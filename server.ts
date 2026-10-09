@@ -15,13 +15,15 @@ import {
   UnitRow,
   AktivitasUnitRow,
   OperatorRow,
-  UserRow
+  UserRow,
+  LokasiRow,
+  RencanaKerjaRow
 } from './server/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Multer memory storage configuration for multipart/form-data photo uploads
@@ -98,7 +100,7 @@ async function startServer() {
   });
 
   // 1. GET /api/master-data?pengawas=:nama
-  // Bundle master data (units, aktivitas, operators) filtered by supervisor for Android offline sync
+  // Bundle master data (units, aktivitas, operators, lokasi) filtered by supervisor for Android offline sync
   app.get('/api/master-data', (req: Request, res: Response) => {
     try {
       const pengawas = (req.query.pengawas as string | undefined)?.trim();
@@ -106,6 +108,7 @@ async function startServer() {
       let units: UnitRow[];
       let operators: OperatorRow[];
       let aktivitas: AktivitasUnitRow[];
+      const lokasi: LokasiRow[] = queryAll<LokasiRow>('SELECT * FROM lokasi ORDER BY kode_lokasi ASC');
 
       if (pengawas && pengawas !== 'Semua') {
         units = queryAll<UnitRow>('SELECT * FROM units WHERE nama_pengawas = ? ORDER BY kode_unit ASC', [pengawas]);
@@ -124,10 +127,12 @@ async function startServer() {
         total_units: units.length,
         total_operators: operators.length,
         total_aktivitas: aktivitas.length,
+        total_lokasi: lokasi.length,
         data: {
           units,
           aktivitas,
-          operators
+          operators,
+          lokasi
         }
       });
     } catch (err: unknown) {
@@ -136,11 +141,366 @@ async function startServer() {
     }
   });
 
-  // 2. POST /api/aktivitas-unit
-  // Atomic transaction from Android app or manual dashboard entry (supports Base64 JSON & multipart/form-data)
-  app.post('/api/aktivitas-unit', upload.single('foto_bukti'), (req: Request, res: Response) => {
+  // 1B. RENCANA KERJA ENDPOINTS (GET, POST, PUT TERBITKAN-SPK, DELETE)
+  app.get('/api/rencana-kerja', (req: Request, res: Response) => {
+    try {
+      const { search, pengawas, status_spk, tanggal } = req.query;
+      let sql = `
+        SELECT 
+          r.*,
+          u.model_unit,
+          l.wilayah
+        FROM rencana_kerja r
+        LEFT JOIN units u ON r.kode_unit = u.kode_unit
+        LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+        WHERE 1=1
+      `;
+      const params: (string | number)[] = [];
+
+      if (search && typeof search === 'string' && search.trim() !== '') {
+        const s = `%${search.trim()}%`;
+        sql += ` AND (r.nama_pengawas LIKE ? OR r.kode_unit LIKE ? OR r.operator LIKE ? OR r.kode_lokasi LIKE ? OR r.nomor_spk LIKE ?)`;
+        params.push(s, s, s, s, s);
+      }
+
+      if (pengawas && typeof pengawas === 'string' && pengawas !== 'Semua') {
+        sql += ' AND r.nama_pengawas = ?';
+        params.push(pengawas);
+      }
+
+      if (status_spk && typeof status_spk === 'string' && status_spk !== 'Semua') {
+        sql += ' AND r.status_spk = ?';
+        params.push(status_spk);
+      }
+
+      if (tanggal && typeof tanggal === 'string' && tanggal.trim() !== '') {
+        sql += ' AND r.tanggal = ?';
+        params.push(tanggal.trim());
+      }
+
+      sql += ' ORDER BY r.tanggal DESC, r.created_at DESC';
+
+      const rows = queryAll<RencanaKerjaRow>(sql, params);
+      res.json({
+        status: 'success',
+        total: rows.length,
+        data: rows
+      });
+    } catch (err: unknown) {
+      console.error('Error fetching rencana-kerja:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/rencana-kerja', (req: Request, res: Response) => {
     try {
       const {
+        id: customId,
+        nama_pengawas,
+        tanggal,
+        status_unit: rawStatusUnit,
+        kode_unit,
+        operator,
+        kode_lokasi,
+        shift_kerja: rawShift,
+        nomor_spk,
+        status_spk: rawStatusSpk,
+        keterangan_rencana
+      } = req.body;
+
+      if (!nama_pengawas || !kode_unit || !operator || !kode_lokasi) {
+        return res.status(400).json({
+          error: 'Field wajib tidak lengkap: nama_pengawas, kode_unit, operator, dan kode_lokasi diperlukan.'
+        });
+      }
+
+      const id = (customId && String(customId).trim()) || `RK-${Date.now()}`;
+      const tgl = tanggal || new Date().toISOString().slice(0, 10);
+      const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const status_unit = (rawStatusUnit || 'OPERASI').toUpperCase();
+      const shift_kerja = (rawShift || 'SIANG').toUpperCase();
+      const status_spk = rawStatusSpk || (nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK');
+
+      const insertSql = `
+        INSERT INTO rencana_kerja (
+          id, nama_pengawas, tanggal, status_unit, kode_unit,
+          operator, kode_lokasi, shift_kerja, nomor_spk, status_spk,
+          keterangan_rencana, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      execute(insertSql, [
+        id,
+        nama_pengawas,
+        tgl,
+        status_unit,
+        kode_unit,
+        operator,
+        kode_lokasi,
+        shift_kerja,
+        nomor_spk || null,
+        status_spk,
+        keterangan_rencana || '',
+        createdAt
+      ]);
+
+      const newRow = queryOne<RencanaKerjaRow>(`
+        SELECT r.*, u.model_unit, l.wilayah
+        FROM rencana_kerja r
+        LEFT JOIN units u ON r.kode_unit = u.kode_unit
+        LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+        WHERE r.id = ?
+      `, [id]);
+
+      broadcast({
+        event: 'NEW_RENCANA',
+        message: `Rencana kerja baru dari ${nama_pengawas} (Unit ${kode_unit})`,
+        data: newRow,
+        timestamp: new Date().toISOString()
+      });
+
+      res.status(201).json({
+        status: 'success',
+        message: 'Rencana kerja berhasil disimpan.',
+        data: newRow
+      });
+    } catch (err: unknown) {
+      console.error('Error saving rencana-kerja:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // PUT /api/rencana-kerja/:id/terbitkan-spk: Admin menginput/mengupdate nomor_spk.
+  // Begitu SPK terbit, kirim broadcast WebSocket ke Android agar nomor SPK otomatis terisi di form realisasi pengawas.
+  app.put('/api/rencana-kerja/:id/terbitkan-spk', (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      const { nomor_spk } = req.body;
+
+      if (!nomor_spk || typeof nomor_spk !== 'string' || !nomor_spk.trim()) {
+        return res.status(400).json({ error: 'Nomor SPK wajib diisi.' });
+      }
+
+      const cleanSpk = nomor_spk.trim();
+      execute(
+        `UPDATE rencana_kerja SET nomor_spk = ?, status_spk = 'SPK_TERBIT' WHERE id = ?`,
+        [cleanSpk, id]
+      );
+
+      const updatedRow = queryOne<RencanaKerjaRow>(`
+        SELECT r.*, u.model_unit, l.wilayah
+        FROM rencana_kerja r
+        LEFT JOIN units u ON r.kode_unit = u.kode_unit
+        LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+        WHERE r.id = ?
+      `, [id]);
+
+      if (!updatedRow) {
+        return res.status(404).json({ error: 'Rencana kerja tidak ditemukan.' });
+      }
+
+      // Broadcast event SPK_TERBIT khusus untuk auto-sync pengawas Android
+      broadcast({
+        event: 'SPK_TERBIT',
+        message: `Nomor SPK ${cleanSpk} telah diterbitkan untuk ${updatedRow.nama_pengawas} (Unit ${updatedRow.kode_unit})`,
+        data: updatedRow,
+        timestamp: new Date().toISOString()
+      });
+
+      // Broadcast update ke seluruh klien Web Admin
+      broadcast({
+        event: 'UPDATE_RENCANA',
+        data: updatedRow,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`📜 [SPK-OK] Nomor SPK ${cleanSpk} diterbitkan untuk Rencana #${id} & dibroadcast via WebSocket`);
+
+      res.json({
+        status: 'success',
+        message: `Nomor SPK ${cleanSpk} berhasil diterbitkan & disinkronkan ke aplikasi Android.`,
+        data: updatedRow
+      });
+    } catch (err: unknown) {
+      console.error('Error updating SPK:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.put('/api/rencana-kerja/:id', (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      const {
+        nama_pengawas,
+        tanggal,
+        status_unit,
+        kode_unit,
+        operator,
+        kode_lokasi,
+        shift_kerja,
+        nomor_spk,
+        status_spk,
+        keterangan_rencana
+      } = req.body;
+
+      execute(`
+        UPDATE rencana_kerja SET
+          nama_pengawas = ?, tanggal = ?, status_unit = ?, kode_unit = ?,
+          operator = ?, kode_lokasi = ?, shift_kerja = ?, nomor_spk = ?,
+          status_spk = ?, keterangan_rencana = ?
+        WHERE id = ?
+      `, [
+        nama_pengawas, tanggal, status_unit, kode_unit,
+        operator, kode_lokasi, shift_kerja, nomor_spk || null,
+        status_spk, keterangan_rencana || '', id
+      ]);
+
+      const updatedRow = queryOne<RencanaKerjaRow>(`
+        SELECT r.*, u.model_unit, l.wilayah
+        FROM rencana_kerja r
+        LEFT JOIN units u ON r.kode_unit = u.kode_unit
+        LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+        WHERE r.id = ?
+      `, [id]);
+
+      broadcast({
+        event: 'UPDATE_RENCANA',
+        data: updatedRow,
+        timestamp: new Date().toISOString()
+      });
+
+      res.json({ status: 'success', data: updatedRow });
+    } catch (err: unknown) {
+      console.error('Error updating rencana-kerja:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.delete('/api/rencana-kerja/:id', (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      execute('DELETE FROM rencana_kerja WHERE id = ?', [id]);
+
+      broadcast({
+        event: 'DELETE_RENCANA',
+        id,
+        timestamp: new Date().toISOString()
+      });
+
+      res.json({ status: 'success', message: 'Rencana kerja berhasil dihapus' });
+    } catch (err: unknown) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // 1C. MASTER LOKASI REST API & BULK IMPORT
+  app.get('/api/master/lokasi', (req: Request, res: Response) => {
+    try {
+      const rows = queryAll<LokasiRow>('SELECT * FROM lokasi ORDER BY kode_lokasi ASC');
+      res.json(rows);
+    } catch (err: unknown) {
+      console.error('Error fetching lokasi:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/master/lokasi', (req: Request, res: Response) => {
+    try {
+      const { kode_lokasi, wilayah, luas_bruto, luas_netto } = req.body;
+      if (!kode_lokasi || !wilayah) {
+        return res.status(400).json({ error: 'Kode lokasi dan wilayah wajib diisi.' });
+      }
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      execute(`
+        INSERT OR REPLACE INTO lokasi (kode_lokasi, wilayah, luas_bruto, luas_netto, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `, [
+        kode_lokasi.trim(),
+        wilayah.trim(),
+        parseFloat(luas_bruto) || 0,
+        parseFloat(luas_netto) || 0,
+        now
+      ]);
+
+      const inserted = queryOne<LokasiRow>('SELECT * FROM lokasi WHERE kode_lokasi = ?', [kode_lokasi.trim()]);
+      res.status(201).json(inserted);
+    } catch (err: unknown) {
+      console.error('Error saving lokasi:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.put('/api/master/lokasi/:kode_lokasi', (req: Request, res: Response) => {
+    try {
+      const kode = req.params.kode_lokasi;
+      const { wilayah, luas_bruto, luas_netto } = req.body;
+      execute(`
+        UPDATE lokasi SET wilayah = ?, luas_bruto = ?, luas_netto = ?
+        WHERE kode_lokasi = ?
+      `, [wilayah, parseFloat(luas_bruto) || 0, parseFloat(luas_netto) || 0, kode]);
+
+      const updated = queryOne<LokasiRow>('SELECT * FROM lokasi WHERE kode_lokasi = ?', [kode]);
+      res.json(updated);
+    } catch (err: unknown) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.delete('/api/master/lokasi/:kode_lokasi', (req: Request, res: Response) => {
+    try {
+      const kode = req.params.kode_lokasi;
+      execute('DELETE FROM lokasi WHERE kode_lokasi = ?', [kode]);
+      res.json({ status: 'success', message: 'Lokasi berhasil dihapus' });
+    } catch (err: unknown) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // POST /api/master/lokasi/bulk-import: Menerima array JSON data lokasi dari file Excel (.xlsx) untuk Bulk UPSERT
+  app.post('/api/master/lokasi/bulk-import', (req: Request, res: Response) => {
+    try {
+      const rawItems = Array.isArray(req.body) ? req.body : req.body.data;
+      if (!Array.isArray(rawItems) || rawItems.length === 0) {
+        return res.status(400).json({ error: 'Data import tidak valid atau kosong.' });
+      }
+
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      let importedCount = 0;
+
+      for (const item of rawItems) {
+        const kode = (item.kode_lokasi || item.lokasi || item.Kode || '').toString().trim();
+        const wilayah = (item.wilayah || item.Wilayah || 'PG1').toString().trim();
+        const bruto = parseFloat(item.luas_bruto ?? item['luas bruto'] ?? item.luasBruto ?? 0) || 0;
+        const netto = parseFloat(item.luas_netto ?? item['luas netto'] ?? item.luasNetto ?? 0) || 0;
+
+        if (kode) {
+          execute(`
+            INSERT OR REPLACE INTO lokasi (kode_lokasi, wilayah, luas_bruto, luas_netto, created_at)
+            VALUES (?, ?, ?, ?, ?)
+          `, [kode, wilayah, bruto, netto, now]);
+          importedCount++;
+        }
+      }
+
+      const allLokasi = queryAll<LokasiRow>('SELECT * FROM lokasi ORDER BY kode_lokasi ASC');
+      res.json({
+        status: 'success',
+        message: `${importedCount} data lokasi berhasil diimpor / diperbarui ke database secara massal.`,
+        importedCount,
+        data: allLokasi
+      });
+    } catch (err: unknown) {
+      console.error('Error bulk import lokasi:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // 2. POST /api/aktivitas-unit
+  // Atomic transaction from Android app or manual dashboard entry (supports Base64 JSON & multipart/form-data)
+  app.post('/api/aktivitas-unit', upload.single('foto_bukti') as unknown as express.RequestHandler, (req: Request, res: Response) => {
+    try {
+      const {
+        rencana_id,
         nama_pengawas,
         tanggal,
         kode_unit,
@@ -149,8 +509,10 @@ async function startServer() {
         satuan,
         operator,
         nik_operator,
-        lokasi,
-        shift_kerja,
+        kode_lokasi: rawKodeLokasi,
+        lokasi: rawLokasi,
+        nomor_spk,
+        shift_kerja: rawShiftKerja,
         jam_kerja,
         hm_awal,
         hm_akhir,
@@ -190,17 +552,22 @@ async function startServer() {
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
       const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawJumlahLiterSolar) || 0) : 0;
 
-      // 1. Simpan baris baru ke tabel hasil_input_aktivitas (tanpa kategori)
+      const kode_lokasi = (rawKodeLokasi || rawLokasi || '001A').toString().trim();
+      const lokasi = (rawLokasi || rawKodeLokasi || 'Pit Operasional').toString().trim();
+      const shift_kerja = (rawShiftKerja || 'SIANG').toUpperCase() === 'MALAM' ? 'Malam' : 'Siang';
+
+      // 1. Simpan baris baru ke tabel hasil_input_aktivitas
       const insertSql = `
         INSERT INTO hasil_input_aktivitas (
-          nama_pengawas, tanggal, kode_unit, nama_aktivitas, kode_sap, satuan,
-          operator, nik_operator, lokasi, shift_kerja, jam_kerja, hm_awal, hm_akhir,
+          rencana_id, nama_pengawas, tanggal, kode_unit, nama_aktivitas, kode_sap, satuan,
+          operator, nik_operator, kode_lokasi, lokasi, nomor_spk, shift_kerja, jam_kerja, hm_awal, hm_akhir,
           hm_harian_berjalan, hasil_kerja, keterangan, foto_bukti,
           status_unit, is_isi_solar, jumlah_liter_solar, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const insertResult = execute(insertSql, [
+        rencana_id || null,
         nama_pengawas,
         currentDate,
         kode_unit,
@@ -209,8 +576,10 @@ async function startServer() {
         satuan || 'm3',
         operator || 'Operator Default',
         nik_operator || 'NIK-00000',
-        lokasi || 'Pit Operasional',
-        shift_kerja || 'Siang',
+        kode_lokasi,
+        lokasi,
+        nomor_spk || null,
+        shift_kerja,
         numJamKerja,
         numHmAwal,
         numHmAkhir,
@@ -234,13 +603,53 @@ async function startServer() {
       `;
       execute(updateUnitSql, [numHmAkhir, createdAt, kode_unit]);
 
-      // Ambil row lengkap yang baru tersimpan (termasuk foto_bukti)
+      // 3. Jika ada rencana_id, update status_spk menjadi 'REALISASI_SELESAI' di tabel rencana_kerja
+      if (rencana_id) {
+        try {
+          if (nomor_spk) {
+            execute(
+              `UPDATE rencana_kerja SET status_spk = 'REALISASI_SELESAI', nomor_spk = ? WHERE id = ?`,
+              [nomor_spk, rencana_id]
+            );
+          } else {
+            execute(
+              `UPDATE rencana_kerja SET status_spk = 'REALISASI_SELESAI' WHERE id = ?`,
+              [rencana_id]
+            );
+          }
+          const updatedPlan = queryOne<RencanaKerjaRow>(`
+            SELECT r.*, u.model_unit, l.wilayah
+            FROM rencana_kerja r
+            LEFT JOIN units u ON r.kode_unit = u.kode_unit
+            LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+            WHERE r.id = ?
+          `, [rencana_id]);
+          if (updatedPlan) {
+            broadcast({
+              event: 'UPDATE_RENCANA',
+              data: updatedPlan,
+              timestamp: new Date().toISOString()
+            });
+          }
+        } catch (e) {
+          console.warn('Error updating linked rencana_kerja status:', e);
+        }
+      }
+
+      // Ambil row lengkap yang baru tersimpan
       const newRow = queryOne<HasilInputAktivitasRow>(
         'SELECT * FROM hasil_input_aktivitas WHERE id = ?',
         [newRowId]
       );
 
-      // 3. Broadcast event 'NEW_ACTIVITY' via WebSocket ke seluruh klien Web Admin aktif beserta payload foto_bukti
+      // 4. Broadcast event 'NEW_REALIZATION' & 'NEW_ACTIVITY' via WebSocket
+      broadcast({
+        event: 'NEW_REALIZATION',
+        message: `Realisasi aktivitas baru diterima dari ${nama_pengawas} (Unit ${kode_unit})`,
+        data: newRow,
+        timestamp: new Date().toISOString()
+      });
+
       broadcast({
         event: 'NEW_ACTIVITY',
         message: `Laporan baru diterima dari ${nama_pengawas} (Unit ${kode_unit})`,
@@ -248,11 +657,11 @@ async function startServer() {
         timestamp: new Date().toISOString()
       });
 
-      console.log(`✨ [TRANS-OK] Laporan baru #${newRowId} tersimpan (foto_bukti: ${foto_bukti ? 'ada' : 'tidak'}) & dibroadcast via WebSocket`);
+      console.log(`✨ [TRANS-OK] Realisasi kerja #${newRowId} tersimpan & dibroadcast via WebSocket`);
 
       return res.status(201).json({
         status: 'success',
-        message: 'Laporan aktivitas unit berhasil disimpan & disinkronisasi.',
+        message: 'Laporan realisasi aktivitas unit berhasil disimpan & disinkronisasi.',
         data: newRow
       });
     } catch (err: unknown) {
@@ -321,7 +730,7 @@ async function startServer() {
   });
 
   // PUT /api/rekapitulasi/:id
-  app.put('/api/rekapitulasi/:id', upload.single('foto_bukti'), (req: Request, res: Response) => {
+  app.put('/api/rekapitulasi/:id', upload.single('foto_bukti') as unknown as express.RequestHandler, (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
       const {
@@ -880,6 +1289,8 @@ async function startServer() {
         const units = queryAll('SELECT * FROM units');
         const aktivitas = queryAll('SELECT * FROM aktivitas_unit');
         const operators = queryAll('SELECT * FROM operators');
+        const lokasi = queryAll('SELECT * FROM lokasi');
+        const rencana_kerja = queryAll('SELECT * FROM rencana_kerja');
         const laporan = queryAll('SELECT * FROM hasil_input_aktivitas');
 
         res.setHeader('Content-Disposition', 'attachment; filename="heavytrack_backup.json"');
@@ -892,13 +1303,15 @@ async function startServer() {
             units,
             aktivitas_unit: aktivitas,
             operators,
+            lokasi,
+            rencana_kerja,
             hasil_input_aktivitas: laporan
           }
         });
       } else {
         // SQL dump format
         let sqlDump = `-- HeavyTrack Enterprise SQL Dump\n-- Exported At: ${new Date().toISOString()}\n\n`;
-        const tables = ['users', 'units', 'aktivitas_unit', 'operators', 'hasil_input_aktivitas'];
+        const tables = ['users', 'units', 'aktivitas_unit', 'operators', 'lokasi', 'rencana_kerja', 'hasil_input_aktivitas'];
 
         for (const tbl of tables) {
           const rows = queryAll(`SELECT * FROM ${tbl}`);

@@ -38,8 +38,35 @@ export interface OperatorRow {
   nama_pengawas: string;
 }
 
+export interface LokasiRow {
+  kode_lokasi: string;
+  wilayah: string;
+  luas_bruto: number;
+  luas_netto: number;
+  created_at: string;
+}
+
+export interface RencanaKerjaRow {
+  id: string;
+  nama_pengawas: string;
+  tanggal: string;
+  status_unit: 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
+  kode_unit: string;
+  operator: string;
+  kode_lokasi: string;
+  shift_kerja: 'SIANG' | 'MALAM' | 'Siang' | 'Malam';
+  nomor_spk?: string | null;
+  status_spk: 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
+  keterangan_rencana?: string | null;
+  created_at: string;
+  // Enriched fields from JOIN
+  model_unit?: string;
+  wilayah?: string;
+}
+
 export interface HasilInputAktivitasRow {
-  id: number;
+  id: number | string;
+  rencana_id?: string | null;
   nama_pengawas: string;
   tanggal: string;
   kode_unit: string;
@@ -48,8 +75,10 @@ export interface HasilInputAktivitasRow {
   satuan: string;
   operator: string;
   nik_operator: string;
+  kode_lokasi: string;
   lokasi: string;
-  shift_kerja: 'Siang' | 'Malam';
+  nomor_spk?: string | null;
+  shift_kerja: 'Siang' | 'Malam' | 'SIANG' | 'MALAM';
   jam_kerja: number;
   hm_awal: number;
   hm_akhir: number;
@@ -206,8 +235,35 @@ function initTablesAndSeed(db: Database) {
       nama_pengawas TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS lokasi (
+      kode_lokasi TEXT PRIMARY KEY,
+      wilayah TEXT NOT NULL,
+      luas_bruto REAL NOT NULL DEFAULT 0.00,
+      luas_netto REAL NOT NULL DEFAULT 0.00,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS rencana_kerja (
+      id TEXT PRIMARY KEY,
+      nama_pengawas TEXT NOT NULL,
+      tanggal TEXT NOT NULL,
+      status_unit TEXT DEFAULT 'OPERASI',
+      kode_unit TEXT NOT NULL,
+      operator TEXT NOT NULL,
+      kode_lokasi TEXT NOT NULL,
+      shift_kerja TEXT NOT NULL,
+      nomor_spk TEXT,
+      status_spk TEXT DEFAULT 'MENUNGGU_SPK',
+      keterangan_rencana TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_rk_tgl ON rencana_kerja(tanggal DESC);
+    CREATE INDEX IF NOT EXISTS idx_rk_pengawas ON rencana_kerja(nama_pengawas);
+
     CREATE TABLE IF NOT EXISTS hasil_input_aktivitas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rencana_id TEXT,
       nama_pengawas TEXT NOT NULL,
       tanggal TEXT NOT NULL,
       kode_unit TEXT NOT NULL,
@@ -216,7 +272,9 @@ function initTablesAndSeed(db: Database) {
       satuan TEXT NOT NULL,
       operator TEXT NOT NULL,
       nik_operator TEXT NOT NULL,
+      kode_lokasi TEXT DEFAULT '001A',
       lokasi TEXT NOT NULL,
+      nomor_spk TEXT,
       shift_kerja TEXT NOT NULL,
       jam_kerja REAL NOT NULL,
       hm_awal REAL NOT NULL,
@@ -235,7 +293,7 @@ function initTablesAndSeed(db: Database) {
     CREATE INDEX IF NOT EXISTS idx_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
   `);
 
-  // Migration: Ensure foto_bukti column exists in existing SQLite databases
+  // Migration: Ensure foto_bukti, status_unit, is_isi_solar, jumlah_liter_solar exist
   try {
     db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN foto_bukti TEXT;");
   } catch {
@@ -258,8 +316,26 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN jumlah_liter_solar REAL DEFAULT 0.00;");
       console.log('Added jumlah_liter_solar column to hasil_input_aktivitas');
     }
+    if (cols && !cols.includes('rencana_id')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN rencana_id TEXT;");
+      console.log('Added rencana_id column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('kode_lokasi')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN kode_lokasi TEXT DEFAULT '001A';");
+      console.log('Added kode_lokasi column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('nomor_spk')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN nomor_spk TEXT;");
+      console.log('Added nomor_spk column to hasil_input_aktivitas');
+    }
   } catch (e) {
-    console.warn('Migration note for solar and status columns:', e);
+    console.warn('Migration note for solar, status, and spk columns:', e);
+  }
+
+  try {
+    db.run("CREATE INDEX IF NOT EXISTS idx_hia_spk ON hasil_input_aktivitas(nomor_spk);");
+  } catch {
+    // Ignore index creation if already created
   }
 
   // Migration: Ensure operators table does not require jabatan
@@ -462,6 +538,47 @@ function initTablesAndSeed(db: Database) {
         console.warn('Could not backfill sample photos:', e);
       }
     }
+  }
+
+  // Check if lokasi seeded
+  const resLok = db.exec("SELECT COUNT(*) as cnt FROM lokasi");
+  const lokCount = (resLok[0]?.values[0]?.[0] as number) || 0;
+  if (lokCount === 0) {
+    db.run(`
+      INSERT OR IGNORE INTO lokasi (kode_lokasi, wilayah, luas_bruto, luas_netto, created_at) VALUES
+      ('001A', 'PG1', 12.50, 10.80, '2026-10-01 08:00:00'),
+      ('002B', 'PG1', 15.00, 13.20, '2026-10-01 08:00:00'),
+      ('003A', 'PG2', 8.40, 7.50, '2026-10-01 08:00:00'),
+      ('004C', 'PG2', 22.00, 19.40, '2026-10-01 08:00:00'),
+      ('100A', 'PG3', 30.50, 27.00, '2026-10-01 08:00:00'),
+      ('101B', 'PG3', 18.20, 16.00, '2026-10-01 08:00:00');
+    `);
+    console.log('Seeded master lokasi.');
+  }
+
+  // Check if rencana_kerja seeded
+  const resRk = db.exec("SELECT COUNT(*) as cnt FROM rencana_kerja");
+  const rkCount = (resRk[0]?.values[0]?.[0] as number) || 0;
+  if (rkCount === 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    db.run(`
+      INSERT OR IGNORE INTO rencana_kerja (id, nama_pengawas, tanggal, status_unit, kode_unit, operator, kode_lokasi, shift_kerja, nomor_spk, status_spk, keterangan_rencana, created_at) VALUES
+      ('RK-2026-001', 'Budi Santoso', '${today}', 'OPERASI', 'HEH1', 'Hendri Kurniawan', '001A', 'SIANG', NULL, 'MENUNGGU_SPK', 'Overburden stripping pit utara blok C', '${today} 06:30:00'),
+      ('RK-2026-002', 'Budi Santoso', '${today}', 'OPERASI', 'DZ-01', 'Bambang Irawan', '002B', 'SIANG', 'SPK-2026-X101', 'SPK_TERBIT', 'Clearing dan land leveling area front 3', '${today} 06:45:00'),
+      ('RK-2026-003', 'Agus Wijaya', '${today}', 'OPERASI', 'DT-102', 'Dedi Prasetyo', '003A', 'SIANG', 'SPK-2026-X102', 'REALISASI_SELESAI', 'Hauling overburden ke disposal barat', '${today} 07:00:00'),
+      ('RK-2026-004', 'Agus Wijaya', '${today}', 'STANDBY', 'EX-301', 'Supriyanto', '004C', 'SIANG', NULL, 'MENUNGGU_SPK', 'Standby perapihan bench dan inspeksi', '${today} 07:15:00'),
+      ('RK-2026-005', 'Rudi Hermawan', '${today}', 'OPERASI', 'GD-01', 'Ahmad Zaki', '100A', 'SIANG', 'SPK-2026-X103', 'SPK_TERBIT', 'Grading main haul road km 2-6', '${today} 07:30:00');
+    `);
+    console.log('Seeded rencana_kerja.');
+  }
+
+  // Backfill nomor_spk and kode_lokasi on existing hasil_input_aktivitas
+  try {
+    db.run("UPDATE hasil_input_aktivitas SET kode_lokasi = '001A' WHERE kode_lokasi IS NULL OR kode_lokasi = ''");
+    db.run("UPDATE hasil_input_aktivitas SET nomor_spk = 'SPK-2026-X102' WHERE kode_unit = 'DT-102' AND (nomor_spk IS NULL OR nomor_spk = '')");
+    db.run("UPDATE hasil_input_aktivitas SET nomor_spk = 'SPK-2026-X101' WHERE kode_unit = 'DZ-01' AND (nomor_spk IS NULL OR nomor_spk = '')");
+  } catch (e) {
+    console.warn('Backfill spk note:', e);
   }
 }
 

@@ -33,6 +33,7 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
   const [satuan, setSatuan] = useState(aktivitasList[0]?.satuan || 'm3');
   const [operatorName, setOperatorName] = useState(operators[0]?.nama_operator || '');
   const [nikOperator, setNikOperator] = useState(operators[0]?.nik || '');
+  const [nomorSpk, setNomorSpk] = useState('');
   const [lokasi, setLokasi] = useState('Pit Area Utama');
   const [shiftKerja, setShiftKerja] = useState<'Siang' | 'Malam'>('Siang');
   const [jamKerja, setJamKerja] = useState<number>(10);
@@ -144,6 +145,7 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
         operator: operatorName,
         nik_operator: nikOperator,
         lokasi,
+        nomor_spk: nomorSpk.trim() || null,
         shift_kerja: shiftKerja,
         jam_kerja: jamKerja,
         hm_awal: hmAwal,
@@ -496,6 +498,20 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
                     </span>
                   </div>
                 ) : null}
+              />
+            </div>
+
+            {/* Nomor SPK (Opsional) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Nomor SPK (Opsional)
+              </label>
+              <input
+                type="text"
+                value={nomorSpk}
+                onChange={(e) => setNomorSpk(e.target.value)}
+                placeholder="Contoh: SPK-2026-X101"
+                className="w-full text-xs font-mono font-bold uppercase rounded-lg border border-slate-300 p-2.5 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white"
               />
             </div>
 

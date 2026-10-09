@@ -33,8 +33,36 @@ export interface Operator {
 
 export type UnitStatus = 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
 
+export type StatusSpk = 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
+
+export interface Lokasi {
+  kode_lokasi: string;
+  wilayah: string;
+  luas_bruto: number;
+  luas_netto: number;
+  created_at?: string;
+}
+
+export interface RencanaKerja {
+  id: string;
+  nama_pengawas: string;
+  tanggal: string;
+  status_unit: UnitStatus;
+  kode_unit: string;
+  model_unit?: string;
+  operator: string;
+  kode_lokasi: string;
+  wilayah?: string;
+  shift_kerja: 'SIANG' | 'MALAM' | 'Siang' | 'Malam';
+  nomor_spk?: string | null;
+  status_spk: StatusSpk;
+  keterangan_rencana?: string | null;
+  created_at: string;
+}
+
 export interface HasilInputAktivitas {
-  id: number;
+  id: number | string;
+  rencana_id?: string | null;
   nama_pengawas: string;
   tanggal: string;
   kode_unit: string;
@@ -43,8 +71,10 @@ export interface HasilInputAktivitas {
   satuan: string;
   operator: string;
   nik_operator: string;
+  kode_lokasi?: string;
   lokasi: string;
-  shift_kerja: 'Siang' | 'Malam';
+  nomor_spk?: string | null;
+  shift_kerja: 'Siang' | 'Malam' | 'SIANG' | 'MALAM';
   jam_kerja: number;
   hm_awal: number;
   hm_akhir: number;

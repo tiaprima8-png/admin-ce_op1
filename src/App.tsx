@@ -10,7 +10,9 @@ import {
   Smartphone,
   ChevronRight,
   Database,
-  BarChart3
+  BarChart3,
+  FileCheck2,
+  MapPin
 } from 'lucide-react';
 import { 
   HasilInputAktivitas, 
@@ -18,12 +20,16 @@ import {
   AktivitasUnit, 
   Operator, 
   User, 
-  KpiStats 
+  KpiStats,
+  RencanaKerja,
+  Lokasi
 } from './types';
 import { soundService } from './utils/sound';
 import { Header } from './components/Header';
 import { KpiCards } from './components/KpiCards';
+import { RencanaKerjaView } from './components/RencanaKerjaView';
 import { ActivityMonitor } from './components/ActivityMonitor';
+import { MasterLokasi } from './components/MasterLokasi';
 import { AnalyticsView } from './components/AnalyticsView';
 import { MasterUnits } from './components/MasterUnits';
 import { MasterAktivitas } from './components/MasterAktivitas';
@@ -35,13 +41,15 @@ import { BackupModal } from './components/BackupModal';
 import { AndroidIntegrationModal } from './components/AndroidIntegrationModal';
 import { PhotoLightboxModal } from './components/PhotoLightboxModal';
 
-type ActiveTab = 'rekapitulasi' | 'analytics' | 'units' | 'aktivitas' | 'operators' | 'users';
+type ActiveTab = 'rencana' | 'rekapitulasi' | 'lokasi' | 'analytics' | 'units' | 'aktivitas' | 'operators' | 'users';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('rekapitulasi');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('rencana');
 
   // Main Data States
+  const [rencanaList, setRencanaList] = useState<RencanaKerja[]>([]);
   const [activities, setActivities] = useState<HasilInputAktivitas[]>([]);
+  const [lokasiList, setLokasiList] = useState<Lokasi[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [aktivitasList, setAktivitasList] = useState<AktivitasUnit[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
@@ -80,6 +88,18 @@ export default function App() {
   ));
 
   // --- Fetch Data Functions ---
+  const fetchRencanaList = useCallback(async () => {
+    try {
+      const res = await fetch('/api/rencana-kerja');
+      const json = await res.json();
+      if (json.data) {
+        setRencanaList(json.data);
+      }
+    } catch (e) {
+      console.error('Failed fetching rencana-kerja:', e);
+    }
+  }, []);
+
   const fetchActivities = useCallback(async () => {
     try {
       const res = await fetch('/api/rekapitulasi');
@@ -89,6 +109,16 @@ export default function App() {
       }
     } catch (e) {
       console.error('Failed fetching activities:', e);
+    }
+  }, []);
+
+  const fetchLokasiList = useCallback(async () => {
+    try {
+      const res = await fetch('/api/master/lokasi');
+      const data = await res.json();
+      setLokasiList(data);
+    } catch (e) {
+      console.error('Failed fetching master lokasi:', e);
     }
   }, []);
 
@@ -143,17 +173,104 @@ export default function App() {
   }, []);
 
   const refreshAllData = useCallback(() => {
+    fetchRencanaList();
     fetchActivities();
+    fetchLokasiList();
     fetchUnits();
     fetchAktivitasList();
     fetchOperators();
     fetchUsers();
     fetchStats();
-  }, [fetchActivities, fetchUnits, fetchAktivitasList, fetchOperators, fetchUsers, fetchStats]);
+  }, [fetchRencanaList, fetchActivities, fetchLokasiList, fetchUnits, fetchAktivitasList, fetchOperators, fetchUsers, fetchStats]);
 
   useEffect(() => {
     refreshAllData();
   }, [refreshAllData]);
+
+  // --- Handlers for Rencana Kerja & SPK ---
+  const handleTerbitkanSpk = async (id: string, nomorSpk: string) => {
+    const res = await fetch(`/api/rencana-kerja/${id}/terbitkan-spk`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nomor_spk: nomorSpk })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Gagal menerbitkan nomor SPK.');
+    }
+    const json = await res.json();
+    setRencanaList(prev => prev.map(r => r.id === id ? json.data : r));
+  };
+
+  const handleCreateRencana = async (data: Partial<RencanaKerja>) => {
+    const res = await fetch('/api/rencana-kerja', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Gagal membuat rencana kerja.');
+    }
+    const json = await res.json();
+    setRencanaList(prev => [json.data, ...prev]);
+  };
+
+  const handleDeleteRencana = async (id: string) => {
+    const res = await fetch(`/api/rencana-kerja/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Gagal menghapus rencana kerja.');
+    }
+    setRencanaList(prev => prev.filter(r => r.id !== id));
+  };
+
+  // --- Handlers for Master Lokasi ---
+  const handleSaveLokasi = async (lokasi: Lokasi) => {
+    const res = await fetch('/api/master/lokasi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(lokasi)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Gagal menyimpan master lokasi.');
+    }
+    const saved = await res.json();
+    setLokasiList(prev => {
+      const exists = prev.some(l => l.kode_lokasi === saved.kode_lokasi);
+      if (exists) {
+        return prev.map(l => l.kode_lokasi === saved.kode_lokasi ? saved : l);
+      }
+      return [...prev, saved].sort((a, b) => a.kode_lokasi.localeCompare(b.kode_lokasi));
+    });
+  };
+
+  const handleDeleteLokasi = async (kodeLokasi: string) => {
+    const res = await fetch(`/api/master/lokasi/${encodeURIComponent(kodeLokasi)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Gagal menghapus master lokasi.');
+    }
+    setLokasiList(prev => prev.filter(l => l.kode_lokasi !== kodeLokasi));
+  };
+
+  const handleBulkImportLokasi = async (items: Lokasi[]): Promise<number> => {
+    const res = await fetch('/api/master/lokasi/bulk-import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: items })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Gagal import lokasi.');
+    }
+    const json = await res.json();
+    if (json.data) {
+      setLokasiList(json.data);
+    }
+    return json.importedCount || items.length;
+  };
 
   // --- Real-Time WebSocket Listener Setup ---
   useEffect(() => {
@@ -180,41 +297,57 @@ export default function App() {
         try {
           const packet = JSON.parse(event.data);
 
-          if (packet.event === 'NEW_ACTIVITY' && packet.data) {
+          // 1. Realisasi Baru Masuk
+          if ((packet.event === 'NEW_ACTIVITY' || packet.event === 'NEW_REALIZATION') && packet.data) {
             const newRow: HasilInputAktivitas = packet.data;
 
-            // 1. Prepend directly to top of table
+            // Prepend directly to top of activities
             setActivities(prev => {
-              // Avoid duplicates
-              if (prev.some(item => item.id === newRow.id)) return prev;
+              if (prev.some(item => String(item.id) === String(newRow.id))) return prev;
               return [newRow, ...prev];
             });
 
-            // 2. Play acoustic chime via Web Audio API
+            // Play acoustic chime
             soundService.playNewActivityChime();
 
-            // 3. Trigger 4-second glowing highlight
-            setNewActivityIds(prev => new Set(prev).add(newRow.id));
-            setTimeout(() => {
-              if (isMounted) {
-                setNewActivityIds(prev => {
-                  const next = new Set(prev);
-                  next.delete(newRow.id);
-                  return next;
-                });
-              }
-            }, 4000);
+            // Trigger 4-second emerald highlight (#A7F3D0)
+            const numId = typeof newRow.id === 'number' ? newRow.id : parseInt(String(newRow.id), 10);
+            if (!isNaN(numId)) {
+              setNewActivityIds(prev => new Set(prev).add(numId));
+              setTimeout(() => {
+                if (isMounted) {
+                  setNewActivityIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(numId);
+                    return next;
+                  });
+                }
+              }, 4000);
+            }
 
-            // 4. Update KPI Stats and Units HM in background
+            // Update KPI Stats and Units HM in background
             fetchStats();
             fetchUnits();
+            fetchRencanaList();
           } else if (packet.event === 'UPDATE_ACTIVITY' && packet.data) {
             const updatedRow: HasilInputAktivitas = packet.data;
-            setActivities(prev => prev.map(item => item.id === updatedRow.id ? updatedRow : item));
+            setActivities(prev => prev.map(item => String(item.id) === String(updatedRow.id) ? updatedRow : item));
             fetchStats();
           } else if (packet.event === 'DELETE_ACTIVITY' && packet.id) {
-            setActivities(prev => prev.filter(item => item.id !== packet.id));
+            setActivities(prev => prev.filter(item => String(item.id) !== String(packet.id)));
             fetchStats();
+          } else if (packet.event === 'NEW_RENCANA' && packet.data) {
+            const newPlan: RencanaKerja = packet.data;
+            setRencanaList(prev => {
+              if (prev.some(r => r.id === newPlan.id)) return prev;
+              return [newPlan, ...prev];
+            });
+            soundService.playNewActivityChime();
+          } else if ((packet.event === 'SPK_TERBIT' || packet.event === 'UPDATE_RENCANA') && packet.data) {
+            const updatedPlan: RencanaKerja = packet.data;
+            setRencanaList(prev => prev.map(r => r.id === updatedPlan.id ? updatedPlan : r));
+          } else if (packet.event === 'DELETE_RENCANA' && packet.id) {
+            setRencanaList(prev => prev.filter(r => r.id !== packet.id));
           }
         } catch (err) {
           console.warn('Error parsing incoming WS message:', err);
@@ -241,7 +374,7 @@ export default function App() {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [fetchStats, fetchUnits]);
+  }, [fetchStats, fetchUnits, fetchRencanaList]);
 
   // --- Quick Android Simulation Trigger ---
   const handleSimulateAndroidReport = async () => {
@@ -265,6 +398,10 @@ export default function App() {
       ];
       const randomOp = availableOps[Math.floor(Math.random() * availableOps.length)];
 
+      const randomLokasi = lokasiList.length > 0 
+        ? lokasiList[Math.floor(Math.random() * lokasiList.length)]
+        : { kode_lokasi: '001A', wilayah: 'PG1' };
+
       const startHm = randomUnit.hm_unit_terakhir_diinputkan || 4280.0;
       const durationHours = Math.round((7 + Math.random() * 4) * 10) / 10;
       const endHm = Math.round((startHm + durationHours) * 10) / 10;
@@ -275,6 +412,7 @@ export default function App() {
       const chosenStatus = statuses[Math.floor(Math.random() * statuses.length)];
       const isIsi = chosenStatus === 'OPERASI' && Math.random() > 0.35;
       const solarLiter = isIsi ? Math.round((90 + Math.random() * 110) * 10) / 10 : 0;
+      const generatedSpk = `SPK-${new Date().getFullYear()}-X${Math.floor(100 + Math.random() * 900)}`;
 
       // Generate authentic photo proof data URI for simulation
       const svgProof = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
@@ -303,10 +441,10 @@ export default function App() {
         </g>
         <rect x="20" y="20" width="760" height="560" fill="none" stroke="#22c55e" stroke-width="2" stroke-dasharray="16,8" opacity="0.6"/>
         <rect x="20" y="20" width="760" height="40" fill="rgba(15,23,42,0.85)"/>
-        <text x="40" y="46" fill="#4ade80" font-family="monospace" font-size="13" font-weight="bold">HEAVYTRACK MOBILE CAM • ANDROID BUKTI LAPANGAN</text>
+        <text x="40" y="46" fill="#4ade80" font-family="monospace" font-size="13" font-weight="bold">HEAVYTRACK MOBILE CAM • ANDROID REALISASI SPK</text>
         <rect x="20" y="500" width="760" height="80" fill="rgba(15,23,42,0.9)"/>
         <text x="40" y="530" fill="#f8fafc" font-family="sans-serif" font-size="15" font-weight="bold">UNIT: ${randomUnit.kode_unit} | ${randomAct.nama_aktivitas}</text>
-        <text x="40" y="555" fill="#94a3b8" font-family="sans-serif" font-size="12">LOKASI: Pit Area • PENGAWAS: ${chosenPengawas}</text>
+        <text x="40" y="555" fill="#94a3b8" font-family="sans-serif" font-size="12">SPK: ${generatedSpk} • LOKASI: ${randomLokasi.kode_lokasi} (${randomLokasi.wilayah}) • PENGAWAS: ${chosenPengawas}</text>
         <text x="40" y="572" fill="#38bdf8" font-family="monospace" font-size="11">${new Date().toISOString().slice(0, 10)} • FOTO OTENTIK</text>
       </svg>`;
       const simulatedPhoto = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgProof);
@@ -320,14 +458,16 @@ export default function App() {
         satuan: randomAct.satuan,
         operator: randomOp.nama_operator,
         nik_operator: randomOp.nik,
-        lokasi: `Pit Area Blok ${String.fromCharCode(65 + Math.floor(Math.random() * 5))}`,
+        kode_lokasi: randomLokasi.kode_lokasi,
+        lokasi: `Pit Area ${randomLokasi.kode_lokasi}`,
+        nomor_spk: generatedSpk,
         shift_kerja: chosenShift,
         jam_kerja: 10.0,
         hm_awal: startHm,
         hm_akhir: endHm,
         hm_harian_berjalan: durationHours,
         hasil_kerja: Math.floor(500 + Math.random() * 2000),
-        keterangan: `Laporan mobile terkirim otomatis (${randomUnit.model_unit})`,
+        keterangan: `Realisasi SPK ${generatedSpk} selesai dikerjakan (${randomUnit.model_unit})`,
         foto_bukti: simulatedPhoto,
         status_unit: chosenStatus,
         is_isi_solar: isIsi ? 1 : 0,
@@ -349,11 +489,11 @@ export default function App() {
     }
   };
 
-  const handleDeleteActivity = async (id: number) => {
+  const handleDeleteActivity = async (id: number | string) => {
     try {
       const res = await fetch(`/api/rekapitulasi/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Gagal menghapus laporan');
-      setActivities(prev => prev.filter(a => a.id !== id));
+      setActivities(prev => prev.filter(a => String(a.id) !== String(id)));
       fetchActivities();
       fetchStats();
     } catch (e) {
@@ -379,10 +519,28 @@ export default function App() {
         {/* Navigation Tabs Bar */}
         <div className="bg-white rounded-xl border border-slate-200 p-1.5 mb-6 shadow-2xs flex flex-wrap items-center gap-1">
           
-          {/* TAB 1: Rekapitulasi Aktivitas */}
+          {/* TAB 1: Rencana Kerja & Penerbitan SPK (Modul Baru) */}
+          <button
+            onClick={() => setActiveTab('rencana')}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'rencana'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <FileCheck2 className="w-4 h-4" />
+            <span>Rencana Kerja & SPK</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              activeTab === 'rencana' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {rencanaList.length}
+            </span>
+          </button>
+
+          {/* TAB 2: Rekapitulasi Aktivitas (Realisasi Kerja Real-Time) */}
           <button
             onClick={() => setActiveTab('rekapitulasi')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'rekapitulasi'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -397,10 +555,28 @@ export default function App() {
             </span>
           </button>
 
-          {/* TAB NEW: Rangkuman & Analitik Operasional */}
+          {/* TAB 3: Data Master Lokasi (Modul Baru Import Excel) */}
+          <button
+            onClick={() => setActiveTab('lokasi')}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'lokasi'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <MapPin className="w-4 h-4" />
+            <span>Data Master Lokasi</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              activeTab === 'lokasi' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {lokasiList.length}
+            </span>
+          </button>
+
+          {/* TAB 4: Rangkuman & Analitik Operasional Fleet */}
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'analytics'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -410,17 +586,17 @@ export default function App() {
             <span>Rangkuman & Analitik</span>
           </button>
 
-          {/* TAB 2: Data Master Unit */}
+          {/* TAB MASTER: Data Master Unit */}
           <button
             onClick={() => setActiveTab('units')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'units'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <Truck className="w-4 h-4" />
-            <span>Data Master Unit</span>
+            <span>Master Unit</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
               activeTab === 'units' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
             }`}>
@@ -428,17 +604,17 @@ export default function App() {
             </span>
           </button>
 
-          {/* TAB 3: Data Master Aktivitas */}
+          {/* TAB MASTER: Data Master Aktivitas */}
           <button
             onClick={() => setActiveTab('aktivitas')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'aktivitas'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <ListChecks className="w-4 h-4" />
-            <span>Data Master Aktivitas & Kode SAP</span>
+            <span>Master Aktivitas</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
               activeTab === 'aktivitas' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
             }`}>
@@ -446,17 +622,17 @@ export default function App() {
             </span>
           </button>
 
-          {/* TAB 4: Data Master Operator */}
+          {/* TAB MASTER: Data Master Operator */}
           <button
             onClick={() => setActiveTab('operators')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'operators'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <UserCheck className="w-4 h-4" />
-            <span>Data Master Operator</span>
+            <span>Master Operator</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
               activeTab === 'operators' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
             }`}>
@@ -464,17 +640,17 @@ export default function App() {
             </span>
           </button>
 
-          {/* TAB 5: Data Master User */}
+          {/* TAB MASTER: Data Master User */}
           <button
             onClick={() => setActiveTab('users')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'users'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Data Master User & Akses</span>
+            <span>Master User</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
               activeTab === 'users' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
             }`}>
@@ -493,7 +669,22 @@ export default function App() {
 
         </div>
 
-        {/* Tab 1: Rekapitulasi Aktivitas */}
+        {/* TAB 1: Rencana Kerja & Penerbitan SPK (Modul Baru) */}
+        {activeTab === 'rencana' && (
+          <RencanaKerjaView
+            rencanaList={rencanaList}
+            units={units}
+            operators={operators}
+            lokasiList={lokasiList}
+            supervisors={supervisors}
+            onRefresh={fetchRencanaList}
+            onTerbitkanSpk={handleTerbitkanSpk}
+            onCreateRencana={handleCreateRencana}
+            onDeleteRencana={handleDeleteRencana}
+          />
+        )}
+
+        {/* TAB 2: Rekapitulasi Real-Time */}
         {activeTab === 'rekapitulasi' && (
           <div>
             {/* Top KPI Stat Cards */}
@@ -516,7 +707,18 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab Baru: Rangkuman & Analitik Operasional */}
+        {/* TAB 3: Data Master Lokasi & Import Excel (Modul Baru) */}
+        {activeTab === 'lokasi' && (
+          <MasterLokasi
+            lokasiList={lokasiList}
+            onRefresh={fetchLokasiList}
+            onSaveLokasi={handleSaveLokasi}
+            onDeleteLokasi={handleDeleteLokasi}
+            onBulkImport={handleBulkImportLokasi}
+          />
+        )}
+
+        {/* TAB 4: Rangkuman & Analitik Operasional Fleet */}
         {activeTab === 'analytics' && (
           <AnalyticsView
             units={units}
@@ -524,7 +726,7 @@ export default function App() {
           />
         )}
 
-        {/* Tab 2: Data Master Unit */}
+        {/* Tab 5: Data Master Unit */}
         {activeTab === 'units' && (
           <MasterUnits
             units={units}
@@ -536,7 +738,7 @@ export default function App() {
           />
         )}
 
-        {/* Tab 3: Data Master Aktivitas */}
+        {/* Tab 6: Data Master Aktivitas */}
         {activeTab === 'aktivitas' && (
           <MasterAktivitas
             aktivitasList={aktivitasList}
@@ -544,7 +746,7 @@ export default function App() {
           />
         )}
 
-        {/* Tab 4: Data Master Operator */}
+        {/* Tab 7: Data Master Operator */}
         {activeTab === 'operators' && (
           <MasterOperators
             operators={operators}
@@ -553,7 +755,7 @@ export default function App() {
           />
         )}
 
-        {/* Tab 5: Data Master User */}
+        {/* Tab 8: Data Master User */}
         {activeTab === 'users' && (
           <MasterUsers
             users={users}

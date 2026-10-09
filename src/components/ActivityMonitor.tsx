@@ -25,10 +25,10 @@ interface ActivityMonitorProps {
   aktivitasList: AktivitasUnit[];
   operators: Operator[];
   supervisors: string[];
-  newActivityIds: Set<number>;
+  newActivityIds: Set<number | string>;
   onOpenManualModal: () => void;
   onEditActivity: (activity: HasilInputAktivitas) => void;
-  onDeleteActivity: (id: number) => Promise<void> | void;
+  onDeleteActivity: (id: number | string) => Promise<void> | void;
   onRefresh: () => void;
   onViewPhoto: (activity: HasilInputAktivitas) => void;
 }
@@ -65,7 +65,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   // Filter logic (tanpa kategori)
   const filteredActivities = activities.filter((item) => {
-    // Search term matching (Pengawas, Unit, SAP, Operator, Aktivitas, Lokasi)
+    // Search term matching (Pengawas, Unit, SAP, Operator, Aktivitas, Lokasi, SPK)
     if (searchTerm.trim() !== '') {
       const term = searchTerm.toLowerCase();
       const matchTerm = 
@@ -74,7 +74,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         (item.kode_sap || '').toLowerCase().includes(term) ||
         (item.operator || '').toLowerCase().includes(term) ||
         (item.nama_aktivitas || '').toLowerCase().includes(term) ||
-        (item.lokasi || '').toLowerCase().includes(term);
+        (item.lokasi || '').toLowerCase().includes(term) ||
+        (item.kode_lokasi || '').toLowerCase().includes(term) ||
+        (item.nomor_spk || '').toLowerCase().includes(term);
       if (!matchTerm) return false;
     }
 
@@ -314,24 +316,25 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             {/* Table Header */}
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                <th className="py-3 px-3 text-center min-w-[70px]">Foto Bukti</th>
+                <th className="py-3 px-3 text-center min-w-[120px]">Nomor SPK</th>
                 <th className="py-3 px-3.5">Pengawas</th>
                 <th className="py-3 px-3">Tanggal</th>
                 <th className="py-3 px-3">Kode Unit</th>
-                <th className="py-3 px-3 text-center">Status Unit</th>
-                <th className="py-3 px-2.5 text-right">Konsumsi Solar</th>
                 <th className="py-3 px-3">Nama Aktivitas</th>
                 <th className="py-3 px-3">Kode SAP</th>
                 <th className="py-3 px-3">Satuan</th>
                 <th className="py-3 px-3">Operator (NIK)</th>
                 <th className="py-3 px-3">Lokasi</th>
                 <th className="py-3 px-3 text-center">Shift</th>
+                <th className="py-3 px-3 text-center">Status Unit</th>
                 <th className="py-3 px-2 text-right">Jam</th>
                 <th className="py-3 px-2 text-right">HM Awal</th>
                 <th className="py-3 px-2 text-right">HM Akhir</th>
                 <th className="py-3 px-2.5 text-right font-extrabold text-emerald-800">HM Jalan</th>
+                <th className="py-3 px-2.5 text-right">Konsumsi Solar</th>
                 <th className="py-3 px-2.5 text-right">Hasil</th>
                 <th className="py-3 px-3 min-w-[140px]">Keterangan</th>
-                <th className="py-3 px-3 text-center min-w-[95px]">Foto Bukti</th>
                 <th className="py-3 px-3 text-center sticky right-0 bg-slate-50/95 shadow-xs">Aksi</th>
               </tr>
             </thead>
@@ -340,7 +343,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {paginatedActivities.length === 0 ? (
                 <tr>
-                  <td colSpan={19} className="text-center py-12 text-slate-400">
+                  <td colSpan={20} className="text-center py-12 text-slate-400">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="font-medium text-slate-600">Tidak ada data aktivitas yang sesuai dengan kriteria filter.</p>
                     <p className="text-[11px] text-slate-400 mt-1">Gunakan tombol "+ Tambah Data Manual" atau tunggu pengiriman dari aplikasi Android.</p>
@@ -348,7 +351,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 </tr>
               ) : (
                 paginatedActivities.map((row) => {
-                  const isGlowing = newActivityIds.has(row.id);
+                  const isGlowing = newActivityIds.has(typeof row.id === 'number' ? row.id : parseInt(String(row.id), 10));
 
                   return (
                     <tr
@@ -359,137 +362,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           : ''
                       }`}
                     >
-                      {/* Pengawas */}
-                      <td className="py-3 px-3.5 font-semibold text-slate-900 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          {isGlowing && (
-                            <span className="flex h-2 w-2 relative" title="Baru saja masuk dari Android">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-                            </span>
-                          )}
-                          <span>{row.nama_pengawas}</span>
-                        </div>
-                      </td>
-
-                      {/* Tanggal */}
-                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                        {row.tanggal}
-                      </td>
-
-                      {/* Kode Unit */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded text-[11px] border border-slate-200 font-mono">
-                          {row.kode_unit}
-                        </span>
-                      </td>
-
-                      {/* Status Unit Badge */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        {(!row.status_unit || row.status_unit === 'OPERASI') && (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                            OPERASI
-                          </span>
-                        )}
-                        {row.status_unit === 'STANDBY' && (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-                            STANDBY
-                          </span>
-                        )}
-                        {row.status_unit === 'BREAKDOWN' && (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
-                            BREAKDOWN
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Konsumsi Solar */}
-                      <td className="py-3 px-2.5 text-right whitespace-nowrap font-mono text-[11px]">
-                        {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
-                          <span className="font-bold text-slate-800 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 inline-flex items-center gap-1">
-                            <Fuel className="w-3 h-3 text-emerald-600 inline" />
-                            {row.jumlah_liter_solar.toLocaleString('id-ID')} Liter
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-bold block text-center">-</span>
-                        )}
-                      </td>
-
-                      {/* Aktivitas */}
-                      <td className="py-3 px-3 font-medium text-slate-800 whitespace-nowrap max-w-[200px] truncate" title={row.nama_aktivitas}>
-                        {row.nama_aktivitas}
-                      </td>
-
-                      {/* Kode SAP Badge */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          {row.kode_sap}
-                        </span>
-                      </td>
-
-                      {/* Satuan */}
-                      <td className="py-3 px-3 text-slate-600 font-mono whitespace-nowrap">
-                        {row.satuan}
-                      </td>
-
-                      {/* Operator (NIK) */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <div className="font-medium text-slate-900">{row.operator}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{row.nik_operator}</div>
-                      </td>
-
-                      {/* Lokasi */}
-                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                        {row.lokasi}
-                      </td>
-
-                      {/* Shift Badge */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        {row.shift_kerja === 'Siang' ? (
-                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
-                            Siang
-                          </span>
-                        ) : (
-                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
-                            Malam
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Jam Kerja */}
-                      <td className="py-3 px-2 text-right font-medium text-slate-700 whitespace-nowrap">
-                        {row.jam_kerja}h
-                      </td>
-
-                      {/* HM Awal */}
-                      <td className="py-3 px-2 text-right text-slate-600 font-mono text-[11px] whitespace-nowrap">
-                        {row.hm_awal.toFixed(1)}
-                      </td>
-
-                      {/* HM Akhir */}
-                      <td className="py-3 px-2 text-right text-slate-600 font-mono text-[11px] whitespace-nowrap">
-                        {row.hm_akhir.toFixed(1)}
-                      </td>
-
-                      {/* HM Berjalan */}
-                      <td className="py-3 px-2.5 text-right font-bold text-emerald-800 font-mono text-xs whitespace-nowrap">
-                        {row.hm_harian_berjalan.toFixed(1)}
-                      </td>
-
-                      {/* Hasil Kerja */}
-                      <td className="py-3 px-2.5 text-right font-semibold text-slate-900 whitespace-nowrap">
-                        {row.hasil_kerja.toLocaleString('id-ID')}
-                      </td>
-
-                      {/* Keterangan */}
-                      <td className="py-3 px-3 text-slate-500 text-[11px] max-w-[160px] truncate" title={row.keterangan}>
-                        {row.keterangan || '-'}
-                      </td>
-
-                      {/* Foto Bukti Column (Thumbnail 40x40px atau Badge Tanpa Foto) */}
+                      {/* 1. Foto Bukti Column (Thumbnail popup preview) */}
                       <td className="py-2.5 px-3 whitespace-nowrap text-center">
                         {row.foto_bukti ? (
                           <button
@@ -515,7 +388,153 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         )}
                       </td>
 
-                      {/* Aksi (Edit, Hapus) */}
+                      {/* 2. Nomor SPK Badge */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        {row.nomor_spk ? (
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                            {row.nomor_spk}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-medium italic border border-dashed border-slate-200 px-2 py-0.5 rounded">
+                            Tanpa SPK
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 3. Pengawas */}
+                      <td className="py-3 px-3.5 font-semibold text-slate-900 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          {isGlowing && (
+                            <span className="flex h-2 w-2 relative" title="Baru saja masuk dari Android">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                            </span>
+                          )}
+                          <span>{row.nama_pengawas}</span>
+                        </div>
+                      </td>
+
+                      {/* 4. Tanggal */}
+                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                        {row.tanggal}
+                      </td>
+
+                      {/* 5. Kode Unit */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded text-[11px] border border-slate-200 font-mono">
+                          {row.kode_unit}
+                        </span>
+                      </td>
+
+                      {/* 6. Aktivitas */}
+                      <td className="py-3 px-3 font-medium text-slate-800 whitespace-nowrap max-w-[200px] truncate" title={row.nama_aktivitas}>
+                        {row.nama_aktivitas}
+                      </td>
+
+                      {/* 7. Kode SAP Badge */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          {row.kode_sap}
+                        </span>
+                      </td>
+
+                      {/* 8. Satuan */}
+                      <td className="py-3 px-3 text-slate-600 font-mono whitespace-nowrap">
+                        {row.satuan}
+                      </td>
+
+                      {/* 9. Operator (NIK) */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <div className="font-medium text-slate-900">{row.operator}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{row.nik_operator}</div>
+                      </td>
+
+                      {/* 10. Lokasi */}
+                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                        <span className="font-medium text-slate-800">{row.kode_lokasi || row.lokasi}</span>
+                        {row.kode_lokasi && row.lokasi && row.kode_lokasi !== row.lokasi && (
+                          <span className="text-[10px] text-slate-400 block">{row.lokasi}</span>
+                        )}
+                      </td>
+
+                      {/* 11. Shift Badge */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        {(row.shift_kerja || '').toUpperCase() === 'SIANG' ? (
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                            Siang
+                          </span>
+                        ) : (
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
+                            Malam
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 12. Status Unit Badge */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        {(!row.status_unit || row.status_unit === 'OPERASI') && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                            OPERASI
+                          </span>
+                        )}
+                        {row.status_unit === 'STANDBY' && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                            STANDBY
+                          </span>
+                        )}
+                        {row.status_unit === 'BREAKDOWN' && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                            BREAKDOWN
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 13. Jam Kerja */}
+                      <td className="py-3 px-2 text-right font-medium text-slate-700 whitespace-nowrap">
+                        {row.jam_kerja}h
+                      </td>
+
+                      {/* 14. HM Awal */}
+                      <td className="py-3 px-2 text-right text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                        {row.hm_awal.toFixed(1)}
+                      </td>
+
+                      {/* 15. HM Akhir */}
+                      <td className="py-3 px-2 text-right text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                        {row.hm_akhir.toFixed(1)}
+                      </td>
+
+                      {/* 16. HM Berjalan */}
+                      <td className="py-3 px-2.5 text-right font-bold text-emerald-800 font-mono text-xs whitespace-nowrap">
+                        {row.hm_harian_berjalan.toFixed(1)}
+                      </td>
+
+                      {/* 17. Konsumsi Solar */}
+                      <td className="py-3 px-2.5 text-right whitespace-nowrap font-mono text-[11px]">
+                        {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
+                          <span className="font-bold text-slate-800 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 inline-flex items-center gap-1">
+                            <Fuel className="w-3 h-3 text-emerald-600 inline" />
+                            {row.jumlah_liter_solar.toLocaleString('id-ID')} L
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-bold block text-center">-</span>
+                        )}
+                      </td>
+
+                      {/* 18. Hasil Kerja */}
+                      <td className="py-3 px-2.5 text-right font-semibold text-slate-900 whitespace-nowrap">
+                        {row.hasil_kerja.toLocaleString('id-ID')}
+                      </td>
+
+                      {/* 19. Keterangan */}
+                      <td className="py-3 px-3 text-slate-500 text-[11px] max-w-[160px] truncate" title={row.keterangan}>
+                        {row.keterangan || '-'}
+                      </td>
+
+                      {/* 20. Aksi (Edit, Hapus) */}
                       <td className="py-3 px-3 text-center whitespace-nowrap sticky right-0 bg-white/95 group-hover:bg-slate-50/95">
                         <div className="flex items-center justify-center gap-1.5">
                           <button

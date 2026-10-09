@@ -12,6 +12,7 @@ export function exportToExcel(
   // Map rows with clean enterprise Indonesian column names
   const rows = data.map((item, index) => ({
     'No': index + 1,
+    'Nomor SPK': item.nomor_spk || '-',
     'Tanggal': item.tanggal,
     'Pengawas': item.nama_pengawas,
     'Kode Unit': item.kode_unit,
@@ -22,7 +23,7 @@ export function exportToExcel(
     'Satuan': item.satuan,
     'Operator': item.operator,
     'NIK Operator': item.nik_operator,
-    'Lokasi': item.lokasi,
+    'Kode Lokasi': item.kode_lokasi || item.lokasi,
     'Shift': item.shift_kerja,
     'Jam Kerja (Jam)': item.jam_kerja,
     'HM Awal': item.hm_awal,
@@ -38,6 +39,7 @@ export function exportToExcel(
   // Set explicit column widths for professional layout
   worksheet['!cols'] = [
     { wch: 6 },  // No
+    { wch: 16 }, // Nomor SPK
     { wch: 13 }, // Tanggal
     { wch: 18 }, // Pengawas
     { wch: 12 }, // Kode Unit
@@ -48,7 +50,7 @@ export function exportToExcel(
     { wch: 10 }, // Satuan
     { wch: 20 }, // Operator
     { wch: 14 }, // NIK Operator
-    { wch: 22 }, // Lokasi
+    { wch: 14 }, // Kode Lokasi
     { wch: 10 }, // Shift
     { wch: 16 }, // Jam Kerja
     { wch: 12 }, // HM Awal

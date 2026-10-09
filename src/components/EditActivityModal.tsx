@@ -33,6 +33,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [satuan, setSatuan] = useState('');
   const [operatorName, setOperatorName] = useState('');
   const [nikOperator, setNikOperator] = useState('');
+  const [nomorSpk, setNomorSpk] = useState('');
   const [lokasi, setLokasi] = useState('');
   const [shiftKerja, setShiftKerja] = useState<'Siang' | 'Malam'>('Siang');
   const [jamKerja, setJamKerja] = useState<number>(10);
@@ -60,8 +61,9 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setSatuan(activity.satuan);
       setOperatorName(activity.operator);
       setNikOperator(activity.nik_operator);
+      setNomorSpk(activity.nomor_spk || '');
       setLokasi(activity.lokasi);
-      setShiftKerja(activity.shift_kerja);
+      setShiftKerja(activity.shift_kerja && activity.shift_kerja.toUpperCase() === 'MALAM' ? 'Malam' : 'Siang');
       setJamKerja(activity.jam_kerja);
       setHmAwal(activity.hm_awal);
       setHmAkhir(activity.hm_akhir);
@@ -144,6 +146,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
         operator: operatorName,
         nik_operator: nikOperator,
         lokasi,
+        nomor_spk: nomorSpk.trim() || null,
         shift_kerja: shiftKerja,
         jam_kerja: jamKerja,
         hm_awal: hmAwal,
@@ -496,6 +499,20 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                     </span>
                   </div>
                 ) : null}
+              />
+            </div>
+
+            {/* Nomor SPK */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Nomor SPK
+              </label>
+              <input
+                type="text"
+                value={nomorSpk}
+                onChange={(e) => setNomorSpk(e.target.value)}
+                placeholder="Contoh: SPK-2026-X101"
+                className="w-full text-xs font-mono font-bold uppercase rounded-lg border border-slate-300 p-2.5 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white"
               />
             </div>
 

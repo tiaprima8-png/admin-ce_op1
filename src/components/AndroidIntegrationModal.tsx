@@ -41,20 +41,34 @@ export const AndroidIntegrationModal: React.FC<AndroidIntegrationModalProps> = (
     }
   };
 
-  const retrofitCode = `// HeavyTrack Mobile - Android Retrofit Interface (Supports JSON Base64 & Multipart)
+  const retrofitCode = `// HeavyTrack Mobile - Android Retrofit Interface v2.0
 interface HeavyTrackApiService {
+    // 1. Sync Master Data (Unit, Aktivitas, Operator, Lokasi)
     @GET("api/master-data")
     suspend fun getMasterData(
         @Query("pengawas") namaPengawas: String
     ): Response<MasterDataResponse>
 
-    // 1. Kirim Laporan dengan Foto Base64
+    // 2. Sync Daftar Rencana Kerja Harian
+    @GET("api/rencana-kerja")
+    suspend fun getRencanaKerja(
+        @Query("pengawas") namaPengawas: String,
+        @Query("tanggal") tanggal: String
+    ): Response<RencanaKerjaResponse>
+
+    // 3. Simpan Rencana Kerja Baru dari Pengawas
+    @POST("api/rencana-kerja")
+    suspend fun submitRencanaKerja(
+        @Body request: RencanaKerjaRequest
+    ): Response<RencanaKerjaItemResponse>
+
+    // 4. Kirim Realisasi Kerja Lapangan (Terkoneksi ke Rencana & Nomor SPK)
     @POST("api/aktivitas-unit")
     suspend fun submitAktivitas(
-        @Body request: AktivitasRequest // Berisi field foto_bukti: "data:image/jpeg;base64,..."
+        @Body request: RealisasiAktivitasRequest
     ): Response<AktivitasResponse>
 
-    // 2. Alternatif Kirim Laporan via Multipart / Form-Data File Asli
+    // 5. Alternatif Upload File Foto Fisik via Multipart
     @Multipart
     @POST("api/aktivitas-unit")
     suspend fun submitAktivitasMultipart(
