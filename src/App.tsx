@@ -343,9 +343,27 @@ export default function App() {
               return [newPlan, ...prev];
             });
             soundService.playNewActivityChime();
-          } else if ((packet.event === 'SPK_TERBIT' || packet.event === 'UPDATE_RENCANA') && packet.data) {
-            const updatedPlan: RencanaKerja = packet.data;
-            setRencanaList(prev => prev.map(r => r.id === updatedPlan.id ? updatedPlan : r));
+          } else if (
+            (packet.event === 'SPK_PUBLISHED' || packet.event === 'SPK_TERBIT' || packet.event === 'UPDATE_RENCANA')
+          ) {
+            const planId = packet.id || (packet.payload && packet.payload.id) || (packet.data && packet.data.id);
+            const targetSpk = packet.nomor_spk || (packet.payload && packet.payload.nomor_spk) || (packet.data && packet.data.nomor_spk);
+            const targetStatus = packet.status_spk || (packet.payload && packet.payload.status_spk) || (packet.data && packet.data.status_spk) || 'SPK_TERBIT';
+            const updatedPlan: RencanaKerja | undefined = packet.data;
+
+            if (planId) {
+              setRencanaList(prev => prev.map(r => {
+                if (r.id === planId) {
+                  return {
+                    ...r,
+                    ...(updatedPlan || {}),
+                    nomor_spk: targetSpk || r.nomor_spk,
+                    status_spk: targetStatus || r.status_spk
+                  };
+                }
+                return r;
+              }));
+            }
           } else if (packet.event === 'DELETE_RENCANA' && packet.id) {
             setRencanaList(prev => prev.filter(r => r.id !== packet.id));
           }

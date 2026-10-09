@@ -181,10 +181,18 @@ async function startServer() {
       sql += ' ORDER BY r.tanggal DESC, r.created_at DESC';
 
       const rows = queryAll<RencanaKerjaRow>(sql, params);
+
+      // Pastikan field nomor_spk dan status_spk selalu disertakan dalam response JSON
+      const formattedRows = rows.map(r => ({
+        ...r,
+        nomor_spk: r.nomor_spk !== undefined && r.nomor_spk !== null && r.nomor_spk !== '' ? String(r.nomor_spk) : null,
+        status_spk: (r.status_spk as string) || (r.nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK')
+      }));
+
       res.json({
         status: 'success',
-        total: rows.length,
-        data: rows
+        total: formattedRows.length,
+        data: formattedRows
       });
     } catch (err: unknown) {
       console.error('Error fetching rencana-kerja:', err);
@@ -299,27 +307,56 @@ async function startServer() {
         return res.status(404).json({ error: 'Rencana kerja tidak ditemukan.' });
       }
 
-      // Broadcast event SPK_TERBIT khusus untuk auto-sync pengawas Android
+      // Format payload SPK sesuai spesifikasi integrasi Android HeavyTrack Mobile
+      const spkPayload = {
+        id: updatedRow.id,
+        nomor_spk: updatedRow.nomor_spk || cleanSpk,
+        nama_pengawas: updatedRow.nama_pengawas,
+        kode_unit: updatedRow.kode_unit,
+        status_spk: updatedRow.status_spk || 'SPK_TERBIT'
+      };
+
+      // 1. Broadcast event 'SPK_PUBLISHED' dengan Payload: { id, nomor_spk, nama_pengawas, kode_unit, status_spk }
+      broadcast({
+        event: 'SPK_PUBLISHED',
+        ...spkPayload,
+        payload: spkPayload,
+        data: {
+          ...updatedRow,
+          nomor_spk: updatedRow.nomor_spk || cleanSpk,
+          status_spk: 'SPK_TERBIT'
+        },
+        message: `Nomor SPK ${cleanSpk} telah diterbitkan untuk ${updatedRow.nama_pengawas} (Unit ${updatedRow.kode_unit})`,
+        timestamp: new Date().toISOString()
+      });
+
+      // 2. Broadcast kompatibilitas 'SPK_TERBIT' dan 'UPDATE_RENCANA'
       broadcast({
         event: 'SPK_TERBIT',
         message: `Nomor SPK ${cleanSpk} telah diterbitkan untuk ${updatedRow.nama_pengawas} (Unit ${updatedRow.kode_unit})`,
         data: updatedRow,
+        payload: spkPayload,
         timestamp: new Date().toISOString()
       });
 
-      // Broadcast update ke seluruh klien Web Admin
       broadcast({
         event: 'UPDATE_RENCANA',
         data: updatedRow,
+        payload: spkPayload,
         timestamp: new Date().toISOString()
       });
 
-      console.log(`📜 [SPK-OK] Nomor SPK ${cleanSpk} diterbitkan untuk Rencana #${id} & dibroadcast via WebSocket`);
+      console.log(`📜 [SPK_PUBLISHED] Nomor SPK ${cleanSpk} diterbitkan untuk Rencana #${id} & dibroadcast via WebSocket`);
 
       res.json({
         status: 'success',
         message: `Nomor SPK ${cleanSpk} berhasil diterbitkan & disinkronkan ke aplikasi Android.`,
-        data: updatedRow
+        data: {
+          ...updatedRow,
+          nomor_spk: updatedRow.nomor_spk || cleanSpk,
+          status_spk: 'SPK_TERBIT'
+        },
+        payload: spkPayload
       });
     } catch (err: unknown) {
       console.error('Error updating SPK:', err);

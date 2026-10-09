@@ -168,7 +168,73 @@ interface HeavyTrackApiService {
             )}
           </div>
 
-          {/* Section 2: POST /api/aktivitas-unit */}
+          {/* Section 2: GET /api/rencana-kerja (Sync SPK & Rencana) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-mono text-[11px] rounded font-bold">GET</span>
+                <span className="font-mono text-xs text-slate-800">/api/rencana-kerja?pengawas=:nama&tanggal=:tgl</span>
+              </h4>
+            </div>
+            <p className="text-xs text-slate-600 mb-2">
+              Diambil oleh aplikasi Android untuk memeriksa daftar rencana kerja aktif. Field <code className="font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">nomor_spk</code> dan <code className="font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">status_spk</code> selalu disertakan dalam response JSON untuk auto-fill formulir realisasi pengawas.
+            </p>
+            <div className="bg-slate-900 rounded-lg p-3 text-slate-100 font-mono text-[11px] overflow-x-auto">
+              <pre>{`// Contoh JSON Response GET /api/rencana-kerja
+{
+  "status": "success",
+  "total": 1,
+  "data": [
+    {
+      "id": "RK-2026-001",
+      "nama_pengawas": "Budi Santoso",
+      "tanggal": "2026-10-09",
+      "status_unit": "OPERASI",
+      "kode_unit": "HEH1",
+      "operator": "Hendri Kurniawan",
+      "kode_lokasi": "001A",
+      "shift_kerja": "SIANG",
+      "nomor_spk": "SPK-2026-X101",        // <-- Nomor SPK Resmi Terbit
+      "status_spk": "SPK_TERBIT",           // <-- Status: SPK_TERBIT / MENUNGGU_SPK / REALISASI_SELESAI
+      "keterangan_rencana": "Loading overburden di Pit Utara",
+      "created_at": "2026-10-09 07:00:00"
+    }
+  ]
+}`}</pre>
+            </div>
+          </div>
+
+          {/* Section 3: WebSocket Event 'SPK_PUBLISHED' (Real-Time Push ke Android) */}
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-emerald-600 text-white font-mono text-[11px] rounded font-bold">WEBSOCKET</span>
+              <span className="font-mono text-xs font-bold text-emerald-950">Event: SPK_PUBLISHED</span>
+            </div>
+            <p className="text-xs text-emerald-900">
+              Saat Admin menekan tombol <strong>"Terbitkan SPK"</strong> di Web Dashboard, server langsung membroadcast event <code className="font-bold">SPK_PUBLISHED</code> ke seluruh aplikasi Android yang sedang aktif. Form pengawas langsung menerima nomor SPK tanpa perlu refresh manual.
+            </p>
+            <div className="bg-slate-900 rounded-lg p-3 text-emerald-300 font-mono text-[11px] overflow-x-auto">
+              <pre>{`// WebSocket Broadcast Packet dari Server:
+{
+  "event": "SPK_PUBLISHED",
+  "payload": {
+    "id": "RK-2026-001",
+    "nomor_spk": "SPK-2026-X101",
+    "nama_pengawas": "Budi Santoso",
+    "kode_unit": "HEH1",
+    "status_spk": "SPK_TERBIT"
+  },
+  "id": "RK-2026-001",
+  "nomor_spk": "SPK-2026-X101",
+  "nama_pengawas": "Budi Santoso",
+  "kode_unit": "HEH1",
+  "status_spk": "SPK_TERBIT",
+  "timestamp": "2026-10-09T07:14:20.000Z"
+}`}</pre>
+            </div>
+          </div>
+
+          {/* Section 4: POST /api/aktivitas-unit */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
@@ -177,19 +243,22 @@ interface HeavyTrackApiService {
               </h4>
             </div>
             <p className="text-xs text-slate-600 mb-2">
-              Mengirim laporan aktivitas kerja harian unit. Server mengeksekusi transaksi atomik (simpan laporan, update HM unit terakhir, broadcast WebSocket).
+              Mengirim laporan realisasi kerja harian unit dengan menyertakan <code className="font-bold text-slate-800 bg-slate-100 px-1 py-0.5 rounded">nomor_spk</code> dan <code className="font-bold text-slate-800 bg-slate-100 px-1 py-0.5 rounded">rencana_id</code>. Server mengeksekusi transaksi atomik (simpan laporan, update HM unit terakhir, broadcast WebSocket ke Admin).
             </p>
 
             <div className="bg-slate-900 rounded-lg p-3 text-slate-100 font-mono text-[11px] overflow-x-auto">
               <pre>{`{
+  "rencana_id": "RK-2026-001",
+  "nomor_spk": "SPK-2026-X101",
   "nama_pengawas": "Budi Santoso",
-  "tanggal": "2026-10-08",
+  "tanggal": "2026-10-09",
   "kode_unit": "HEH1",
   "nama_aktivitas": "Loading Overburden (OB)",
   "kode_sap": "ACT-SAP-102",
   "satuan": "BCM",
   "operator": "Hendri Kurniawan",
   "nik_operator": "NIK-94822",
+  "kode_lokasi": "001A",
   "lokasi": "Pit Utara Blok C",
   "shift_kerja": "Siang",
   "status_unit": "OPERASI",
