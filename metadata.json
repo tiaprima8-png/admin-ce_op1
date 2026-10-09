@@ -1,0 +1,7 @@
+{
+  "name": "Portal Dashboard Administrator - HeavyTrack Enterprise",
+  "description": "Portal Dashboard Administrator real-time monitoring dan database master alat berat terintegrasi aplikasi HeavyTrack Mobile.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
