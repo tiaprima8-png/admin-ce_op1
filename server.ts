@@ -55,7 +55,7 @@ async function startServer() {
     // Send welcome packet with current server time
     ws.send(JSON.stringify({
       event: 'CONNECTED',
-      message: 'Tersambung ke WebSocket HeavyTrack Enterprise Server',
+      message: 'Tersambung ke WebSocket RKCE (Rencana Kerja Unit Civil Engineering) Server',
       timestamp: new Date().toISOString(),
       activeClients: clients.size
     }));
@@ -93,7 +93,7 @@ async function startServer() {
   app.get('/api/health', (req: Request, res: Response) => {
     res.json({
       status: 'ok',
-      service: 'HeavyTrack Enterprise Portal API',
+      service: 'RKCE (Rencana Kerja Unit Civil Engineering) Portal API',
       wsClients: clients.size,
       uptime: process.uptime()
     });
@@ -307,7 +307,7 @@ async function startServer() {
         return res.status(404).json({ error: 'Rencana kerja tidak ditemukan.' });
       }
 
-      // Format payload SPK sesuai spesifikasi integrasi Android HeavyTrack Mobile
+      // Format payload SPK sesuai spesifikasi integrasi Android RKCE Mobile
       const spkPayload = {
         id: updatedRow.id,
         nomor_spk: updatedRow.nomor_spk || cleanSpk,
@@ -1330,10 +1330,10 @@ async function startServer() {
         const rencana_kerja = queryAll('SELECT * FROM rencana_kerja');
         const laporan = queryAll('SELECT * FROM hasil_input_aktivitas');
 
-        res.setHeader('Content-Disposition', 'attachment; filename="heavytrack_backup.json"');
+        res.setHeader('Content-Disposition', 'attachment; filename="rkce_backup.json"');
         res.setHeader('Content-Type', 'application/json');
         return res.json({
-          system: 'HeavyTrack Enterprise Database Backup',
+          system: 'RKCE (Rencana Kerja Unit Civil Engineering) Database Backup',
           exported_at: new Date().toISOString(),
           tables: {
             users,
@@ -1347,7 +1347,7 @@ async function startServer() {
         });
       } else {
         // SQL dump format
-        let sqlDump = `-- HeavyTrack Enterprise SQL Dump\n-- Exported At: ${new Date().toISOString()}\n\n`;
+        let sqlDump = `-- RKCE (Rencana Kerja Unit Civil Engineering) SQL Dump\n-- Exported At: ${new Date().toISOString()}\n\n`;
         const tables = ['users', 'units', 'aktivitas_unit', 'operators', 'lokasi', 'rencana_kerja', 'hasil_input_aktivitas'];
 
         for (const tbl of tables) {
@@ -1361,7 +1361,7 @@ async function startServer() {
           sqlDump += '\n';
         }
 
-        res.setHeader('Content-Disposition', 'attachment; filename="heavytrack_backup.sql"');
+        res.setHeader('Content-Disposition', 'attachment; filename="rkce_backup.sql"');
         res.setHeader('Content-Type', 'text/plain');
         return res.send(sqlDump);
       }
@@ -1386,7 +1386,7 @@ async function startServer() {
   }
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 HeavyTrack Enterprise Server running at http://0.0.0.0:${PORT}`);
+    console.log(`🚀 RKCE (Rencana Kerja Unit Civil Engineering) Server running at http://0.0.0.0:${PORT}`);
     console.log(`🔌 WebSocket server listening on ws://0.0.0.0:${PORT}/ws`);
   });
 }

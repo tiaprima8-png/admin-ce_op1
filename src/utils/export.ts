@@ -3,7 +3,7 @@ import { HasilInputAktivitas, UnitAnalyticsRow, AktivitasAnalyticsRow, Analytics
 
 export function exportToExcel(
   data: HasilInputAktivitas[],
-  filename = `rekapitulasi_heavytrack_${new Date().toISOString().slice(0, 10)}.xlsx`
+  filename = `rekapitulasi_rkce_${new Date().toISOString().slice(0, 10)}.xlsx`
 ): void {
   if (data.length === 0) {
     return;
@@ -72,7 +72,7 @@ export function exportAnalyticsToExcel(
   unitData: UnitAnalyticsRow[],
   aktivitasData: AktivitasAnalyticsRow[],
   summary: AnalyticsSummary,
-  filename = `rangkuman_analitik_heavytrack_${new Date().toISOString().slice(0, 10)}.xlsx`
+  filename = `rangkuman_analitik_rkce_${new Date().toISOString().slice(0, 10)}.xlsx`
 ): void {
   const workbook = XLSX.utils.book_new();
 

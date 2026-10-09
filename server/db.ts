@@ -182,7 +182,7 @@ export function generateSampleFieldPhoto(kodeUnit: string, aktivitas: string, lo
     <rect x="20" y="20" width="760" height="560" fill="none" stroke="#22c55e" stroke-width="2" stroke-dasharray="16,8" opacity="0.6"/>
     <!-- Top HUD Banner -->
     <rect x="20" y="20" width="760" height="45" fill="rgba(15,23,42,0.85)"/>
-    <text x="40" y="48" fill="#4ade80" font-family="monospace" font-size="14" font-weight="bold">HEAVYTRACK MOBILE • GPS VERIFIED [ANDROID CAM]</text>
+    <text x="40" y="48" fill="#4ade80" font-family="monospace" font-size="14" font-weight="bold">RKCE MOBILE • GPS VERIFIED [ANDROID CAM]</text>
     <text x="760" y="48" fill="#f8fafc" font-family="monospace" font-size="13" text-anchor="end">LAT: -3.42819° • LON: 114.83912° • ELEV: 112m</text>
     
     <!-- Crosshair in center -->

@@ -289,7 +289,7 @@ export default function App() {
       ws.onopen = () => {
         if (!isMounted) return;
         setWsStatus('connected');
-        console.log('📡 Connected to HeavyTrack WebSocket server');
+        console.log('📡 Connected to RKCE WebSocket server');
       };
 
       ws.onmessage = (event) => {
@@ -459,7 +459,7 @@ export default function App() {
         </g>
         <rect x="20" y="20" width="760" height="560" fill="none" stroke="#22c55e" stroke-width="2" stroke-dasharray="16,8" opacity="0.6"/>
         <rect x="20" y="20" width="760" height="40" fill="rgba(15,23,42,0.85)"/>
-        <text x="40" y="46" fill="#4ade80" font-family="monospace" font-size="13" font-weight="bold">HEAVYTRACK MOBILE CAM • ANDROID REALISASI SPK</text>
+        <text x="40" y="46" fill="#4ade80" font-family="monospace" font-size="13" font-weight="bold">RKCE MOBILE CAM • ANDROID REALISASI SPK</text>
         <rect x="20" y="500" width="760" height="80" fill="rgba(15,23,42,0.9)"/>
         <text x="40" y="530" fill="#f8fafc" font-family="sans-serif" font-size="15" font-weight="bold">UNIT: ${randomUnit.kode_unit} | ${randomAct.nama_aktivitas}</text>
         <text x="40" y="555" fill="#94a3b8" font-family="sans-serif" font-size="12">SPK: ${generatedSpk} • LOKASI: ${randomLokasi.kode_lokasi} (${randomLokasi.wilayah}) • PENGAWAS: ${chosenPengawas}</text>
@@ -787,7 +787,7 @@ export default function App() {
       <footer className="mt-auto border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800">HeavyTrack Enterprise Portal</span>
+            <span className="font-bold text-slate-800">RKCE (Rencana Kerja Unit Civil Engineering)</span>
             <span>—</span>
             <span>Penyedia Database Master & Monitoring Fleet Lapangan</span>
           </div>

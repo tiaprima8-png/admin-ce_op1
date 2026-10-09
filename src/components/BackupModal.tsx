@@ -18,7 +18,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({ isOpen, onClose }) => 
 
     const link = document.createElement('a');
     link.href = `/api/backup/export?format=${format}`;
-    link.download = `heavytrack_backup_${new Date().toISOString().slice(0, 10)}.${format}`;
+    link.download = `rkce_backup_${new Date().toISOString().slice(0, 10)}.${format}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -43,7 +43,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({ isOpen, onClose }) => 
                 Backup Database Master & Rekapitulasi
               </h3>
               <p className="text-xs text-slate-500">
-                Penyimpanan cadangan terstruktur HeavyTrack Enterprise
+                Penyimpanan cadangan terstruktur RKCE (Rencana Kerja Unit Civil Engineering)
               </p>
             </div>
           </div>

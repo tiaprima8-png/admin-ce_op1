@@ -41,8 +41,8 @@ export const AndroidIntegrationModal: React.FC<AndroidIntegrationModalProps> = (
     }
   };
 
-  const retrofitCode = `// HeavyTrack Mobile - Android Retrofit Interface v2.0
-interface HeavyTrackApiService {
+  const retrofitCode = `// RKCE Mobile - Android Retrofit Interface v2.0
+interface RkceApiService {
     // 1. Sync Master Data (Unit, Aktivitas, Operator, Lokasi)
     @GET("api/master-data")
     suspend fun getMasterData(
@@ -88,7 +88,7 @@ interface HeavyTrackApiService {
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">
-                Integrasi REST API Aplikasi "HeavyTrack Mobile"
+                Integrasi REST API Aplikasi "RKCE Mobile"
               </h3>
               <p className="text-xs text-slate-500">
                 Spesifikasi endpoint komunikasi Android di lapangan (Offline-first sync & push report)

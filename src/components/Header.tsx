@@ -34,20 +34,29 @@ export const Header: React.FC<HeaderProps> = ({
           
           {/* Logo & Brand Identity */}
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-700 to-emerald-500 flex items-center justify-center text-white shadow-sm ring-2 ring-emerald-100">
-              <HardHat className="h-6 w-6" />
+            {/* Launcher Icon: RKCE */}
+            <div 
+              className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-700 to-emerald-500 flex flex-col items-center justify-center text-white shadow-sm ring-2 ring-emerald-100 select-none cursor-default"
+              title="Launcher Icon: RKCE"
+            >
+              <span className="font-extrabold text-[13px] tracking-tight leading-none text-white font-sans drop-shadow-xs">
+                RKCE
+              </span>
+              <span className="text-[7px] font-bold text-emerald-200 tracking-tighter leading-none mt-0.5">
+                CIVIL
+              </span>
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-lg tracking-tight text-slate-900">
-                  HeavyTrack
+                  RKCE
                 </span>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Enterprise
+                  Portal Admin
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium">
-                Portal Dashboard Administrator & Fleet Monitoring
+                RKCE (Rencana Kerja Unit Civil Engineering)
               </p>
             </div>
           </div>
@@ -171,7 +180,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <button
                       onClick={() => {
                         setShowProfileMenu(false);
-                        alert('Anda sedang berada di sesi Super Admin aktif HeavyTrack Enterprise.');
+                        alert('Anda sedang berada di sesi Super Admin aktif RKCE (Rencana Kerja Unit Civil Engineering).');
                       }}
                       className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg flex items-center gap-2 cursor-pointer"
                     >

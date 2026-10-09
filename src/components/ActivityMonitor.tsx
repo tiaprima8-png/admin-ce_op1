@@ -132,7 +132,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
-    exportToExcel(filteredActivities, `rekapitulasi_heavytrack_${today}.xlsx`);
+    exportToExcel(filteredActivities, `rekapitulasi_rkce_${today}.xlsx`);
     setFeedbackNotice(`File Excel (.xlsx) berhasil diunduh (${filteredActivities.length} baris data)!`);
     setTimeout(() => setFeedbackNotice(null), 3500);
   };
