@@ -11,7 +11,8 @@ import {
   ChevronLeft, 
   ChevronRight,
   ShieldAlert,
-  Clock
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 
 export type ActiveTab = 
@@ -20,6 +21,7 @@ export type ActiveTab =
   | 'lokasi' 
   | 'units' 
   | 'aktivitas' 
+  | 'kendala'
   | 'operators' 
   | 'users' 
   | 'analytics';
@@ -34,6 +36,7 @@ interface SidebarProps {
     lokasi: number;
     units: number;
     aktivitas: number;
+    kendala: number;
     operators: number;
     users: number;
   };
@@ -99,6 +102,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'MASTER AKTIVITAS',
       icon: ListChecks,
       count: counts.aktivitas
+    },
+    {
+      id: 'kendala',
+      label: 'MASTER KENDALA',
+      icon: AlertTriangle,
+      count: counts.kendala
     },
     {
       id: 'operators',

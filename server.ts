@@ -18,18 +18,16 @@ import db, {
   type OperatorRow,
   type UserRow,
   type LokasiRow,
-  type RencanaKerjaRow
+  type RencanaKerjaRow,
+  type MasterKendalaRow
 } from './server/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === 'production';
-// Port configuration: Read dynamic process.env.PORT (or 8080) for Cloud Run in production,
-// and default to 3000 for AI Studio development environment
-const PORT = isProduction
-  ? (process.env.PORT ? parseInt(process.env.PORT, 10) : 8080)
-  : 3000;
+// Port configuration: Read dynamic process.env.PORT if provided, defaulting to 3000 for AI Studio
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Multer memory storage configuration for multipart/form-data photo uploads
 const upload = multer({
@@ -114,6 +112,7 @@ async function startServer() {
       let operators: OperatorRow[];
       let aktivitas: AktivitasUnitRow[];
       const lokasi: LokasiRow[] = queryAll<LokasiRow>('SELECT * FROM lokasi ORDER BY kode_lokasi ASC');
+      const kendala: MasterKendalaRow[] = queryAll<MasterKendalaRow>('SELECT * FROM master_kendala WHERE status_aktif = 1 ORDER BY id ASC');
 
       if (pengawas && pengawas !== 'Semua') {
         units = queryAll<UnitRow>('SELECT * FROM units WHERE nama_pengawas = ? ORDER BY kode_unit ASC', [pengawas]);
@@ -133,11 +132,13 @@ async function startServer() {
         total_operators: operators.length,
         total_aktivitas: aktivitas.length,
         total_lokasi: lokasi.length,
+        total_kendala: kendala.length,
         data: {
           units,
           aktivitas,
           operators,
-          lokasi
+          lokasi,
+          kendala
         }
       });
     } catch (err: unknown) {
@@ -537,6 +538,94 @@ async function startServer() {
     }
   });
 
+  // 1D. MASTER KENDALA OPERASIONAL REST API
+  // Mengembalikan ke-15 data kendala standar operasional (dengan id, nama_kendala, status_aktif: 1)
+  app.get('/api/master-kendala', (req: Request, res: Response) => {
+    try {
+      const { search, status } = req.query;
+      let sql = 'SELECT * FROM master_kendala WHERE 1=1';
+      const params: (string | number)[] = [];
+
+      if (search && typeof search === 'string' && search.trim() !== '') {
+        sql += ' AND nama_kendala LIKE ?';
+        params.push(`%${search.trim()}%`);
+      }
+
+      if (status !== undefined && status !== 'Semua' && status !== '') {
+        sql += ' AND status_aktif = ?';
+        params.push(status === '1' || status === 'true' || status === 'aktif' ? 1 : 0);
+      }
+
+      sql += ' ORDER BY id ASC';
+      const rows = queryAll<MasterKendalaRow>(sql, params);
+      res.json(rows);
+    } catch (err: unknown) {
+      console.error('Error fetching master kendala:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/master-kendala', (req: Request, res: Response) => {
+    try {
+      const { nama_kendala, status_aktif } = req.body;
+      if (!nama_kendala || typeof nama_kendala !== 'string' || nama_kendala.trim() === '') {
+        return res.status(400).json({ error: 'Nama kendala wajib diisi.' });
+      }
+
+      const activeStatus = status_aktif === 0 || status_aktif === false || status_aktif === '0' ? 0 : 1;
+      const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+      const result = execute(
+        'INSERT INTO master_kendala (nama_kendala, status_aktif, created_at) VALUES (?, ?, ?)',
+        [nama_kendala.trim(), activeStatus, createdAt]
+      );
+
+      const newRow = queryOne<MasterKendalaRow>('SELECT * FROM master_kendala WHERE id = ?', [result.lastInsertRowId]);
+      res.status(201).json({ status: 'success', data: newRow });
+    } catch (err: unknown) {
+      console.error('Error creating master kendala:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.put('/api/master-kendala/:id', (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { nama_kendala, status_aktif } = req.body;
+
+      const existing = queryOne<MasterKendalaRow>('SELECT * FROM master_kendala WHERE id = ?', [id]);
+      if (!existing) {
+        return res.status(404).json({ error: 'Data kendala tidak ditemukan.' });
+      }
+
+      const updatedName = nama_kendala !== undefined ? String(nama_kendala).trim() : existing.nama_kendala;
+      const updatedStatus = status_aktif !== undefined ? (status_aktif === 0 || status_aktif === false || status_aktif === '0' ? 0 : 1) : existing.status_aktif;
+
+      execute('UPDATE master_kendala SET nama_kendala = ?, status_aktif = ? WHERE id = ?', [
+        updatedName,
+        updatedStatus,
+        id
+      ]);
+
+      const updatedRow = queryOne<MasterKendalaRow>('SELECT * FROM master_kendala WHERE id = ?', [id]);
+      res.json({ status: 'success', data: updatedRow });
+    } catch (err: unknown) {
+      console.error('Error updating master kendala:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.delete('/api/master-kendala/:id', (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      execute('DELETE FROM master_kendala WHERE id = ?', [id]);
+      res.json({ status: 'success', message: 'Data kendala berhasil dihapus.' });
+    } catch (err: unknown) {
+      console.error('Error deleting master kendala:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // 2. POST /api/aktivitas-unit
   // Atomic transaction from Android app or manual dashboard entry (supports Base64 JSON & multipart/form-data)
   app.post('/api/aktivitas-unit', upload.single('foto_bukti') as unknown as express.RequestHandler, (req: Request, res: Response) => {
@@ -563,7 +652,10 @@ async function startServer() {
         keterangan,
         status_unit: rawStatusUnit,
         is_isi_solar: rawIsIsiSolar,
-        jumlah_liter_solar: rawJumlahLiterSolar
+        jumlah_liter_solar: rawJumlahLiterSolar,
+        stik_awal: rawStikAwal,
+        stik_akhir: rawStikAkhir,
+        kendala_list: rawKendalaList
       } = req.body;
 
       // Extract foto_bukti either from multipart/form-data file upload or Base64 JSON string
@@ -594,6 +686,14 @@ async function startServer() {
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
       const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawJumlahLiterSolar) || 0) : 0;
 
+      // Stik BBM & Kendala handling
+      const numStikAwal = rawStikAwal !== undefined && rawStikAwal !== null && rawStikAwal !== '' ? parseFloat(rawStikAwal) : null;
+      const numStikAkhir = rawStikAkhir !== undefined && rawStikAkhir !== null && rawStikAkhir !== '' ? parseFloat(rawStikAkhir) : null;
+      let kendalaListStr: string | null = null;
+      if (rawKendalaList) {
+        kendalaListStr = typeof rawKendalaList === 'string' ? rawKendalaList : JSON.stringify(rawKendalaList);
+      }
+
       const kode_lokasi = (rawKodeLokasi || rawLokasi || '001A').toString().trim();
       const lokasi = (rawLokasi || rawKodeLokasi || 'Pit Operasional').toString().trim();
       const shift_kerja = (rawShiftKerja || 'SIANG').toUpperCase() === 'MALAM' ? 'Malam' : 'Siang';
@@ -604,8 +704,8 @@ async function startServer() {
           rencana_id, nama_pengawas, tanggal, kode_unit, nama_aktivitas, kode_sap, satuan,
           operator, nik_operator, kode_lokasi, lokasi, nomor_spk, shift_kerja, jam_kerja, hm_awal, hm_akhir,
           hm_harian_berjalan, hasil_kerja, keterangan, foto_bukti,
-          status_unit, is_isi_solar, jumlah_liter_solar, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, kendala_list, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const insertResult = execute(insertSql, [
@@ -632,6 +732,9 @@ async function startServer() {
         status_unit,
         is_isi_solar,
         jumlah_liter_solar,
+        numStikAwal,
+        numStikAkhir,
+        kendalaListStr,
         createdAt
       ]);
 
@@ -760,10 +863,25 @@ async function startServer() {
       sql += ' ORDER BY id DESC';
 
       const rows = queryAll<HasilInputAktivitasRow>(sql, params);
+      const formattedRows = rows.map(r => {
+        let parsedKendala = null;
+        if (r.kendala_list) {
+          try {
+            parsedKendala = JSON.parse(r.kendala_list);
+          } catch {
+            parsedKendala = r.kendala_list;
+          }
+        }
+        return {
+          ...r,
+          kendala_list: parsedKendala
+        };
+      });
+
       res.json({
         status: 'success',
-        total: rows.length,
-        data: rows
+        total: formattedRows.length,
+        data: formattedRows
       });
     } catch (err: unknown) {
       console.error('Error fetching rekapitulasi:', err);
@@ -794,7 +912,10 @@ async function startServer() {
         keterangan,
         status_unit: rawStatusUnit,
         is_isi_solar: rawIsIsiSolar,
-        jumlah_liter_solar: rawJumlahLiterSolar
+        jumlah_liter_solar: rawJumlahLiterSolar,
+        stik_awal: rawStikAwal,
+        stik_akhir: rawStikAkhir,
+        kendala_list: rawKendalaList
       } = req.body;
 
       const numHmAwal = parseFloat(hm_awal) || 0;
@@ -808,6 +929,13 @@ async function startServer() {
       const status_unit = ['OPERASI', 'STANDBY', 'BREAKDOWN'].includes(statusUnitStr) ? statusUnitStr : 'OPERASI';
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
       const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawJumlahLiterSolar) || 0) : 0;
+
+      const numStikAwal = rawStikAwal !== undefined && rawStikAwal !== null && rawStikAwal !== '' ? parseFloat(rawStikAwal) : null;
+      const numStikAkhir = rawStikAkhir !== undefined && rawStikAkhir !== null && rawStikAkhir !== '' ? parseFloat(rawStikAkhir) : null;
+      let kendalaListStr: string | null = null;
+      if (rawKendalaList) {
+        kendalaListStr = typeof rawKendalaList === 'string' ? rawKendalaList : JSON.stringify(rawKendalaList);
+      }
 
       // Check if new photo was uploaded or passed in body
       let foto_bukti = req.body.foto_bukti;
@@ -826,7 +954,8 @@ async function startServer() {
             kode_sap = ?, satuan = ?, operator = ?, nik_operator = ?, lokasi = ?,
             shift_kerja = ?, jam_kerja = ?, hm_awal = ?, hm_akhir = ?, hm_harian_berjalan = ?,
             hasil_kerja = ?, keterangan = ?, foto_bukti = ?,
-            status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?
+            status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?,
+            stik_awal = ?, stik_akhir = ?, kendala_list = ?
           WHERE id = ?
         `;
         params = [
@@ -850,6 +979,9 @@ async function startServer() {
           status_unit,
           is_isi_solar,
           jumlah_liter_solar,
+          numStikAwal,
+          numStikAkhir,
+          kendalaListStr,
           id
         ];
       } else {
@@ -859,7 +991,8 @@ async function startServer() {
             kode_sap = ?, satuan = ?, operator = ?, nik_operator = ?, lokasi = ?,
             shift_kerja = ?, jam_kerja = ?, hm_awal = ?, hm_akhir = ?, hm_harian_berjalan = ?,
             hasil_kerja = ?, keterangan = ?,
-            status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?
+            status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?,
+            stik_awal = ?, stik_akhir = ?, kendala_list = ?
           WHERE id = ?
         `;
         params = [
@@ -882,6 +1015,9 @@ async function startServer() {
           status_unit,
           is_isi_solar,
           jumlah_liter_solar,
+          numStikAwal,
+          numStikAkhir,
+          kendalaListStr,
           id
         ];
       }

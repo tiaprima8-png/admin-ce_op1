@@ -60,6 +60,22 @@ export interface RencanaKerja {
   created_at: string;
 }
 
+export interface MasterKendala {
+  id: number;
+  nama_kendala: string;
+  status_aktif: number; // 1: Aktif, 0: Nonaktif
+  created_at: string;
+}
+
+export interface KendalaItem {
+  id?: number | string;
+  nama_kendala: string;
+  waktu_mulai?: string; // Format JJ:MM
+  waktu_selesai?: string; // Format JJ:MM
+  durasi_menit?: number;
+  keterangan?: string;
+}
+
 export interface HasilInputAktivitas {
   id: number | string;
   rencana_id?: string | null;
@@ -85,6 +101,9 @@ export interface HasilInputAktivitas {
   status_unit: UnitStatus;
   is_isi_solar: boolean | number;
   jumlah_liter_solar: number;
+  stik_awal?: number | null;
+  stik_akhir?: number | null;
+  kendala_list?: KendalaItem[] | string | null;
   created_at: string;
   _isNew?: boolean; // UI highlight flag
 }

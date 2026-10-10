@@ -65,6 +65,13 @@ export interface RencanaKerjaRow {
   wilayah?: string;
 }
 
+export interface MasterKendalaRow {
+  id: number;
+  nama_kendala: string;
+  status_aktif: number;
+  created_at: string;
+}
+
 export interface HasilInputAktivitasRow {
   id: number | string;
   rencana_id?: string | null;
@@ -90,6 +97,9 @@ export interface HasilInputAktivitasRow {
   status_unit: 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
   is_isi_solar: number;
   jumlah_liter_solar: number;
+  stik_awal?: number | null;
+  stik_akhir?: number | null;
+  kendala_list?: string | null;
   created_at: string;
 }
 
@@ -262,6 +272,13 @@ function initTablesAndSeed(db: Database) {
     CREATE INDEX IF NOT EXISTS idx_rk_tgl ON rencana_kerja(tanggal DESC);
     CREATE INDEX IF NOT EXISTS idx_rk_pengawas ON rencana_kerja(nama_pengawas);
 
+    CREATE TABLE IF NOT EXISTS master_kendala (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama_kendala TEXT NOT NULL UNIQUE,
+      status_aktif INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS hasil_input_aktivitas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       rencana_id TEXT,
@@ -287,6 +304,9 @@ function initTablesAndSeed(db: Database) {
       status_unit TEXT DEFAULT 'OPERASI',
       is_isi_solar INTEGER DEFAULT 0,
       jumlah_liter_solar REAL DEFAULT 0.00,
+      stik_awal REAL,
+      stik_akhir REAL,
+      kendala_list TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -294,14 +314,14 @@ function initTablesAndSeed(db: Database) {
     CREATE INDEX IF NOT EXISTS idx_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
   `);
 
-  // Migration: Ensure foto_bukti, status_unit, is_isi_solar, jumlah_liter_solar exist
+  // Migration: Ensure foto_bukti, status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, kendala_list exist
   try {
     db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN foto_bukti TEXT;");
   } catch {
     // Column already exists
   }
 
-  // Migration: Ensure status_unit, is_isi_solar, and jumlah_liter_solar exist
+  // Migration: Ensure status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, kendala_list exist
   try {
     const hiaInfo = db.exec("PRAGMA table_info(hasil_input_aktivitas)");
     const cols = hiaInfo[0]?.values.map(v => v[1]);
@@ -316,6 +336,18 @@ function initTablesAndSeed(db: Database) {
     if (cols && !cols.includes('jumlah_liter_solar')) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN jumlah_liter_solar REAL DEFAULT 0.00;");
       console.log('Added jumlah_liter_solar column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('stik_awal')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN stik_awal REAL;");
+      console.log('Added stik_awal column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('stik_akhir')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN stik_akhir REAL;");
+      console.log('Added stik_akhir column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('kendala_list')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN kendala_list TEXT;");
+      console.log('Added kendala_list column to hasil_input_aktivitas');
     }
     if (cols && !cols.includes('rencana_id')) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN rencana_id TEXT;");
@@ -573,13 +605,64 @@ function initTablesAndSeed(db: Database) {
     console.log('Seeded rencana_kerja.');
   }
 
+  // Check if master_kendala seeded
+  const resKendala = db.exec("SELECT COUNT(*) as cnt FROM master_kendala");
+  const kendalaCount = (resKendala[0]?.values[0]?.[0] as number) || 0;
+  if (kendalaCount === 0) {
+    const defaultKendalaList = [
+      'Antar - jemput',
+      'Cek unit, Implement Pemanasan mesin',
+      'Transport',
+      'Kerja',
+      'Istirahat',
+      'Perbaikan Unit',
+      'Perbaikan Implement',
+      'Perawatan Unit',
+      'Perawatan Implement',
+      'Ganti Implement',
+      'Tunggu Solar',
+      'Tunggu Mekanik',
+      'Tunggu Trailler',
+      'Tunggu Lokasi',
+      'Tunggu Cuaca'
+    ];
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    for (const item of defaultKendalaList) {
+      db.run("INSERT OR IGNORE INTO master_kendala (nama_kendala, status_aktif, created_at) VALUES (?, 1, ?)", [item, now]);
+    }
+    console.log(`Seeded ${defaultKendalaList.length} master kendala operasional.`);
+  }
+
   // Backfill nomor_spk and kode_lokasi on existing hasil_input_aktivitas
   try {
     db.run("UPDATE hasil_input_aktivitas SET kode_lokasi = '001A' WHERE kode_lokasi IS NULL OR kode_lokasi = ''");
     db.run("UPDATE hasil_input_aktivitas SET nomor_spk = 'SPK-2026-X102' WHERE kode_unit = 'DT-102' AND (nomor_spk IS NULL OR nomor_spk = '')");
     db.run("UPDATE hasil_input_aktivitas SET nomor_spk = 'SPK-2026-X101' WHERE kode_unit = 'DZ-01' AND (nomor_spk IS NULL OR nomor_spk = '')");
+
+    // Backfill sample stik & kendala for demonstration
+    db.run("UPDATE hasil_input_aktivitas SET stik_awal = 65.0, stik_akhir = 25.0 WHERE kode_unit = 'HEH1' AND stik_awal IS NULL");
+    db.run("UPDATE hasil_input_aktivitas SET stik_awal = 55.0, stik_akhir = 30.0 WHERE kode_unit = 'DZ-01' AND stik_awal IS NULL");
+    db.run("UPDATE hasil_input_aktivitas SET stik_awal = 50.0, stik_akhir = 20.0 WHERE kode_unit = 'DT-102' AND stik_awal IS NULL");
+    db.run("UPDATE hasil_input_aktivitas SET stik_awal = 45.0, stik_akhir = 20.0 WHERE kode_unit = 'DZ-02' AND stik_awal IS NULL");
+    db.run("UPDATE hasil_input_aktivitas SET stik_awal = 30.0, stik_akhir = 30.0 WHERE kode_unit = 'GD-01' AND stik_awal IS NULL");
+    db.run("UPDATE hasil_input_aktivitas SET stik_awal = 60.0, stik_akhir = 35.0 WHERE kode_unit = 'DT-101' AND stik_awal IS NULL");
+
+    const sampleKendalaDZ02 = JSON.stringify([
+      { nama_kendala: 'Tunggu Solar', waktu_mulai: '08:30', waktu_selesai: '10:00', durasi_menit: 90 },
+      { nama_kendala: 'Perbaikan Implement', waktu_mulai: '13:15', waktu_selesai: '14:00', durasi_menit: 45 }
+    ]);
+    const sampleKendalaGD01 = JSON.stringify([
+      { nama_kendala: 'Tunggu Cuaca', waktu_mulai: '07:00', waktu_selesai: '09:30', durasi_menit: 150 }
+    ]);
+    const sampleKendalaHEH1 = JSON.stringify([
+      { nama_kendala: 'Cek unit, Implement Pemanasan mesin', waktu_mulai: '06:30', waktu_selesai: '07:00', durasi_menit: 30 }
+    ]);
+
+    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'DZ-02' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaDZ02]);
+    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'GD-01' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaGD01]);
+    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'HEH1' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaHEH1]);
   } catch (e) {
-    console.warn('Backfill spk note:', e);
+    console.warn('Backfill spk and kendala note:', e);
   }
 }
 

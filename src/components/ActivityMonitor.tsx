@@ -21,6 +21,29 @@ import { HasilInputAktivitas, Unit, AktivitasUnit, Operator } from '../types';
 import { exportToExcel } from '../utils/export';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
+function formatKendalaDuration(menit: number): string {
+  if (!menit || menit <= 0) return '0 m';
+  const jam = Math.floor(menit / 60);
+  const sisa = menit % 60;
+  if (jam > 0 && sisa > 0) return `${jam} jam ${sisa} mnt`;
+  if (jam > 0) return `${jam} jam`;
+  return `${sisa} menit`;
+}
+
+function parseKendalaList(kendala: unknown): Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }> {
+  if (!kendala) return [];
+  if (Array.isArray(kendala)) return kendala;
+  if (typeof kendala === 'string') {
+    try {
+      const parsed = JSON.parse(kendala);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return [{ nama_kendala: kendala }];
+    }
+  }
+  return [];
+}
+
 interface ActivityMonitorProps {
   activities: HasilInputAktivitas[];
   units: Unit[];
@@ -310,54 +333,54 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           {/* Table Header: Exactly 9 Compact Columns with specified widths */}
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
-              {/* Kolom 1 [FOTO & SPK] - ~9% */}
-              <th className="w-[9%] py-2.5 px-2 text-center">
+              {/* Kolom 1 [FOTO & SPK] - ~8% */}
+              <th className="w-[8%] py-2.5 px-2 text-center">
                 Foto & SPK
               </th>
 
-              {/* Kolom 2 [PENGAWAS & TANGGAL] - ~13% */}
-              <th className="w-[13%] py-2.5 px-2.5">
-                Pengawas & Tanggal
+              {/* Kolom 2 [PENGAWAS & TANGGAL] - ~15% */}
+              <th className="w-[15%] py-2.5 px-2.5">
+                Pengawas & Shift
               </th>
 
-              {/* Kolom 3 [UNIT & STATUS] - ~11% */}
-              <th className="w-[11%] py-2.5 px-2 text-center">
+              {/* Kolom 3 [UNIT & STATUS] - ~10% */}
+              <th className="w-[10%] py-2.5 px-2 text-center">
                 Unit & Status
               </th>
 
-              {/* Kolom 4 [AKTIVITAS & KODE SAP] - ~19% */}
-              <th className="w-[19%] py-2.5 px-2.5">
-                Aktivitas & Kode SAP
+              {/* Kolom 4 [AKTIVITAS & KENDALA] - ~25% */}
+              <th className="w-[25%] py-2.5 px-2.5">
+                Aktivitas & Kendala Lapangan
               </th>
 
-              {/* Kolom 5 [OPERATOR] - ~12% */}
-              <th className="w-[12%] py-2.5 px-2">
+              {/* Kolom 5 [OPERATOR] - ~11% */}
+              <th className="w-[11%] py-2.5 px-2">
                 Operator
               </th>
 
-              {/* Kolom 6 [LOKASI] - ~11% */}
-              <th className="w-[11%] py-2.5 px-2">
+              {/* Kolom 6 [LOKASI] - ~9% */}
+              <th className="w-[9%] py-2.5 px-2">
                 Lokasi
               </th>
 
-              {/* Kolom 7 [OPERASIONAL HM & SOLAR] - ~12% */}
-              <th className="w-[12%] py-2.5 px-2 text-right">
-                Operasional & Solar
+              {/* Kolom 7 [OPERASIONAL HM & SOLAR] - ~13% */}
+              <th className="w-[13%] py-2.5 px-2 text-right">
+                Operasional HM & Solar
               </th>
 
-              {/* Kolom 8 [HASIL KERJA] - ~8% */}
-              <th className="w-[8%] py-2.5 px-2 text-right">
-                Hasil Kerja
+              {/* Kolom 8 [HASIL KERJA] - ~5% */}
+              <th className="w-[5%] py-2.5 px-2 text-right">
+                Hasil
               </th>
 
-              {/* Kolom 9 [AKSI] - ~5% */}
-              <th className="w-[5%] py-2.5 px-1.5 text-center">
+              {/* Kolom 9 [AKSI] - ~4% */}
+              <th className="w-[4%] py-2.5 px-1 text-center">
                 Aksi
               </th>
             </tr>
           </thead>
 
-          {/* Table Body: 2-line cell stacking per column */}
+          {/* Table Body: 2-3 line cell stacking per column */}
           <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
             {paginatedActivities.length === 0 ? (
               <tr>
@@ -370,6 +393,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             ) : (
               paginatedActivities.map((row) => {
                 const isGlowing = newActivityIds.has(typeof row.id === 'number' ? row.id : parseInt(String(row.id), 10));
+                const kendalaItems = parseKendalaList(row.kendala_list);
+                const isMalam = (row.shift_kerja || '').toUpperCase() === 'MALAM';
 
                 return (
                   <tr
@@ -380,7 +405,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   >
                     
                     {/* Kolom 1 [FOTO & SPK]: Thumbnail compact 36x36px + Nomor SPK */}
-                    <td className="py-2 px-2 text-center align-middle">
+                    <td className="py-2.5 px-2 text-center align-top">
                       <div className="flex flex-col items-center gap-1">
                         {row.foto_bukti ? (
                           <button
@@ -410,7 +435,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         {row.nomor_spk ? (
                           <span 
                             title={`Nomor SPK: ${row.nomor_spk}`}
-                            className="font-mono text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300 max-w-[85px] truncate"
+                            className="font-mono text-[9px] font-bold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300 max-w-[80px] truncate"
                           >
                             {row.nomor_spk}
                           </span>
@@ -422,8 +447,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     </td>
 
-                    {/* Kolom 2 [PENGAWAS & TANGGAL]: Baris 1: Nama Pengawas (tebal), Baris 2: Tanggal */}
-                    <td className="py-2 px-2.5 align-middle">
+                    {/* Kolom 2 [PENGAWAS & TANGGAL & SHIFT]: 
+                        Baris 1: Nama Pengawas (teks tebal)
+                        Baris 2: Tanggal laporan + Badge Shift kecil (SIANG amber / MALAM indigo) */}
+                    <td className="py-2.5 px-2.5 align-top">
                       <div className="min-w-0">
                         <div className="flex items-center gap-1">
                           {isGlowing && (
@@ -436,14 +463,30 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             {row.nama_pengawas}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-500 font-mono block mt-0.5">
-                          {row.tanggal}
-                        </span>
+                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 font-mono flex-wrap">
+                          <span>{row.tanggal}</span>
+                          <span className="text-slate-300">•</span>
+                          {isMalam ? (
+                            <span 
+                              title="Shift Kerja: MALAM"
+                              className="font-bold text-[9px] px-1.5 py-0.2 rounded-sm bg-indigo-50 text-indigo-700 border border-indigo-200 tracking-wider inline-flex items-center gap-0.5"
+                            >
+                              MALAM
+                            </span>
+                          ) : (
+                            <span 
+                              title="Shift Kerja: SIANG"
+                              className="font-bold text-[9px] px-1.5 py-0.2 rounded-sm bg-amber-50 text-amber-800 border border-amber-300 tracking-wider inline-flex items-center gap-0.5"
+                            >
+                              SIANG
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
 
                     {/* Kolom 3 [UNIT & STATUS]: Baris 1: Kode Unit badge, Baris 2: Pill status */}
-                    <td className="py-2 px-2 text-center align-middle">
+                    <td className="py-2.5 px-2 text-center align-top">
                       <div className="flex flex-col items-center gap-1">
                         <span className="font-mono font-bold text-slate-900 text-[11px] px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
                           {row.kode_unit}
@@ -470,28 +513,69 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     </td>
 
-                    {/* Kolom 4 [AKTIVITAS & KODE SAP]: Baris 1: Aktivitas (truncate), Baris 2: SAP + Satuan */}
-                    <td className="py-2 px-2.5 align-middle">
-                      <div className="min-w-0">
-                        <div 
-                          className="font-semibold text-slate-800 text-xs truncate"
-                          title={row.nama_aktivitas}
-                        >
-                          {row.nama_aktivitas}
-                        </div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    {/* Kolom 4 [AKTIVITAS & KENDALA & KETERANGAN]: 
+                        Baris 1: Nama Aktivitas + Kode SAP (Satuan)
+                        Baris 2: Stack Badge Peringatan Oranye Kendala: "⚠️ [Nama Kendala] (JJ:MM - JJ:MM | X jam Y menit)"
+                        Baris 3: Catatan Pengawas (italic slate-600, truncate + tooltip) */}
+                    <td className="py-2.5 px-2.5 align-top">
+                      <div className="min-w-0 space-y-1">
+                        {/* Baris 1: Aktivitas & SAP */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span 
+                            className="font-bold text-slate-800 text-xs truncate max-w-[210px]"
+                            title={row.nama_aktivitas}
+                          >
+                            {row.nama_aktivitas}
+                          </span>
+                          <span className="font-mono text-[9px] font-bold px-1 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
                             {row.kode_sap}
                           </span>
-                          <span className="text-[10px] text-slate-500 font-mono">
+                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
                             ({row.satuan})
                           </span>
                         </div>
+
+                        {/* Baris 2: Stack Kendala jika ada */}
+                        {kendalaItems && kendalaItems.length > 0 && (
+                          <div className="space-y-1 pt-0.5">
+                            {kendalaItems.map((k, kIdx) => {
+                              const range = (k.waktu_mulai && k.waktu_selesai) ? `${k.waktu_mulai} - ${k.waktu_selesai}` : '';
+                              const durasi = k.durasi_menit !== undefined ? formatKendalaDuration(k.durasi_menit) : '';
+                              const detailTiming = [range, durasi].filter(Boolean).join(' | ');
+
+                              return (
+                                <div
+                                  key={kIdx}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-900 bg-amber-50/90 border border-amber-300 rounded px-1.5 py-0.5 max-w-full leading-tight"
+                                  title={`Kendala: ${k.nama_kendala}${detailTiming ? ` (${detailTiming})` : ''}`}
+                                >
+                                  <span className="text-[11px] shrink-0">⚠️</span>
+                                  <span className="font-bold truncate">{k.nama_kendala}</span>
+                                  {detailTiming && (
+                                    <span className="text-amber-800 font-mono text-[9px] shrink-0 font-normal">
+                                      ({detailTiming})
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Baris 3: Keterangan / Catatan Lapangan Pengawas */}
+                        {row.keterangan && row.keterangan.trim() !== '' && (
+                          <div 
+                            className="text-[11px] italic text-slate-600 truncate max-w-[340px] pt-0.5 cursor-help"
+                            title={`Catatan Pengawas: "${row.keterangan}"`}
+                          >
+                            "{row.keterangan}"
+                          </div>
+                        )}
                       </div>
                     </td>
 
                     {/* Kolom 5 [OPERATOR]: Baris 1: Nama Operator, Baris 2: NIK */}
-                    <td className="py-2 px-2 align-middle">
+                    <td className="py-2.5 px-2 align-top">
                       <div className="min-w-0">
                         <div className="font-medium text-slate-900 text-xs truncate" title={row.operator}>
                           {row.operator}
@@ -503,7 +587,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     </td>
 
                     {/* Kolom 6 [LOKASI]: Baris 1: Kode Lokasi, Baris 2: Detail wilayah/blok */}
-                    <td className="py-2 px-2 align-middle">
+                    <td className="py-2.5 px-2 align-top">
                       <div className="min-w-0">
                         <div className="font-bold text-slate-900 text-xs truncate">
                           {row.kode_lokasi || row.lokasi}
@@ -514,29 +598,56 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     </td>
 
-                    {/* Kolom 7 [OPERASIONAL HM & SOLAR]: Baris 1: Jam & HM, Baris 2: Solar */}
-                    <td className="py-2 px-2 text-right align-middle">
+                    {/* Kolom 7 [OPERASIONAL HM & SOLAR]: 
+                        Baris 1: Total HM Berjalan tebal | Jam (misal: "4.0 HM | 8.0 Jam")
+                        Baris 2: Range HM Awal s/d Akhir (teks abu-abu ringkas, misal: "HM: 1,240.5 → 1,244.5")
+                        Baris 3: Stik BBM / Liter Solar (misal: "Stik: 45→20 | 120 L") */}
+                    <td className="py-2.5 px-2 text-right align-top">
                       <div className="text-right">
+                        {/* Baris 1: Total HM Berjalan tebal */}
                         <div className="text-xs">
-                          <span className="text-slate-500 font-medium">{row.jam_kerja}h</span>
+                          <span className="font-bold text-emerald-800 font-mono">
+                            {row.hm_harian_berjalan.toFixed(1)} HM
+                          </span>
                           <span className="text-slate-300 mx-1">|</span>
-                          <span className="font-bold text-emerald-800 font-mono">{row.hm_harian_berjalan.toFixed(1)} HM</span>
+                          <span className="text-slate-600 font-medium font-mono">
+                            {row.jam_kerja} Jam
+                          </span>
                         </div>
-                        <div className="text-[10px] mt-0.5">
-                          {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
-                            <span className="inline-flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 font-mono">
+
+                        {/* Baris 2: Range HM Awal s/d Akhir */}
+                        <div 
+                          className="text-[10px] text-slate-400 font-mono mt-0.5 truncate"
+                          title={`HM Awal: ${row.hm_awal.toLocaleString('id-ID')} s/d HM Akhir: ${row.hm_akhir.toLocaleString('id-ID')}`}
+                        >
+                          HM: {row.hm_awal.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} → {row.hm_akhir.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                        </div>
+
+                        {/* Baris 3: Stik BBM / Liter Solar */}
+                        <div className="text-[10px] mt-0.5 font-mono">
+                          {row.stik_awal !== undefined && row.stik_awal !== null && row.stik_akhir !== undefined && row.stik_akhir !== null ? (
+                            <span className="text-slate-600 font-medium">
+                              Stik: {row.stik_awal}→{row.stik_akhir}
+                              {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
+                                <span className="text-amber-700 font-bold ml-1">
+                                  | {row.jumlah_liter_solar.toLocaleString('id-ID')} L
+                                </span>
+                              ) : ''}
+                            </span>
+                          ) : row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
+                            <span className="inline-flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
                               <Fuel className="w-2.5 h-2.5 inline text-amber-600" />
                               {row.jumlah_liter_solar.toLocaleString('id-ID')} L
                             </span>
                           ) : (
-                            <span className="text-slate-400 font-medium">-</span>
+                            <span className="text-slate-300 font-medium">-</span>
                           )}
                         </div>
                       </div>
                     </td>
 
                     {/* Kolom 8 [HASIL KERJA]: Volume hasil kerja tebal + satuan */}
-                    <td className="py-2 px-2 text-right align-middle">
+                    <td className="py-2.5 px-2 text-right align-top">
                       <div className="text-right">
                         <span className="font-bold text-slate-900 font-mono text-xs block">
                           {row.hasil_kerja.toLocaleString('id-ID')}
@@ -548,7 +659,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     </td>
 
                     {/* Kolom 9 [AKSI]: Tombol compact Edit & Hapus */}
-                    <td className="py-2 px-1.5 text-center align-middle">
+                    <td className="py-2.5 px-1 text-center align-top">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"

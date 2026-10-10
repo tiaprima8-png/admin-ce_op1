@@ -12,7 +12,8 @@ import {
   User, 
   KpiStats, 
   RencanaKerja, 
-  Lokasi 
+  Lokasi,
+  MasterKendala as MasterKendalaType
 } from './types';
 import { soundService } from './utils/sound';
 import { Header } from './components/Header';
@@ -25,6 +26,7 @@ import { MasterLokasi } from './components/MasterLokasi';
 import { AnalyticsView } from './components/AnalyticsView';
 import { MasterUnits } from './components/MasterUnits';
 import { MasterAktivitas } from './components/MasterAktivitas';
+import { MasterKendala } from './components/MasterKendala';
 import { MasterOperators } from './components/MasterOperators';
 import { MasterUsers } from './components/MasterUsers';
 import { ManualActivityModal } from './components/ManualActivityModal';
@@ -71,6 +73,7 @@ export default function App() {
   const [aktivitasList, setAktivitasList] = useState<AktivitasUnit[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [kendalaList, setKendalaList] = useState<MasterKendalaType[]>([]);
   const [stats, setStats] = useState<KpiStats>({
     totalHmBerjalan: 0,
     totalJamKerja: 0,
@@ -189,6 +192,18 @@ export default function App() {
     }
   }, []);
 
+  const fetchKendalaList = useCallback(async () => {
+    try {
+      const res = await fetch('/api/master-kendala');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setKendalaList(data);
+      }
+    } catch (e) {
+      console.error('Failed fetching master kendala:', e);
+    }
+  }, []);
+
   const fetchStats = useCallback(async () => {
     try {
       const res = await fetch('/api/stats');
@@ -207,12 +222,13 @@ export default function App() {
       fetchLokasiList(),
       fetchUnits(),
       fetchAktivitasList(),
+      fetchKendalaList(),
       fetchOperators(),
       fetchUsers(),
       fetchStats()
     ]);
     setTimeout(() => setIsRefreshing(false), 400);
-  }, [fetchRencanaList, fetchActivities, fetchLokasiList, fetchUnits, fetchAktivitasList, fetchOperators, fetchUsers, fetchStats]);
+  }, [fetchRencanaList, fetchActivities, fetchLokasiList, fetchUnits, fetchAktivitasList, fetchKendalaList, fetchOperators, fetchUsers, fetchStats]);
 
   useEffect(() => {
     if (currentUser) {
@@ -442,6 +458,7 @@ export default function App() {
     lokasi: lokasiList.length,
     units: units.length,
     aktivitas: aktivitasList.length,
+    kendala: kendalaList.length,
     operators: operators.length,
     users: users.length
   };
@@ -473,6 +490,11 @@ export default function App() {
         return {
           title: 'Data Master Aktivitas',
           subtitle: 'Katalog jenis pekerjaan civil engineering, satuan ukur, dan kode SAP operasional'
+        };
+      case 'kendala':
+        return {
+          title: 'Data Master Kendala Operasional',
+          subtitle: 'Katalog 15 kendala standar operasional civil engineering untuk sinkronisasi ke aplikasi mobile pengawas'
         };
       case 'operators':
         return {
@@ -619,6 +641,14 @@ export default function App() {
             <MasterAktivitas
               aktivitasList={aktivitasList}
               onRefresh={fetchAktivitasList}
+            />
+          )}
+
+          {/* TAB 5B: Master Kendala */}
+          {activeTab === 'kendala' && (
+            <MasterKendala
+              kendalaList={kendalaList}
+              onRefresh={fetchKendalaList}
             />
           )}
 

@@ -13,6 +13,24 @@ interface EditActivityModalProps {
   supervisors: string[];
 }
 
+const STANDARD_KENDALA = [
+  'Antar - jemput',
+  'Cek unit, Implement Pemanasan mesin',
+  'Transport',
+  'Kerja',
+  'Istirahat',
+  'Perbaikan Unit',
+  'Perbaikan Implement',
+  'Perawatan Unit',
+  'Perawatan Implement',
+  'Ganti Implement',
+  'Tunggu Solar',
+  'Tunggu Mekanik',
+  'Tunggu Trailler',
+  'Tunggu Lokasi',
+  'Tunggu Cuaca'
+];
+
 export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   activity,
   onClose,
@@ -28,6 +46,12 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [statusUnit, setStatusUnit] = useState<UnitStatus>('OPERASI');
   const [isIsiSolar, setIsIsiSolar] = useState<boolean>(false);
   const [jumlahLiterSolar, setJumlahLiterSolar] = useState<number>(0);
+  const [stikAwal, setStikAwal] = useState<number | ''>('');
+  const [stikAkhir, setStikAkhir] = useState<number | ''>('');
+  const [kendalaInput, setKendalaInput] = useState<string>('');
+  const [waktuMulai, setWaktuMulai] = useState<string>('');
+  const [waktuSelesai, setWaktuSelesai] = useState<string>('');
+  const [kendalaListItems, setKendalaListItems] = useState<Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }>>([]);
   const [namaAktivitas, setNamaAktivitas] = useState('');
   const [kodeSap, setKodeSap] = useState('');
   const [satuan, setSatuan] = useState('');
@@ -56,6 +80,26 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setStatusUnit(activity.status_unit || 'OPERASI');
       setIsIsiSolar(Boolean(activity.is_isi_solar) || (Number(activity.jumlah_liter_solar) > 0));
       setJumlahLiterSolar(Number(activity.jumlah_liter_solar) || 0);
+      setStikAwal(activity.stik_awal !== undefined && activity.stik_awal !== null ? activity.stik_awal : '');
+      setStikAkhir(activity.stik_akhir !== undefined && activity.stik_akhir !== null ? activity.stik_akhir : '');
+      
+      // Parse kendala_list
+      let parsedKendala: Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }> = [];
+      if (Array.isArray(activity.kendala_list)) {
+        parsedKendala = activity.kendala_list as typeof parsedKendala;
+      } else if (typeof activity.kendala_list === 'string') {
+        try {
+          const parsed = JSON.parse(activity.kendala_list);
+          if (Array.isArray(parsed)) parsedKendala = parsed;
+        } catch {
+          // Ignore
+        }
+      }
+      setKendalaListItems(parsedKendala);
+      setKendalaInput('');
+      setWaktuMulai('');
+      setWaktuSelesai('');
+
       setNamaAktivitas(activity.nama_aktivitas);
       setKodeSap(activity.kode_sap);
       setSatuan(activity.satuan);
@@ -76,6 +120,30 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   }, [activity]);
 
   if (!activity) return null;
+
+  const handleAddKendala = () => {
+    if (!kendalaInput) return;
+    let durasi_menit: number | undefined = undefined;
+    if (waktuMulai && waktuSelesai) {
+      const [h1, m1] = waktuMulai.split(':').map(Number);
+      const [h2, m2] = waktuSelesai.split(':').map(Number);
+      let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+      if (diff < 0) diff += 24 * 60; // Lewat tengah malam
+      durasi_menit = diff;
+    }
+    setKendalaListItems(prev => [
+      ...prev,
+      {
+        nama_kendala: kendalaInput,
+        waktu_mulai: waktuMulai || undefined,
+        waktu_selesai: waktuSelesai || undefined,
+        durasi_menit
+      }
+    ]);
+    setKendalaInput('');
+    setWaktuMulai('');
+    setWaktuSelesai('');
+  };
 
   // Auto-sync when selected Unit changes
   const handleUnitSelect = (newKodeUnit: string, unitObj?: Unit) => {
@@ -157,7 +225,10 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
         foto_bukti: fotoBukti,
         status_unit: statusUnit,
         is_isi_solar: isIsiSolar ? 1 : 0,
-        jumlah_liter_solar: isIsiSolar ? jumlahLiterSolar : 0
+        jumlah_liter_solar: isIsiSolar ? jumlahLiterSolar : 0,
+        stik_awal: stikAwal !== '' ? Number(stikAwal) : null,
+        stik_akhir: stikAkhir !== '' ? Number(stikAkhir) : null,
+        kendala_list: kendalaListItems.length > 0 ? kendalaListItems : null
       };
 
       const res = await fetch(`/api/rekapitulasi/${activity.id}`, {
@@ -399,6 +470,36 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                   </p>
                 </div>
               )}
+
+              {/* Pengukuran Stik Solar Lapangan */}
+              <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-slate-200">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Stik Solar Awal (cm)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={stikAwal}
+                    onChange={(e) => setStikAwal(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    placeholder="Contoh: 45"
+                    className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Stik Solar Akhir (cm)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={stikAkhir}
+                    onChange={(e) => setStikAkhir(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    placeholder="Contoh: 20"
+                    className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Aktivitas Unit Kerja (Searchable Selector) */}
@@ -641,6 +742,98 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               </span>
               <span className="text-xs text-emerald-700 font-semibold ml-1">Jam</span>
             </div>
+          </div>
+
+          {/* Kendala Operasional Lapangan (Standar Civil Engineering) */}
+          <div className="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-base">⚠️</span>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950">Kendala Standar Operasional (Jika Ada)</h4>
+                  <p className="text-[11px] text-amber-800">Catat atau perbarui kendala unit di lapangan beserta waktu</p>
+                </div>
+              </div>
+              {kendalaListItems.length > 0 && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-mono">
+                  {kendalaListItems.length} Kendala Dicatat
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-amber-200/80">
+              <div className="sm:col-span-6">
+                <label className="block text-[11px] font-semibold text-amber-900 mb-1">Pilih Kendala Standar</label>
+                <select
+                  value={kendalaInput}
+                  onChange={(e) => setKendalaInput(e.target.value)}
+                  className="w-full text-xs rounded-lg border border-amber-300 p-2 bg-white text-slate-800 focus:ring-2 focus:ring-amber-500 font-medium"
+                >
+                  <option value="">-- Pilih Kendala Standar Lapangan --</option>
+                  {STANDARD_KENDALA.map((k, i) => (
+                    <option key={i} value={k}>{k}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-amber-900 mb-1">Mulai (JJ:MM)</label>
+                <input
+                  type="time"
+                  value={waktuMulai}
+                  onChange={(e) => setWaktuMulai(e.target.value)}
+                  className="w-full text-xs rounded-lg border border-amber-300 p-2 bg-white text-slate-800 font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-amber-900 mb-1">Selesai (JJ:MM)</label>
+                <input
+                  type="time"
+                  value={waktuSelesai}
+                  onChange={(e) => setWaktuSelesai(e.target.value)}
+                  className="w-full text-xs rounded-lg border border-amber-300 p-2 bg-white text-slate-800 font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2 flex items-end">
+                <button
+                  type="button"
+                  onClick={handleAddKendala}
+                  disabled={!kendalaInput}
+                  className="w-full py-2 px-3 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-40 cursor-pointer shadow-2xs transition-colors"
+                >
+                  + Tambah
+                </button>
+              </div>
+            </div>
+
+            {/* List Kendala yang sudah ditambahkan */}
+            {kendalaListItems.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                {kendalaListItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white border border-amber-200 text-xs shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-amber-600 font-bold shrink-0">⚠️</span>
+                      <span className="font-bold text-slate-800 truncate">{item.nama_kendala}</span>
+                      {(item.waktu_mulai || item.waktu_selesai) && (
+                        <span className="text-[11px] text-amber-800 font-mono shrink-0">
+                          ({item.waktu_mulai || '--:--'} s/d {item.waktu_selesai || '--:--'}{item.durasi_menit ? ` | ${Math.floor(item.durasi_menit/60)} jam ${item.durasi_menit%60} mnt` : ''})
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setKendalaListItems(prev => prev.filter((_, i) => i !== idx))}
+                      title="Hapus item kendala ini"
+                      className="text-rose-500 hover:text-rose-700 p-1 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Keterangan */}

@@ -1,6 +1,30 @@
 import * as XLSX from 'xlsx';
 import { HasilInputAktivitas, UnitAnalyticsRow, AktivitasAnalyticsRow, AnalyticsSummary } from '../types';
 
+function formatKendalaForExcel(kendala: unknown): string {
+  if (!kendala) return '-';
+  let items: Array<{ nama_kendala?: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }> = [];
+  if (Array.isArray(kendala)) {
+    items = kendala;
+  } else if (typeof kendala === 'string') {
+    try {
+      const parsed = JSON.parse(kendala);
+      if (Array.isArray(parsed)) items = parsed;
+      else return kendala;
+    } catch {
+      return kendala;
+    }
+  }
+  if (!items || items.length === 0) return '-';
+  return items.map((k, idx) => {
+    const nama = k.nama_kendala || 'Kendala';
+    const range = (k.waktu_mulai && k.waktu_selesai) ? `${k.waktu_mulai} - ${k.waktu_selesai}` : '';
+    const durasi = k.durasi_menit !== undefined ? `${k.durasi_menit} menit` : '';
+    const detail = [range, durasi].filter(Boolean).join(' | ');
+    return `${idx + 1}. ${nama}${detail ? ` (${detail})` : ''}`;
+  }).join('; ');
+}
+
 export function exportToExcel(
   data: HasilInputAktivitas[],
   filename = `rekapitulasi_rkce_${new Date().toISOString().slice(0, 10)}.xlsx`
@@ -14,23 +38,26 @@ export function exportToExcel(
     'No': index + 1,
     'Nomor SPK': item.nomor_spk || '-',
     'Tanggal': item.tanggal,
+    'Shift': item.shift_kerja ? item.shift_kerja.toUpperCase() : 'SIANG',
     'Pengawas': item.nama_pengawas,
     'Kode Unit': item.kode_unit,
     'Status Unit': item.status_unit || 'OPERASI',
+    'HM Awal': item.hm_awal,
+    'HM Akhir': item.hm_akhir,
+    'HM Berjalan': item.hm_harian_berjalan,
+    'Jam Kerja (Jam)': item.jam_kerja,
+    'Stik Solar Awal': item.stik_awal !== undefined && item.stik_awal !== null ? item.stik_awal : '-',
+    'Stik Solar Akhir': item.stik_akhir !== undefined && item.stik_akhir !== null ? item.stik_akhir : '-',
     'Konsumsi Solar (Liter)': item.jumlah_liter_solar && item.jumlah_liter_solar > 0 ? item.jumlah_liter_solar : 0,
     'Nama Aktivitas': item.nama_aktivitas,
     'Kode SAP': item.kode_sap,
     'Satuan': item.satuan,
+    'Hasil Kerja': item.hasil_kerja,
+    'Daftar Kendala (Nama, Waktu Mulai, Waktu Selesai, Total Menit)': formatKendalaForExcel(item.kendala_list),
+    'Keterangan Lapangan': item.keterangan || '-',
     'Operator': item.operator,
     'NIK Operator': item.nik_operator,
     'Kode Lokasi': item.kode_lokasi || item.lokasi,
-    'Shift': item.shift_kerja,
-    'Jam Kerja (Jam)': item.jam_kerja,
-    'HM Awal': item.hm_awal,
-    'HM Akhir': item.hm_akhir,
-    'HM Harian Berjalan': item.hm_harian_berjalan,
-    'Hasil Kerja': item.hasil_kerja,
-    'Keterangan': item.keterangan || '-',
     'Foto Bukti': item.foto_bukti ? 'Ada Foto Bukti' : 'Tanpa Foto'
   }));
 
@@ -41,23 +68,26 @@ export function exportToExcel(
     { wch: 6 },  // No
     { wch: 16 }, // Nomor SPK
     { wch: 13 }, // Tanggal
+    { wch: 10 }, // Shift
     { wch: 18 }, // Pengawas
     { wch: 12 }, // Kode Unit
     { wch: 14 }, // Status Unit
+    { wch: 12 }, // HM Awal
+    { wch: 12 }, // HM Akhir
+    { wch: 14 }, // HM Berjalan
+    { wch: 16 }, // Jam Kerja
+    { wch: 15 }, // Stik Solar Awal
+    { wch: 15 }, // Stik Solar Akhir
     { wch: 22 }, // Konsumsi Solar
     { wch: 30 }, // Nama Aktivitas
     { wch: 14 }, // Kode SAP
     { wch: 10 }, // Satuan
+    { wch: 14 }, // Hasil Kerja
+    { wch: 45 }, // Daftar Kendala
+    { wch: 35 }, // Keterangan Lapangan
     { wch: 20 }, // Operator
     { wch: 14 }, // NIK Operator
     { wch: 14 }, // Kode Lokasi
-    { wch: 10 }, // Shift
-    { wch: 16 }, // Jam Kerja
-    { wch: 12 }, // HM Awal
-    { wch: 12 }, // HM Akhir
-    { wch: 20 }, // HM Harian Berjalan
-    { wch: 14 }, // Hasil Kerja
-    { wch: 35 }, // Keterangan
     { wch: 16 }  // Foto Bukti
   ];
 

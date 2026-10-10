@@ -41,13 +41,19 @@ export const AndroidIntegrationModal: React.FC<AndroidIntegrationModalProps> = (
     }
   };
 
-  const retrofitCode = `// RKCE Mobile - Android Retrofit Interface v2.0
+  const retrofitCode = `// RKCE Mobile - Android Retrofit Interface v2.5 (Kendala & Stik BBM Support)
 interface RkceApiService {
-    // 1. Sync Master Data (Unit, Aktivitas, Operator, Lokasi)
+    // 1. Sync Master Data (Unit, Aktivitas, Operator, Lokasi, Kendala)
     @GET("api/master-data")
     suspend fun getMasterData(
         @Query("pengawas") namaPengawas: String
     ): Response<MasterDataResponse>
+
+    // 1B. Sync Master Kendala Standar Operasional Civil Engineering (15 Kendala Standar)
+    @GET("api/master-kendala")
+    suspend fun getMasterKendala(
+        @Query("status") statusAktif: String = "1"
+    ): Response<List<MasterKendalaItem>>
 
     // 2. Sync Daftar Rencana Kerja Harian
     @GET("api/rencana-kerja")
@@ -62,7 +68,7 @@ interface RkceApiService {
         @Body request: RencanaKerjaRequest
     ): Response<RencanaKerjaItemResponse>
 
-    // 4. Kirim Realisasi Kerja Lapangan (Terkoneksi ke Rencana & Nomor SPK)
+    // 4. Kirim Realisasi Kerja Lapangan (Terkoneksi ke SPK, HM Awal/Akhir, Stik BBM & Kendala)
     @POST("api/aktivitas-unit")
     suspend fun submitAktivitas(
         @Body request: RealisasiAktivitasRequest
@@ -264,12 +270,22 @@ interface RkceApiService {
   "status_unit": "OPERASI",
   "is_isi_solar": 1,
   "jumlah_liter_solar": 185.0,
+  "stik_awal": 65.0,
+  "stik_akhir": 25.0,
   "jam_kerja": 10.5,
   "hm_awal": 8910.0,
   "hm_akhir": 8920.4,
   "hm_harian_berjalan": 10.4,
   "hasil_kerja": 1450,
-  "keterangan": "Operasi lancar, material mudstone",
+  "kendala_list": [
+    {
+      "nama_kendala": "Tunggu Solar",
+      "waktu_mulai": "08:30",
+      "waktu_selesai": "10:00",
+      "durasi_menit": 90
+    }
+  ],
+  "keterangan": "Operasi lancar, pengisian BBM jam 08:30",
   "foto_bukti": "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
 }`}</pre>
             </div>
