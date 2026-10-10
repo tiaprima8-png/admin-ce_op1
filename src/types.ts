@@ -72,6 +72,7 @@ export interface RencanaKerja {
   status_spk: StatusSpk;
   keterangan_rencana?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface MasterKendala {
@@ -90,8 +91,20 @@ export interface KendalaItem {
   keterangan?: string;
 }
 
+export interface AktivitasKendala {
+  id: number;
+  id_aktivitas: number | string;
+  id_kendala?: string | null;
+  nama_kendala: string;
+  waktu_mulai?: string | null;
+  waktu_selesai?: string | null;
+  durasi_menit?: number | null;
+  created_at: string;
+}
+
 export interface HasilInputAktivitas {
   id: number | string;
+  client_transaction_id?: string | null;
   rencana_id?: string | null;
   nama_pengawas: string;
   tanggal: string;

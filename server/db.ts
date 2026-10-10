@@ -69,6 +69,7 @@ export interface RencanaKerjaRow {
   status_spk: 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
   keterangan_rencana?: string | null;
   created_at: string;
+  updated_at?: string;
   // Enriched fields from JOIN
   model_unit?: string;
   wilayah?: string;
@@ -81,8 +82,20 @@ export interface MasterKendalaRow {
   created_at: string;
 }
 
+export interface AktivitasKendalaRow {
+  id: number;
+  id_aktivitas: number;
+  id_kendala?: string | null;
+  nama_kendala: string;
+  waktu_mulai?: string | null;
+  waktu_selesai?: string | null;
+  durasi_menit?: number | null;
+  created_at: string;
+}
+
 export interface HasilInputAktivitasRow {
   id: number | string;
+  client_transaction_id?: string | null;
   rencana_id?: string | null;
   nama_pengawas: string;
   tanggal: string;
@@ -133,6 +146,16 @@ export async function getDb(): Promise<Database> {
     }
   } else {
     dbInstance = new SQL.Database();
+  }
+
+  // 1. OPTIMASI KONKURENSI SQLITE (ANTI-LOCKING / SQLITE_BUSY)
+  try {
+    dbInstance.run("PRAGMA journal_mode = WAL;");
+    dbInstance.run("PRAGMA busy_timeout = 5000;");
+    dbInstance.run("PRAGMA synchronous = NORMAL;");
+    console.log('⚡ [SQLITE-CONFIG] WAL mode, busy_timeout = 5000ms, dan synchronous = NORMAL aktif.');
+  } catch (errPragma) {
+    console.warn('Note on SQLite WAL & busy_timeout configuration:', errPragma);
   }
 
   initTablesAndSeed(dbInstance);
@@ -253,6 +276,7 @@ function initTablesAndSeed(db: Database) {
 
     CREATE TABLE IF NOT EXISTS aktivitas_unit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_transaction_id TEXT UNIQUE,
       jenis_unit TEXT NOT NULL,
       nama_aktivitas TEXT NOT NULL,
       satuan TEXT NOT NULL,
@@ -288,7 +312,8 @@ function initTablesAndSeed(db: Database) {
       nomor_spk TEXT,
       status_spk TEXT DEFAULT 'MENUNGGU_SPK',
       keterangan_rencana TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      updated_at TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_rk_tgl ON rencana_kerja(tanggal DESC);
@@ -303,6 +328,7 @@ function initTablesAndSeed(db: Database) {
 
     CREATE TABLE IF NOT EXISTS hasil_input_aktivitas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_transaction_id TEXT UNIQUE,
       rencana_id TEXT,
       nama_pengawas TEXT NOT NULL,
       tanggal TEXT NOT NULL,
@@ -336,6 +362,19 @@ function initTablesAndSeed(db: Database) {
 
     CREATE INDEX IF NOT EXISTS idx_unit_tgl ON hasil_input_aktivitas(kode_unit, tanggal DESC);
     CREATE INDEX IF NOT EXISTS idx_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_client_tx ON hasil_input_aktivitas(client_transaction_id);
+
+    CREATE TABLE IF NOT EXISTS aktivitas_kendala (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id_aktivitas INTEGER NOT NULL,
+      id_kendala TEXT,
+      nama_kendala TEXT NOT NULL,
+      waktu_mulai TEXT,
+      waktu_selesai TEXT,
+      durasi_menit REAL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ak_aktivitas ON aktivitas_kendala(id_aktivitas);
   `);
 
   // Migration: Ensure foto_bukti, status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, kendala_list exist
@@ -393,6 +432,15 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN alasan_koreksi_hm TEXT DEFAULT NULL;");
       console.log('Added alasan_koreksi_hm column to hasil_input_aktivitas');
     }
+    if (cols && !cols.includes('client_transaction_id')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN client_transaction_id TEXT DEFAULT NULL;");
+      try {
+        db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_client_tx ON hasil_input_aktivitas(client_transaction_id);");
+      } catch (idxErr) {
+        console.warn('Index on client_transaction_id already exists or ignored:', idxErr);
+      }
+      console.log('Added client_transaction_id column to hasil_input_aktivitas');
+    }
 
     // Migration for aktivitas_unit table
     const actInfo = db.exec("PRAGMA table_info(aktivitas_unit)");
@@ -405,6 +453,34 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN alasan_koreksi_hm TEXT DEFAULT NULL;");
       console.log('Added alasan_koreksi_hm column to aktivitas_unit');
     }
+    if (actCols && !actCols.includes('client_transaction_id')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN client_transaction_id TEXT DEFAULT NULL;");
+      console.log('Added client_transaction_id column to aktivitas_unit');
+    }
+
+    // Migration for rencana_kerja table (updated_at column)
+    const rkInfo = db.exec("PRAGMA table_info(rencana_kerja)");
+    const rkCols = rkInfo[0]?.values.map(v => v[1]);
+    if (rkCols && !rkCols.includes('updated_at')) {
+      db.run("ALTER TABLE rencana_kerja ADD COLUMN updated_at TEXT DEFAULT NULL;");
+      db.run("UPDATE rencana_kerja SET updated_at = created_at WHERE updated_at IS NULL;");
+      console.log('Added updated_at column to rencana_kerja');
+    }
+
+    // Ensure aktivitas_kendala table exists
+    db.run(`
+      CREATE TABLE IF NOT EXISTS aktivitas_kendala (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_aktivitas INTEGER NOT NULL,
+        id_kendala TEXT,
+        nama_kendala TEXT NOT NULL,
+        waktu_mulai TEXT,
+        waktu_selesai TEXT,
+        durasi_menit REAL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_ak_aktivitas ON aktivitas_kendala(id_aktivitas);
+    `);
 
     // Migration for units table (hm_min_standar & hm_max_standar override)
     const unitsInfo = db.exec("PRAGMA table_info(units)");

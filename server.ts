@@ -159,7 +159,7 @@ async function startServer() {
   // 1B. RENCANA KERJA ENDPOINTS (GET, POST, PUT TERBITKAN-SPK, DELETE)
   app.get('/api/rencana-kerja', (req: Request, res: Response) => {
     try {
-      const { search, pengawas, status_spk, tanggal } = req.query;
+      const { search, pengawas, pengawas_id, status_spk, tanggal } = req.query;
       let sql = `
         SELECT 
           r.*,
@@ -178,9 +178,11 @@ async function startServer() {
         params.push(s, s, s, s, s);
       }
 
-      if (pengawas && typeof pengawas === 'string' && pengawas !== 'Semua') {
-        sql += ' AND r.nama_pengawas = ?';
-        params.push(pengawas);
+      const rawPengawasFilter = (pengawas_id || pengawas) as string | undefined;
+      if (rawPengawasFilter && typeof rawPengawasFilter === 'string' && rawPengawasFilter.trim() !== '' && rawPengawasFilter !== 'Semua') {
+        const p = rawPengawasFilter.trim();
+        sql += ' AND (r.nama_pengawas = ? OR r.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE username = ? OR CAST(id AS TEXT) = ?))';
+        params.push(p, p, p);
       }
 
       if (status_spk && typeof status_spk === 'string' && status_spk !== 'Semua') {
@@ -197,11 +199,12 @@ async function startServer() {
 
       const rows = queryAll<RencanaKerjaRow>(sql, params);
 
-      // Pastikan field nomor_spk dan status_spk selalu disertakan dalam response JSON
+      // Pastikan field nomor_spk, status_spk, dan updated_at selalu disertakan dalam response JSON
       const formattedRows = rows.map(r => ({
         ...r,
         nomor_spk: r.nomor_spk !== undefined && r.nomor_spk !== null && r.nomor_spk !== '' ? String(r.nomor_spk) : null,
-        status_spk: (r.status_spk as string) || (r.nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK')
+        status_spk: (r.status_spk as string) || (r.nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK'),
+        updated_at: r.updated_at || r.created_at
       }));
 
       res.json({
@@ -248,8 +251,8 @@ async function startServer() {
         INSERT INTO rencana_kerja (
           id, nama_pengawas, tanggal, status_unit, kode_unit,
           operator, kode_lokasi, shift_kerja, nomor_spk, status_spk,
-          keterangan_rencana, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          keterangan_rencana, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       execute(insertSql, [
@@ -264,6 +267,7 @@ async function startServer() {
         nomor_spk || null,
         status_spk,
         keterangan_rencana || '',
+        createdAt,
         createdAt
       ]);
 
@@ -305,9 +309,10 @@ async function startServer() {
       }
 
       const cleanSpk = nomor_spk.trim();
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
       execute(
-        `UPDATE rencana_kerja SET nomor_spk = ?, status_spk = 'SPK_TERBIT' WHERE id = ?`,
-        [cleanSpk, id]
+        `UPDATE rencana_kerja SET nomor_spk = ?, status_spk = 'SPK_TERBIT', updated_at = ? WHERE id = ?`,
+        [cleanSpk, now, id]
       );
 
       const updatedRow = queryOne<RencanaKerjaRow>(`
