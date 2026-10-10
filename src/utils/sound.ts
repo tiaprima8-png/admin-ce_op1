@@ -61,6 +61,10 @@ class SoundService {
       console.warn('Audio chime playback failed or blocked by autoplay policy:', e);
     }
   }
+
+  public playSuccess(): void {
+    this.playNewActivityChime();
+  }
 }
 
 export const soundService = new SoundService();

@@ -1262,7 +1262,45 @@ async function startServer() {
     }
   });
 
-  // 8. MASTER USERS CRUD
+  // 8. MASTER USERS CRUD & AUTH
+  app.post('/api/auth/login', (req: Request, res: Response) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username dan kata sandi wajib diisi.' });
+      }
+
+      const user = queryOne<UserRow>(
+        'SELECT id, nama_lengkap, username, password, hak_akses FROM users WHERE LOWER(username) = LOWER(?)',
+        [username.trim()]
+      );
+
+      if (!user) {
+        return res.status(401).json({ error: 'Username atau kata sandi tidak sesuai.' });
+      }
+
+      if (user.password !== password) {
+        return res.status(401).json({ error: 'Username atau kata sandi tidak sesuai.' });
+      }
+
+      res.json({
+        status: 'success',
+        message: 'Login berhasil.',
+        token: `rkce_token_${user.id}_${Date.now()}`,
+        user: {
+          id: user.id,
+          nama_lengkap: user.nama_lengkap,
+          username: user.username,
+          hak_akses: user.hak_akses,
+          email: `${user.username}@rkce.co.id`
+        }
+      });
+    } catch (err: unknown) {
+      console.error('Error during login:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   app.get('/api/users', (req: Request, res: Response) => {
     try {
       const rows = queryAll<UserRow>('SELECT id, nama_lengkap, username, hak_akses FROM users ORDER BY id ASC');
