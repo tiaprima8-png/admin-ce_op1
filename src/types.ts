@@ -13,7 +13,21 @@ export interface Unit {
   model_unit: string;
   nama_pengawas: string;
   hm_unit_terakhir_diinputkan: number;
+  hm_min_standar?: number | null;
+  hm_max_standar?: number | null;
   updated_at: string;
+}
+
+export interface HmStandarConfig {
+  min: number;
+  max: number;
+}
+
+export interface HmStandarResponse {
+  hm_min_standar: number;
+  hm_max_standar: number;
+  hm_min?: number;
+  hm_max?: number;
 }
 
 export interface AktivitasUnit {
@@ -104,6 +118,8 @@ export interface HasilInputAktivitas {
   stik_awal?: number | null;
   stik_akhir?: number | null;
   kendala_list?: KendalaItem[] | string | null;
+  is_hm_awal_corrected?: boolean | number;
+  alasan_koreksi_hm?: string | null;
   created_at: string;
   _isNew?: boolean; // UI highlight flag
 }

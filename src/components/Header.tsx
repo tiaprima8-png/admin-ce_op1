@@ -6,7 +6,8 @@ import {
   ChevronDown,
   Menu,
   User as UserIcon,
-  ShieldCheck
+  ShieldCheck,
+  Sliders
 } from 'lucide-react';
 
 interface AuthUser {
@@ -23,6 +24,8 @@ interface HeaderProps {
   onLogout: () => void;
   onOpenMobileSidebar?: () => void;
   isSidebarCollapsed?: boolean;
+  onOpenSettings?: () => void;
+  hmStandar?: { min: number; max: number };
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,7 +33,9 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onLogout,
   onOpenMobileSidebar,
-  isSidebarCollapsed
+  isSidebarCollapsed,
+  onOpenSettings,
+  hmStandar
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -127,6 +132,23 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
+          {/* 1B. Tombol Akses Cepat Pengaturan Sistem (HM Standar) */}
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              title="Pengaturan Sistem: Standar Operasional HM Mesin"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-emerald-300 bg-white hover:bg-emerald-50/70 shadow-2xs text-slate-700 hover:text-emerald-800 transition-all cursor-pointer text-xs font-semibold"
+            >
+              <Sliders className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Pengaturan HM</span>
+              {hmStandar && (
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 ml-0.5">
+                  {hmStandar.min.toFixed(1)} - {hmStandar.max.toFixed(1)} HM
+                </span>
+              )}
+            </button>
+          )}
+
           {/* 2. Menu Profil User di Pojok Kanan Atas */}
           <div className="relative" ref={dropdownRef}>
             <button
@@ -173,6 +195,29 @@ export const Header: React.FC<HeaderProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {/* Settings Button */}
+                {onOpenSettings && (
+                  <div className="p-1.5 border-b border-slate-100">
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onOpenSettings();
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-lg flex items-center justify-between transition-colors font-semibold cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Sliders className="w-4 h-4 text-emerald-600" />
+                        <span>Pengaturan Sistem (HM)</span>
+                      </div>
+                      {hmStandar && (
+                        <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                          {hmStandar.min.toFixed(1)} - {hmStandar.max.toFixed(1)} HM
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                )}
 
                 {/* Logout Button */}
                 <div className="p-1.5">

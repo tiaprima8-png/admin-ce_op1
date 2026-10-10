@@ -15,7 +15,8 @@ import {
   CheckCircle,
   Fuel,
   Clock,
-  Sparkles
+  Sparkles,
+  Pencil
 } from 'lucide-react';
 import { HasilInputAktivitas, Unit, AktivitasUnit, Operator } from '../types';
 import { exportToExcel } from '../utils/export';
@@ -616,12 +617,38 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         </div>
 
                         {/* Baris 2: Range HM Awal s/d Akhir */}
-                        <div 
-                          className="text-[10px] text-slate-400 font-mono mt-0.5 truncate"
-                          title={`HM Awal: ${row.hm_awal.toLocaleString('id-ID')} s/d HM Akhir: ${row.hm_akhir.toLocaleString('id-ID')}`}
-                        >
-                          HM: {row.hm_awal.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} → {row.hm_akhir.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                        <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 font-mono mt-0.5 flex-wrap">
+                          <span className="text-slate-400">HM:</span>
+                          <span className="font-semibold text-slate-700">
+                            {row.hm_awal.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                          </span>
+                          {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
+                            <span 
+                              title={row.alasan_koreksi_hm ? `Alasan Koreksi: ${row.alasan_koreksi_hm}` : 'HM Awal telah dikoreksi oleh pengawas'}
+                              className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold font-sans cursor-help shrink-0 shadow-2xs"
+                            >
+                              <Pencil className="w-2.5 h-2.5 text-amber-700" />
+                              <span>Koreksi</span>
+                            </span>
+                          )}
+                          <span className="text-slate-400">→</span>
+                          <span className="font-semibold text-slate-700">
+                            {row.hm_akhir.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                          </span>
                         </div>
+
+                        {/* Baris 2B: Alasan Koreksi HM Pengawas (jika is_hm_awal_corrected = 1) */}
+                        {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
+                          <div 
+                            className="text-[9px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5 max-w-[210px] ml-auto truncate cursor-help text-left flex items-center gap-1 font-sans font-medium"
+                            title={`Alasan Koreksi Pengawas: "${row.alasan_koreksi_hm || 'Perbaikan koreksi HM awal lapangan'}"`}
+                          >
+                            <Pencil className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                            <span className="truncate italic">
+                              Koreksi: {row.alasan_koreksi_hm || 'Audit koreksi pengawas'}
+                            </span>
+                          </div>
+                        )}
 
                         {/* Baris 3: Stik BBM / Liter Solar */}
                         <div className="text-[10px] mt-0.5 font-mono">

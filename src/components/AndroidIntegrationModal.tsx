@@ -240,6 +240,31 @@ interface RkceApiService {
             </div>
           </div>
 
+          {/* Section 3B: WebSocket Event 'HM_STANDAR_UPDATED' (Sync Batas HM Real-Time) */}
+          <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-amber-600 text-white font-mono text-[11px] rounded font-bold">WEBSOCKET</span>
+              <span className="font-mono text-xs font-bold text-amber-950">Event: HM_STANDAR_UPDATED</span>
+            </div>
+            <p className="text-xs text-amber-900">
+              Saat Admin memperbarui batas standar jam kerja HM per shift di Portal Admin (Pengaturan Sistem), server membroadcast event <code className="font-bold">HM_STANDAR_UPDATED</code>. Label badge standar pada form realisasi aplikasi Android otomatis berubah seketika:
+            </p>
+            <div className="bg-slate-900 rounded-lg p-3 text-amber-300 font-mono text-[11px] overflow-x-auto">
+              <pre>{`// WebSocket Broadcast Packet Sinkronisasi Standar HM:
+{
+  "event": "HM_STANDAR_UPDATED",
+  "type": "HM_STANDAR_UPDATED",
+  "hm_standar": {
+    "min": 6.0,
+    "max": 10.0
+  },
+  "hm_min_standar": 6.0,
+  "hm_max_standar": 10.0,
+  "timestamp": "2026-10-10T15:00:00.000Z"
+}`}</pre>
+            </div>
+          </div>
+
           {/* Section 4: POST /api/aktivitas-unit */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -274,6 +299,8 @@ interface RkceApiService {
   "stik_akhir": 25.0,
   "jam_kerja": 10.5,
   "hm_awal": 8910.0,
+  "is_hm_awal_corrected": 1,
+  "alasan_koreksi_hm": "Salah input shift malam",
   "hm_akhir": 8920.4,
   "hm_harian_berjalan": 10.4,
   "hasil_kerja": 1450,

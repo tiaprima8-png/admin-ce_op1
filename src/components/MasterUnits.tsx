@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, X, Search, AlertCircle, CheckCircle } from 'lucide-react';
-import { Unit } from '../types';
+import { Plus, Edit2, Trash2, X, Search, AlertCircle, CheckCircle, Clock, Sliders } from 'lucide-react';
+import { Unit, HmStandarConfig } from '../types';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface MasterUnitsProps {
   units: Unit[];
   supervisors: string[];
   onRefresh: () => void;
+  globalHmStandar?: HmStandarConfig;
 }
 
-export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, onRefresh }) => {
+export const MasterUnits: React.FC<MasterUnitsProps> = ({ 
+  units, 
+  supervisors, 
+  onRefresh,
+  globalHmStandar = { min: 6.0, max: 10.0 }
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
@@ -20,6 +26,8 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
   const [modelUnit, setModelUnit] = useState('');
   const [namaPengawas, setNamaPengawas] = useState(supervisors[0] || 'Budi Santoso');
   const [hmTerakhir, setHmTerakhir] = useState<number>(0);
+  const [hmMinStandar, setHmMinStandar] = useState<string>('');
+  const [hmMaxStandar, setHmMaxStandar] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -35,6 +43,8 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
     setModelUnit('');
     setNamaPengawas(supervisors[0] || 'Budi Santoso');
     setHmTerakhir(0);
+    setHmMinStandar('');
+    setHmMaxStandar('');
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -46,6 +56,8 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
     setModelUnit(unit.model_unit);
     setNamaPengawas(unit.nama_pengawas);
     setHmTerakhir(unit.hm_unit_terakhir_diinputkan);
+    setHmMinStandar(unit.hm_min_standar !== undefined && unit.hm_min_standar !== null ? String(unit.hm_min_standar) : '');
+    setHmMaxStandar(unit.hm_max_standar !== undefined && unit.hm_max_standar !== null ? String(unit.hm_max_standar) : '');
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -54,6 +66,15 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMessage(null);
+
+    const parsedMin = hmMinStandar.trim() !== '' ? parseFloat(hmMinStandar) : null;
+    const parsedMax = hmMaxStandar.trim() !== '' ? parseFloat(hmMaxStandar) : null;
+
+    if (parsedMin !== null && parsedMax !== null && parsedMin > parsedMax) {
+      setErrorMessage('HM Min Standar tidak boleh lebih besar dari HM Max Standar.');
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const url = editingUnit ? `/api/units/${editingUnit.id}` : '/api/units';
@@ -67,7 +88,9 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
           jenis_unit: jenisUnit,
           model_unit: modelUnit,
           nama_pengawas: namaPengawas,
-          hm_unit_terakhir_diinputkan: hmTerakhir
+          hm_unit_terakhir_diinputkan: hmTerakhir,
+          hm_min_standar: parsedMin,
+          hm_max_standar: parsedMax
         })
       });
 
@@ -166,6 +189,7 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
                 <th className="py-3 px-4">Model / Tipe</th>
                 <th className="py-3 px-4">Pengawas Penanggung Jawab</th>
                 <th className="py-3 px-4 text-right">HM Unit Terakhir</th>
+                <th className="py-3 px-4 text-center">Standar HM Shift</th>
                 <th className="py-3 px-4 text-center">Terakhir Update</th>
                 <th className="py-3 px-4 text-center">Aksi</th>
               </tr>
@@ -173,7 +197,7 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredUnits.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400">
+                  <td colSpan={8} className="text-center py-10 text-slate-400">
                     Tidak ada data unit yang sesuai.
                   </td>
                 </tr>
@@ -198,6 +222,26 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
                     </td>
                     <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
                       {unit.hm_unit_terakhir_diinputkan.toFixed(1)}
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {(unit.hm_min_standar != null || unit.hm_max_standar != null) ? (
+                        <span 
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-mono font-bold text-[10px]"
+                          title={`Standar Khusus Unit: ${(unit.hm_min_standar ?? globalHmStandar.min).toFixed(1)} - ${(unit.hm_max_standar ?? globalHmStandar.max).toFixed(1)} HM per shift`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0"></span>
+                          <span>{(unit.hm_min_standar ?? globalHmStandar.min).toFixed(1)} - {(unit.hm_max_standar ?? globalHmStandar.max).toFixed(1)} HM</span>
+                          <span className="text-[9px] font-semibold text-purple-600 bg-purple-100 px-1 py-0.2 rounded ml-0.5">Khusus</span>
+                        </span>
+                      ) : (
+                        <span 
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 text-slate-600 border border-slate-200 font-mono text-[10px]"
+                          title={`Mengikuti Standar Global: ${globalHmStandar.min.toFixed(1)} - ${globalHmStandar.max.toFixed(1)} HM per shift`}
+                        >
+                          <span>{globalHmStandar.min.toFixed(1)} - {globalHmStandar.max.toFixed(1)} HM</span>
+                          <span className="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.2 rounded border border-slate-200 ml-0.5">Global</span>
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center text-slate-500 text-[11px]">
                       {unit.updated_at ? unit.updated_at.slice(0, 16) : '-'}
@@ -328,6 +372,66 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({ units, supervisors, on
                   onChange={(e) => setHmTerakhir(parseFloat(e.target.value) || 0)}
                   className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono bg-white"
                 />
+              </div>
+
+              {/* Batas Standar HM Spesifik (Override per Unit) */}
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Batas Standar HM per Shift (Khusus Unit Ini)</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-semibold bg-slate-100 px-1.5 py-0.5 rounded">
+                    Opsional
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Kosongkan field ini jika ingin mengikuti standar global sistem (
+                  <strong className="text-emerald-700 font-mono">{globalHmStandar.min.toFixed(1)} - {globalHmStandar.max.toFixed(1)} HM</strong>
+                  ). Isi jika unit ini memiliki siklus kerja khusus (misal: Genset, Pompa, Dozer berat).
+                </p>
+
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      HM Min Standar
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        placeholder={`Global: ${globalHmStandar.min.toFixed(1)}`}
+                        value={hmMinStandar}
+                        onChange={(e) => setHmMinStandar(e.target.value)}
+                        className="w-full text-xs p-2.5 pr-9 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono bg-white"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">
+                        HM
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      HM Max Standar
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        placeholder={`Global: ${globalHmStandar.max.toFixed(1)}`}
+                        value={hmMaxStandar}
+                        onChange={(e) => setHmMaxStandar(e.target.value)}
+                        className="w-full text-xs p-2.5 pr-9 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono bg-white"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">
+                        HM
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">

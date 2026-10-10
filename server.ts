@@ -19,7 +19,8 @@ import db, {
   type UserRow,
   type LokasiRow,
   type RencanaKerjaRow,
-  type MasterKendalaRow
+  type MasterKendalaRow,
+  type AppSettingRow
 } from './server/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -114,6 +115,12 @@ async function startServer() {
       const lokasi: LokasiRow[] = queryAll<LokasiRow>('SELECT * FROM lokasi ORDER BY kode_lokasi ASC');
       const kendala: MasterKendalaRow[] = queryAll<MasterKendalaRow>('SELECT * FROM master_kendala WHERE status_aktif = 1 ORDER BY id ASC');
 
+      const minSetting = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_min_standar'");
+      const maxSetting = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_max_standar'");
+      const hm_min = minSetting ? parseFloat(minSetting.value) || 6.0 : 6.0;
+      const hm_max = maxSetting ? parseFloat(maxSetting.value) || 10.0 : 10.0;
+      const hm_standar = { min: hm_min, max: hm_max };
+
       if (pengawas && pengawas !== 'Semua') {
         units = queryAll<UnitRow>('SELECT * FROM units WHERE nama_pengawas = ? ORDER BY kode_unit ASC', [pengawas]);
         operators = queryAll<OperatorRow>('SELECT * FROM operators WHERE nama_pengawas = ? ORDER BY nama_operator ASC', [pengawas]);
@@ -133,12 +140,14 @@ async function startServer() {
         total_aktivitas: aktivitas.length,
         total_lokasi: lokasi.length,
         total_kendala: kendala.length,
+        hm_standar,
         data: {
           units,
           aktivitas,
           operators,
           lokasi,
-          kendala
+          kendala,
+          hm_standar
         }
       });
     } catch (err: unknown) {
@@ -655,7 +664,9 @@ async function startServer() {
         jumlah_liter_solar: rawJumlahLiterSolar,
         stik_awal: rawStikAwal,
         stik_akhir: rawStikAkhir,
-        kendala_list: rawKendalaList
+        kendala_list: rawKendalaList,
+        is_hm_awal_corrected: rawIsHmAwalCorrected,
+        alasan_koreksi_hm: rawAlasanKoreksiHm
       } = req.body;
 
       // Extract foto_bukti either from multipart/form-data file upload or Base64 JSON string
@@ -694,6 +705,12 @@ async function startServer() {
         kendalaListStr = typeof rawKendalaList === 'string' ? rawKendalaList : JSON.stringify(rawKendalaList);
       }
 
+      // HM Awal Correction Audit handling
+      const is_hm_awal_corrected = (rawIsHmAwalCorrected === true || rawIsHmAwalCorrected === 1 || rawIsHmAwalCorrected === '1' || rawIsHmAwalCorrected === 'true') ? 1 : 0;
+      const alasan_koreksi_hm = is_hm_awal_corrected === 1
+        ? (rawAlasanKoreksiHm !== undefined && rawAlasanKoreksiHm !== null && String(rawAlasanKoreksiHm).trim() !== '' ? String(rawAlasanKoreksiHm).trim() : null)
+        : null;
+
       const kode_lokasi = (rawKodeLokasi || rawLokasi || '001A').toString().trim();
       const lokasi = (rawLokasi || rawKodeLokasi || 'Pit Operasional').toString().trim();
       const shift_kerja = (rawShiftKerja || 'SIANG').toUpperCase() === 'MALAM' ? 'Malam' : 'Siang';
@@ -704,8 +721,9 @@ async function startServer() {
           rencana_id, nama_pengawas, tanggal, kode_unit, nama_aktivitas, kode_sap, satuan,
           operator, nik_operator, kode_lokasi, lokasi, nomor_spk, shift_kerja, jam_kerja, hm_awal, hm_akhir,
           hm_harian_berjalan, hasil_kerja, keterangan, foto_bukti,
-          status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, kendala_list, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, kendala_list,
+          is_hm_awal_corrected, alasan_koreksi_hm, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const insertResult = execute(insertSql, [
@@ -735,6 +753,8 @@ async function startServer() {
         numStikAwal,
         numStikAkhir,
         kendalaListStr,
+        is_hm_awal_corrected,
+        alasan_koreksi_hm,
         createdAt
       ]);
 
@@ -915,7 +935,9 @@ async function startServer() {
         jumlah_liter_solar: rawJumlahLiterSolar,
         stik_awal: rawStikAwal,
         stik_akhir: rawStikAkhir,
-        kendala_list: rawKendalaList
+        kendala_list: rawKendalaList,
+        is_hm_awal_corrected: rawIsHmAwalCorrected,
+        alasan_koreksi_hm: rawAlasanKoreksiHm
       } = req.body;
 
       const numHmAwal = parseFloat(hm_awal) || 0;
@@ -937,6 +959,14 @@ async function startServer() {
         kendalaListStr = typeof rawKendalaList === 'string' ? rawKendalaList : JSON.stringify(rawKendalaList);
       }
 
+      // HM Awal Correction Audit handling
+      const is_hm_awal_corrected = rawIsHmAwalCorrected !== undefined
+        ? ((rawIsHmAwalCorrected === true || rawIsHmAwalCorrected === 1 || rawIsHmAwalCorrected === '1' || rawIsHmAwalCorrected === 'true') ? 1 : 0)
+        : 0;
+      const alasan_koreksi_hm = is_hm_awal_corrected === 1
+        ? (rawAlasanKoreksiHm !== undefined && rawAlasanKoreksiHm !== null && String(rawAlasanKoreksiHm).trim() !== '' ? String(rawAlasanKoreksiHm).trim() : null)
+        : null;
+
       // Check if new photo was uploaded or passed in body
       let foto_bukti = req.body.foto_bukti;
       if (req.file) {
@@ -955,7 +985,8 @@ async function startServer() {
             shift_kerja = ?, jam_kerja = ?, hm_awal = ?, hm_akhir = ?, hm_harian_berjalan = ?,
             hasil_kerja = ?, keterangan = ?, foto_bukti = ?,
             status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?,
-            stik_awal = ?, stik_akhir = ?, kendala_list = ?
+            stik_awal = ?, stik_akhir = ?, kendala_list = ?,
+            is_hm_awal_corrected = ?, alasan_koreksi_hm = ?
           WHERE id = ?
         `;
         params = [
@@ -982,6 +1013,8 @@ async function startServer() {
           numStikAwal,
           numStikAkhir,
           kendalaListStr,
+          is_hm_awal_corrected,
+          alasan_koreksi_hm,
           id
         ];
       } else {
@@ -992,7 +1025,8 @@ async function startServer() {
             shift_kerja = ?, jam_kerja = ?, hm_awal = ?, hm_akhir = ?, hm_harian_berjalan = ?,
             hasil_kerja = ?, keterangan = ?,
             status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?,
-            stik_awal = ?, stik_akhir = ?, kendala_list = ?
+            stik_awal = ?, stik_akhir = ?, kendala_list = ?,
+            is_hm_awal_corrected = ?, alasan_koreksi_hm = ?
           WHERE id = ?
         `;
         params = [
@@ -1018,6 +1052,8 @@ async function startServer() {
           numStikAwal,
           numStikAkhir,
           kendalaListStr,
+          is_hm_awal_corrected,
+          alasan_koreksi_hm,
           id
         ];
       }
@@ -1260,12 +1296,23 @@ async function startServer() {
 
   app.post('/api/units', (req: Request, res: Response) => {
     try {
-      const { kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan } = req.body;
+      const { 
+        kode_unit, 
+        jenis_unit, 
+        model_unit, 
+        nama_pengawas, 
+        hm_unit_terakhir_diinputkan,
+        hm_min_standar,
+        hm_max_standar
+      } = req.body;
       const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const minVal = (hm_min_standar !== undefined && hm_min_standar !== null && hm_min_standar !== '') ? parseFloat(hm_min_standar) : null;
+      const maxVal = (hm_max_standar !== undefined && hm_max_standar !== null && hm_max_standar !== '') ? parseFloat(hm_max_standar) : null;
+
       const resDb = execute(`
-        INSERT INTO units (kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [kode_unit, jenis_unit, model_unit, nama_pengawas, parseFloat(hm_unit_terakhir_diinputkan) || 0, now]);
+        INSERT INTO units (kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [kode_unit, jenis_unit, model_unit, nama_pengawas, parseFloat(hm_unit_terakhir_diinputkan) || 0, minVal, maxVal, now]);
 
       const inserted = queryOne<UnitRow>('SELECT * FROM units WHERE id = ?', [resDb.lastInsertRowId]);
       res.status(201).json(inserted);
@@ -1277,12 +1324,31 @@ async function startServer() {
   app.put('/api/units/:id', (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const { kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan } = req.body;
+      const { 
+        kode_unit, 
+        jenis_unit, 
+        model_unit, 
+        nama_pengawas, 
+        hm_unit_terakhir_diinputkan,
+        hm_min_standar,
+        hm_max_standar
+      } = req.body;
       const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const minVal = (hm_min_standar !== undefined && hm_min_standar !== null && hm_min_standar !== '') ? parseFloat(hm_min_standar) : null;
+      const maxVal = (hm_max_standar !== undefined && hm_max_standar !== null && hm_max_standar !== '') ? parseFloat(hm_max_standar) : null;
+
       execute(`
-        UPDATE units SET kode_unit = ?, jenis_unit = ?, model_unit = ?, nama_pengawas = ?, hm_unit_terakhir_diinputkan = ?, updated_at = ?
+        UPDATE units SET 
+          kode_unit = ?, 
+          jenis_unit = ?, 
+          model_unit = ?, 
+          nama_pengawas = ?, 
+          hm_unit_terakhir_diinputkan = ?, 
+          hm_min_standar = ?,
+          hm_max_standar = ?,
+          updated_at = ?
         WHERE id = ?
-      `, [kode_unit, jenis_unit, model_unit, nama_pengawas, parseFloat(hm_unit_terakhir_diinputkan) || 0, now, id]);
+      `, [kode_unit, jenis_unit, model_unit, nama_pengawas, parseFloat(hm_unit_terakhir_diinputkan) || 0, minVal, maxVal, now, id]);
 
       const updated = queryOne<UnitRow>('SELECT * FROM units WHERE id = ?', [id]);
       res.json(updated);
@@ -1491,6 +1557,80 @@ async function startServer() {
       execute('DELETE FROM users WHERE id = ?', [id]);
       res.json({ message: 'User berhasil dihapus' });
     } catch (err: unknown) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // 10. APP SETTINGS / SYSTEM CONFIG (HM STANDAR CONFIG)
+  app.get('/api/settings/hm-standar', (req: Request, res: Response) => {
+    try {
+      const minRow = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_min_standar'");
+      const maxRow = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_max_standar'");
+      const hm_min = minRow ? parseFloat(minRow.value) || 6.0 : 6.0;
+      const hm_max = maxRow ? parseFloat(maxRow.value) || 10.0 : 10.0;
+      res.json({
+        hm_min_standar: hm_min,
+        hm_max_standar: hm_max,
+        hm_min,
+        hm_max
+      });
+    } catch (err: unknown) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.put('/api/settings/hm-standar', (req: Request, res: Response) => {
+    try {
+      const { hm_min_standar, hm_max_standar } = req.body;
+      const minVal = parseFloat(hm_min_standar);
+      const maxVal = parseFloat(hm_max_standar);
+
+      if (isNaN(minVal) || isNaN(maxVal)) {
+        return res.status(400).json({ error: 'Nilai standar minimal dan maksimal HM harus berupa angka valid.' });
+      }
+      if (minVal < 0 || maxVal < 0) {
+        return res.status(400).json({ error: 'Nilai standar HM tidak boleh bernilai negatif.' });
+      }
+      if (minVal > maxVal) {
+        return res.status(400).json({ error: 'Standar minimal HM tidak boleh lebih besar dari standar maksimal HM.' });
+      }
+
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+      // Upsert into app_settings
+      execute(`
+        INSERT INTO app_settings (key, value, keterangan, updated_at)
+        VALUES ('hm_min_standar', ?, 'Batas minimal HM normal per shift', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `, [minVal.toFixed(1), now]);
+
+      execute(`
+        INSERT INTO app_settings (key, value, keterangan, updated_at)
+        VALUES ('hm_max_standar', ?, 'Batas maksimal wajar HM per shift', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `, [maxVal.toFixed(1), now]);
+
+      // Broadcast WebSocket notification to all active clients (Android & Web)
+      broadcast({
+        event: 'HM_STANDAR_UPDATED',
+        type: 'HM_STANDAR_UPDATED',
+        hm_standar: { min: minVal, max: maxVal },
+        hm_min_standar: minVal,
+        hm_max_standar: maxVal,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`⚙️ [SETTINGS_UPDATED] Batas standar HM diubah ke: ${minVal} - ${maxVal} HM & dibroadcast via WebSocket`);
+
+      res.json({
+        status: 'success',
+        message: 'Pengaturan standar operasional HM berhasil disimpan!',
+        hm_standar: { min: minVal, max: maxVal },
+        hm_min_standar: minVal,
+        hm_max_standar: maxVal
+      });
+    } catch (err: unknown) {
+      console.error('Error updating HM standard settings:', err);
       res.status(500).json({ error: (err as Error).message });
     }
   });

@@ -43,6 +43,8 @@ export function exportToExcel(
     'Kode Unit': item.kode_unit,
     'Status Unit': item.status_unit || 'OPERASI',
     'HM Awal': item.hm_awal,
+    'Koreksi HM Awal': (item.is_hm_awal_corrected === 1 || item.is_hm_awal_corrected === true) ? 'YA' : 'TIDAK',
+    'Alasan Koreksi HM': item.alasan_koreksi_hm || '-',
     'HM Akhir': item.hm_akhir,
     'HM Berjalan': item.hm_harian_berjalan,
     'Jam Kerja (Jam)': item.jam_kerja,
@@ -73,6 +75,8 @@ export function exportToExcel(
     { wch: 12 }, // Kode Unit
     { wch: 14 }, // Status Unit
     { wch: 12 }, // HM Awal
+    { wch: 16 }, // Koreksi HM Awal
+    { wch: 28 }, // Alasan Koreksi HM
     { wch: 12 }, // HM Akhir
     { wch: 14 }, // HM Berjalan
     { wch: 16 }, // Jam Kerja

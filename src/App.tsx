@@ -13,7 +13,8 @@ import {
   KpiStats, 
   RencanaKerja, 
   Lokasi,
-  MasterKendala as MasterKendalaType
+  MasterKendala as MasterKendalaType,
+  HmStandarConfig
 } from './types';
 import { soundService } from './utils/sound';
 import { Header } from './components/Header';
@@ -32,6 +33,7 @@ import { MasterUsers } from './components/MasterUsers';
 import { ManualActivityModal } from './components/ManualActivityModal';
 import { EditActivityModal } from './components/EditActivityModal';
 import { PhotoLightboxModal } from './components/PhotoLightboxModal';
+import { SettingsModal } from './components/SettingsModal';
 
 interface AuthUser {
   id: number;
@@ -96,6 +98,8 @@ export default function App() {
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<HasilInputAktivitas | null>(null);
   const [viewingPhotoActivity, setViewingPhotoActivity] = useState<HasilInputAktivitas | null>(null);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [hmStandar, setHmStandar] = useState<HmStandarConfig>({ min: 6.0, max: 10.0 });
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Extract unique supervisors
@@ -214,6 +218,21 @@ export default function App() {
     }
   }, []);
 
+  const fetchHmStandar = useCallback(async () => {
+    try {
+      const res = await fetch('/api/settings/hm-standar');
+      const data = await res.json();
+      if (data.hm_min_standar !== undefined && data.hm_max_standar !== undefined) {
+        setHmStandar({
+          min: parseFloat(data.hm_min_standar) || 6.0,
+          max: parseFloat(data.hm_max_standar) || 10.0
+        });
+      }
+    } catch (e) {
+      console.error('Failed fetching HM standard settings:', e);
+    }
+  }, []);
+
   const refreshAllData = useCallback(async () => {
     setIsRefreshing(true);
     await Promise.all([
@@ -225,10 +244,11 @@ export default function App() {
       fetchKendalaList(),
       fetchOperators(),
       fetchUsers(),
-      fetchStats()
+      fetchStats(),
+      fetchHmStandar()
     ]);
     setTimeout(() => setIsRefreshing(false), 400);
-  }, [fetchRencanaList, fetchActivities, fetchLokasiList, fetchUnits, fetchAktivitasList, fetchKendalaList, fetchOperators, fetchUsers, fetchStats]);
+  }, [fetchRencanaList, fetchActivities, fetchLokasiList, fetchUnits, fetchAktivitasList, fetchKendalaList, fetchOperators, fetchUsers, fetchStats, fetchHmStandar]);
 
   useEffect(() => {
     if (currentUser) {
@@ -403,6 +423,19 @@ export default function App() {
             }
           } else if (packet.event === 'DELETE_RENCANA' && packet.id) {
             setRencanaList(prev => prev.filter(r => r.id !== packet.id));
+          } else if (packet.event === 'HM_STANDAR_UPDATED' || packet.type === 'HM_STANDAR_UPDATED') {
+            const incomingStd = packet.hm_standar || {
+              min: packet.hm_min_standar !== undefined ? packet.hm_min_standar : 6.0,
+              max: packet.hm_max_standar !== undefined ? packet.hm_max_standar : 10.0
+            };
+            if (incomingStd && incomingStd.min !== undefined && incomingStd.max !== undefined) {
+              setHmStandar({
+                min: parseFloat(incomingStd.min) || 6.0,
+                max: parseFloat(incomingStd.max) || 10.0
+              });
+              soundService.playSuccess();
+              console.log('⚡ Standar HM diperbarui via real-time WebSocket:', incomingStd);
+            }
           }
         } catch (err) {
           console.warn('Error parsing incoming WS message:', err);
@@ -530,6 +563,8 @@ export default function App() {
         onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        hmStandar={hmStandar}
       />
 
       {/* 2. MAIN CONTENT AREA (Flexibly offset by sidebar width) */}
@@ -546,6 +581,8 @@ export default function App() {
           onLogout={handleLogout}
           onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          hmStandar={hmStandar}
         />
 
         {/* Content Body */}
@@ -629,6 +666,7 @@ export default function App() {
             <MasterUnits
               units={units}
               supervisors={supervisors}
+              globalHmStandar={hmStandar}
               onRefresh={() => {
                 fetchUnits();
                 fetchStats();
@@ -730,6 +768,17 @@ export default function App() {
       <PhotoLightboxModal
         activity={viewingPhotoActivity}
         onClose={() => setViewingPhotoActivity(null)}
+      />
+
+      {/* 4. Modal Pengaturan Sistem (Standar Minimal & Maksimal HM) */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        currentHmStandar={hmStandar}
+        onSaved={(newStandar) => {
+          setHmStandar(newStandar);
+          fetchUnits();
+        }}
       />
 
     </div>

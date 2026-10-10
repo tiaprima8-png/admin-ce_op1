@@ -63,6 +63,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [jamKerja, setJamKerja] = useState<number>(10);
   const [hmAwal, setHmAwal] = useState<number>(0);
   const [hmAkhir, setHmAkhir] = useState<number>(0);
+  const [isHmAwalCorrected, setIsHmAwalCorrected] = useState(false);
+  const [alasanKoreksiHm, setAlasanKoreksiHm] = useState('');
   const [hasilKerja, setHasilKerja] = useState<number>(0);
   const [keterangan, setKeterangan] = useState('');
   const [fotoBukti, setFotoBukti] = useState<string | null>(null);
@@ -111,6 +113,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setJamKerja(activity.jam_kerja);
       setHmAwal(activity.hm_awal);
       setHmAkhir(activity.hm_akhir);
+      setIsHmAwalCorrected(Boolean(activity.is_hm_awal_corrected));
+      setAlasanKoreksiHm(activity.alasan_koreksi_hm || '');
       setHasilKerja(activity.hasil_kerja);
       setKeterangan(activity.keterangan || '');
       setFotoBukti(activity.foto_bukti || null);
@@ -228,7 +232,9 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
         jumlah_liter_solar: isIsiSolar ? jumlahLiterSolar : 0,
         stik_awal: stikAwal !== '' ? Number(stikAwal) : null,
         stik_akhir: stikAkhir !== '' ? Number(stikAkhir) : null,
-        kendala_list: kendalaListItems.length > 0 ? kendalaListItems : null
+        kendala_list: kendalaListItems.length > 0 ? kendalaListItems : null,
+        is_hm_awal_corrected: isHmAwalCorrected ? 1 : 0,
+        alasan_koreksi_hm: isHmAwalCorrected ? (alasanKoreksiHm.trim() || 'Koreksi input pengawas') : null
       };
 
       const res = await fetch(`/api/rekapitulasi/${activity.id}`, {
@@ -725,6 +731,38 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               />
             </div>
 
+          </div>
+
+          {/* Opsi Audit Koreksi HM Awal */}
+          <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isHmAwalCorrected}
+                onChange={(e) => setIsHmAwalCorrected(e.target.checked)}
+                className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+              />
+              <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                <span className="text-xs">✏️</span>
+                Audit Koreksi HM Awal (Tandai koreksi data lapangan)
+              </span>
+            </label>
+
+            {isHmAwalCorrected && (
+              <div className="mt-2.5 pt-2 border-t border-amber-200/60">
+                <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                  Alasan Koreksi HM Awal <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Misal: Salah input shift malam, reset meter, pergantian gauge..."
+                  value={alasanKoreksiHm}
+                  onChange={(e) => setAlasanKoreksiHm(e.target.value)}
+                  className="w-full text-xs rounded-lg border border-amber-300 bg-white p-2 text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                  required={isHmAwalCorrected}
+                />
+              </div>
+            )}
           </div>
 
           {/* HM Calculation Live Box */}

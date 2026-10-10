@@ -21,6 +21,15 @@ export interface UnitRow {
   model_unit: string;
   nama_pengawas: string;
   hm_unit_terakhir_diinputkan: number;
+  hm_min_standar?: number | null;
+  hm_max_standar?: number | null;
+  updated_at: string;
+}
+
+export interface AppSettingRow {
+  key: string;
+  value: string;
+  keterangan?: string;
   updated_at: string;
 }
 
@@ -100,6 +109,8 @@ export interface HasilInputAktivitasRow {
   stik_awal?: number | null;
   stik_akhir?: number | null;
   kendala_list?: string | null;
+  is_hm_awal_corrected?: number;
+  alasan_koreksi_hm?: string | null;
   created_at: string;
 }
 
@@ -228,6 +239,15 @@ function initTablesAndSeed(db: Database) {
       model_unit TEXT NOT NULL,
       nama_pengawas TEXT NOT NULL,
       hm_unit_terakhir_diinputkan REAL DEFAULT 0,
+      hm_min_standar REAL DEFAULT NULL,
+      hm_max_standar REAL DEFAULT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      keterangan TEXT,
       updated_at TEXT NOT NULL
     );
 
@@ -236,7 +256,9 @@ function initTablesAndSeed(db: Database) {
       jenis_unit TEXT NOT NULL,
       nama_aktivitas TEXT NOT NULL,
       satuan TEXT NOT NULL,
-      kode_sap TEXT NOT NULL
+      kode_sap TEXT NOT NULL,
+      is_hm_awal_corrected INTEGER DEFAULT 0,
+      alasan_koreksi_hm TEXT DEFAULT NULL
     );
 
     CREATE TABLE IF NOT EXISTS operators (
@@ -307,6 +329,8 @@ function initTablesAndSeed(db: Database) {
       stik_awal REAL,
       stik_akhir REAL,
       kendala_list TEXT,
+      is_hm_awal_corrected INTEGER DEFAULT 0,
+      alasan_koreksi_hm TEXT DEFAULT NULL,
       created_at TEXT NOT NULL
     );
 
@@ -360,6 +384,59 @@ function initTablesAndSeed(db: Database) {
     if (cols && !cols.includes('nomor_spk')) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN nomor_spk TEXT;");
       console.log('Added nomor_spk column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('is_hm_awal_corrected')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN is_hm_awal_corrected INTEGER DEFAULT 0;");
+      console.log('Added is_hm_awal_corrected column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('alasan_koreksi_hm')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN alasan_koreksi_hm TEXT DEFAULT NULL;");
+      console.log('Added alasan_koreksi_hm column to hasil_input_aktivitas');
+    }
+
+    // Migration for aktivitas_unit table
+    const actInfo = db.exec("PRAGMA table_info(aktivitas_unit)");
+    const actCols = actInfo[0]?.values.map(v => v[1]);
+    if (actCols && !actCols.includes('is_hm_awal_corrected')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN is_hm_awal_corrected INTEGER DEFAULT 0;");
+      console.log('Added is_hm_awal_corrected column to aktivitas_unit');
+    }
+    if (actCols && !actCols.includes('alasan_koreksi_hm')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN alasan_koreksi_hm TEXT DEFAULT NULL;");
+      console.log('Added alasan_koreksi_hm column to aktivitas_unit');
+    }
+
+    // Migration for units table (hm_min_standar & hm_max_standar override)
+    const unitsInfo = db.exec("PRAGMA table_info(units)");
+    const unitsCols = unitsInfo[0]?.values.map(v => v[1]);
+    if (unitsCols && !unitsCols.includes('hm_min_standar')) {
+      db.run("ALTER TABLE units ADD COLUMN hm_min_standar REAL DEFAULT NULL;");
+      console.log('Added hm_min_standar column to units');
+    }
+    if (unitsCols && !unitsCols.includes('hm_max_standar')) {
+      db.run("ALTER TABLE units ADD COLUMN hm_max_standar REAL DEFAULT NULL;");
+      console.log('Added hm_max_standar column to units');
+    }
+
+    // Migration and default seeding for app_settings
+    db.run(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        keterangan TEXT,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    const appSettingsCountRes = db.exec("SELECT COUNT(*) FROM app_settings");
+    const appSettingsCount = appSettingsCountRes[0]?.values[0]?.[0] as number || 0;
+    if (appSettingsCount === 0) {
+      db.run(`
+        INSERT INTO app_settings (key, value, keterangan, updated_at) VALUES
+        ('hm_min_standar', '6.0', 'Batas minimal HM normal per shift', datetime('now')),
+        ('hm_max_standar', '10.0', 'Batas maksimal wajar HM per shift', datetime('now'));
+      `);
+      console.log('Seeded default app_settings: hm_min_standar = 6.0, hm_max_standar = 10.0');
     }
   } catch (e) {
     console.warn('Migration note for solar, status, and spk columns:', e);
@@ -661,6 +738,9 @@ function initTablesAndSeed(db: Database) {
     db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'DZ-02' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaDZ02]);
     db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'GD-01' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaGD01]);
     db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'HEH1' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaHEH1]);
+
+    // Backfill sample corrected HM awal on DT-101 for realistic testing & immediate verification
+    db.run("UPDATE hasil_input_aktivitas SET is_hm_awal_corrected = 1, alasan_koreksi_hm = 'Salah input shift malam' WHERE kode_unit = 'DT-101' AND (is_hm_awal_corrected IS NULL OR is_hm_awal_corrected = 0)");
   } catch (e) {
     console.warn('Backfill spk and kendala note:', e);
   }
