@@ -1,30 +1,35 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
+import type { Request, Response } from 'express';
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import multer from 'multer';
-import {
+import db, {
   getDb,
   queryAll,
   queryOne,
   execute,
   saveDb,
-  HasilInputAktivitasRow,
-  UnitRow,
-  AktivitasUnitRow,
-  OperatorRow,
-  UserRow,
-  LokasiRow,
-  RencanaKerjaRow
+  type HasilInputAktivitasRow,
+  type UnitRow,
+  type AktivitasUnitRow,
+  type OperatorRow,
+  type UserRow,
+  type LokasiRow,
+  type RencanaKerjaRow
 } from './server/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+// Port configuration: Read dynamic process.env.PORT (or 8080) for Cloud Run in production,
+// and default to 3000 for AI Studio development environment
+const PORT = isProduction
+  ? (process.env.PORT ? parseInt(process.env.PORT, 10) : 8080)
+  : 3000;
 
 // Multer memory storage configuration for multipart/form-data photo uploads
 const upload = multer({
@@ -1424,6 +1429,7 @@ async function startServer() {
   }
 
   server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
     console.log(`🚀 RKCE (Rencana Kerja Unit Civil Engineering) Server running at http://0.0.0.0:${PORT}`);
     console.log(`🔌 WebSocket server listening on ws://0.0.0.0:${PORT}/ws`);
   });

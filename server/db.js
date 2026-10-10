@@ -1,136 +1,41 @@
-import initSqlJs from 'sql.js';
-import type { Database, SqlValue } from 'sql.js';
-import fs from 'fs';
-import path from 'path';
-
-let dbInstance: Database | null = null;
-const DB_FILE_PATH = path.resolve(process.cwd(), 'data', 'heavytrack.sqlite');
-
-export interface UserRow {
-  id: number;
-  nama_lengkap: string;
-  username: string;
-  password?: string;
-  hak_akses: 'Admin' | 'Pengawas';
-}
-
-export interface UnitRow {
-  id: number;
-  kode_unit: string;
-  jenis_unit: string;
-  model_unit: string;
-  nama_pengawas: string;
-  hm_unit_terakhir_diinputkan: number;
-  updated_at: string;
-}
-
-export interface AktivitasUnitRow {
-  id: number;
-  jenis_unit: string;
-  nama_aktivitas: string;
-  satuan: string;
-  kode_sap: string;
-}
-
-export interface OperatorRow {
-  id: number;
-  nama_operator: string;
-  nik: string;
-  nama_pengawas: string;
-}
-
-export interface LokasiRow {
-  kode_lokasi: string;
-  wilayah: string;
-  luas_bruto: number;
-  luas_netto: number;
-  created_at: string;
-}
-
-export interface RencanaKerjaRow {
-  id: string;
-  nama_pengawas: string;
-  tanggal: string;
-  status_unit: 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
-  kode_unit: string;
-  operator: string;
-  kode_lokasi: string;
-  shift_kerja: 'SIANG' | 'MALAM' | 'Siang' | 'Malam';
-  nomor_spk?: string | null;
-  status_spk: 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
-  keterangan_rencana?: string | null;
-  created_at: string;
-  // Enriched fields from JOIN
-  model_unit?: string;
-  wilayah?: string;
-}
-
-export interface HasilInputAktivitasRow {
-  id: number | string;
-  rencana_id?: string | null;
-  nama_pengawas: string;
-  tanggal: string;
-  kode_unit: string;
-  nama_aktivitas: string;
-  kode_sap: string;
-  satuan: string;
-  operator: string;
-  nik_operator: string;
-  kode_lokasi: string;
-  lokasi: string;
-  nomor_spk?: string | null;
-  shift_kerja: 'Siang' | 'Malam' | 'SIANG' | 'MALAM';
-  jam_kerja: number;
-  hm_awal: number;
-  hm_akhir: number;
-  hm_harian_berjalan: number;
-  hasil_kerja: number;
-  keterangan: string;
-  foto_bukti?: string | null;
-  status_unit: 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
-  is_isi_solar: number;
-  jumlah_liter_solar: number;
-  created_at: string;
-}
-
-export async function getDb(): Promise<Database> {
+import initSqlJs from "sql.js";
+import fs from "fs";
+import path from "path";
+let dbInstance = null;
+const DB_FILE_PATH = path.resolve(process.cwd(), "data", "heavytrack.sqlite");
+async function getDb() {
   if (dbInstance) return dbInstance;
-
   const SQL = await initSqlJs();
   const dir = path.dirname(DB_FILE_PATH);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-
   if (fs.existsSync(DB_FILE_PATH)) {
     try {
       const fileBuffer = fs.readFileSync(DB_FILE_PATH);
       dbInstance = new SQL.Database(fileBuffer);
     } catch (e) {
-      console.error('Failed reading existing SQLite file, creating fresh one:', e);
+      console.error("Failed reading existing SQLite file, creating fresh one:", e);
       dbInstance = new SQL.Database();
     }
   } else {
     dbInstance = new SQL.Database();
   }
-
   initTablesAndSeed(dbInstance);
   saveDb();
   return dbInstance;
 }
-
-export function saveDb(): void {
+function saveDb() {
   if (!dbInstance) return;
   try {
     const data = dbInstance.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(DB_FILE_PATH, buffer);
   } catch (err) {
-    console.error('Failed to save SQLite file:', err);
+    console.error("Failed to save SQLite file:", err);
   }
 }
-
-export function generateSampleFieldPhoto(kodeUnit: string, aktivitas: string, lokasi: string, pengawas: string, tanggal: string): string {
+function generateSampleFieldPhoto(kodeUnit, aktivitas, lokasi, pengawas, tanggal) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
     <defs>
       <linearGradient id="sky-${kodeUnit}" x1="0" y1="0" x2="0" y2="1">
@@ -183,8 +88,8 @@ export function generateSampleFieldPhoto(kodeUnit: string, aktivitas: string, lo
     <rect x="20" y="20" width="760" height="560" fill="none" stroke="#22c55e" stroke-width="2" stroke-dasharray="16,8" opacity="0.6"/>
     <!-- Top HUD Banner -->
     <rect x="20" y="20" width="760" height="45" fill="rgba(15,23,42,0.85)"/>
-    <text x="40" y="48" fill="#4ade80" font-family="monospace" font-size="14" font-weight="bold">RKCE MOBILE • GPS VERIFIED [ANDROID CAM]</text>
-    <text x="760" y="48" fill="#f8fafc" font-family="monospace" font-size="13" text-anchor="end">LAT: -3.42819° • LON: 114.83912° • ELEV: 112m</text>
+    <text x="40" y="48" fill="#4ade80" font-family="monospace" font-size="14" font-weight="bold">RKCE MOBILE \u2022 GPS VERIFIED [ANDROID CAM]</text>
+    <text x="760" y="48" fill="#f8fafc" font-family="monospace" font-size="13" text-anchor="end">LAT: -3.42819\xB0 \u2022 LON: 114.83912\xB0 \u2022 ELEV: 112m</text>
     
     <!-- Crosshair in center -->
     <path d="M380,300 L420,300 M400,280 L400,320" stroke="#4ade80" stroke-width="2" opacity="0.8"/>
@@ -192,17 +97,15 @@ export function generateSampleFieldPhoto(kodeUnit: string, aktivitas: string, lo
     <!-- Bottom Metadata Overlay Stamp -->
     <rect x="20" y="490" width="760" height="90" fill="rgba(15,23,42,0.9)"/>
     <text x="40" y="520" fill="#f8fafc" font-family="sans-serif" font-size="16" font-weight="bold">UNIT: ${kodeUnit} | AKTIVITAS: ${aktivitas}</text>
-    <text x="40" y="545" fill="#94a3b8" font-family="sans-serif" font-size="13">LOKASI: ${lokasi} • PENGAWAS: ${pengawas}</text>
-    <text x="40" y="568" fill="#38bdf8" font-family="monospace" font-size="12">WAKTU: ${tanggal} 17:42 WITA • BUKTI VALIDASI ANDROID</text>
+    <text x="40" y="545" fill="#94a3b8" font-family="sans-serif" font-size="13">LOKASI: ${lokasi} \u2022 PENGAWAS: ${pengawas}</text>
+    <text x="40" y="568" fill="#38bdf8" font-family="monospace" font-size="12">WAKTU: ${tanggal} 17:42 WITA \u2022 BUKTI VALIDASI ANDROID</text>
     <rect x="660" y="510" width="100" height="40" rx="6" fill="#059669"/>
     <text x="710" y="535" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle">VERIFIED</text>
   </svg>`;
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 }
-
-function initTablesAndSeed(db: Database) {
-  // DDL Schema definitions according to specification
-  db.run(`
+function initTablesAndSeed(db2) {
+  db2.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nama_lengkap TEXT NOT NULL,
@@ -293,58 +196,49 @@ function initTablesAndSeed(db: Database) {
     CREATE INDEX IF NOT EXISTS idx_unit_tgl ON hasil_input_aktivitas(kode_unit, tanggal DESC);
     CREATE INDEX IF NOT EXISTS idx_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
   `);
-
-  // Migration: Ensure foto_bukti, status_unit, is_isi_solar, jumlah_liter_solar exist
   try {
-    db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN foto_bukti TEXT;");
+    db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN foto_bukti TEXT;");
   } catch {
-    // Column already exists
   }
-
-  // Migration: Ensure status_unit, is_isi_solar, and jumlah_liter_solar exist
   try {
-    const hiaInfo = db.exec("PRAGMA table_info(hasil_input_aktivitas)");
-    const cols = hiaInfo[0]?.values.map(v => v[1]);
-    if (cols && !cols.includes('status_unit')) {
-      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN status_unit TEXT DEFAULT 'OPERASI';");
-      console.log('Added status_unit column to hasil_input_aktivitas');
+    const hiaInfo = db2.exec("PRAGMA table_info(hasil_input_aktivitas)");
+    const cols = hiaInfo[0]?.values.map((v) => v[1]);
+    if (cols && !cols.includes("status_unit")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN status_unit TEXT DEFAULT 'OPERASI';");
+      console.log("Added status_unit column to hasil_input_aktivitas");
     }
-    if (cols && !cols.includes('is_isi_solar')) {
-      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN is_isi_solar INTEGER DEFAULT 0;");
-      console.log('Added is_isi_solar column to hasil_input_aktivitas');
+    if (cols && !cols.includes("is_isi_solar")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN is_isi_solar INTEGER DEFAULT 0;");
+      console.log("Added is_isi_solar column to hasil_input_aktivitas");
     }
-    if (cols && !cols.includes('jumlah_liter_solar')) {
-      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN jumlah_liter_solar REAL DEFAULT 0.00;");
-      console.log('Added jumlah_liter_solar column to hasil_input_aktivitas');
+    if (cols && !cols.includes("jumlah_liter_solar")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN jumlah_liter_solar REAL DEFAULT 0.00;");
+      console.log("Added jumlah_liter_solar column to hasil_input_aktivitas");
     }
-    if (cols && !cols.includes('rencana_id')) {
-      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN rencana_id TEXT;");
-      console.log('Added rencana_id column to hasil_input_aktivitas');
+    if (cols && !cols.includes("rencana_id")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN rencana_id TEXT;");
+      console.log("Added rencana_id column to hasil_input_aktivitas");
     }
-    if (cols && !cols.includes('kode_lokasi')) {
-      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN kode_lokasi TEXT DEFAULT '001A';");
-      console.log('Added kode_lokasi column to hasil_input_aktivitas');
+    if (cols && !cols.includes("kode_lokasi")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN kode_lokasi TEXT DEFAULT '001A';");
+      console.log("Added kode_lokasi column to hasil_input_aktivitas");
     }
-    if (cols && !cols.includes('nomor_spk')) {
-      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN nomor_spk TEXT;");
-      console.log('Added nomor_spk column to hasil_input_aktivitas');
+    if (cols && !cols.includes("nomor_spk")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN nomor_spk TEXT;");
+      console.log("Added nomor_spk column to hasil_input_aktivitas");
     }
   } catch (e) {
-    console.warn('Migration note for solar, status, and spk columns:', e);
+    console.warn("Migration note for solar, status, and spk columns:", e);
   }
-
   try {
-    db.run("CREATE INDEX IF NOT EXISTS idx_hia_spk ON hasil_input_aktivitas(nomor_spk);");
+    db2.run("CREATE INDEX IF NOT EXISTS idx_hia_spk ON hasil_input_aktivitas(nomor_spk);");
   } catch {
-    // Ignore index creation if already created
   }
-
-  // Migration: Ensure operators table does not require jabatan
   try {
-    const opInfo = db.exec("PRAGMA table_info(operators)");
-    const cols = opInfo[0]?.values.map(v => v[1]);
-    if (cols && cols.includes('jabatan')) {
-      db.run(`
+    const opInfo = db2.exec("PRAGMA table_info(operators)");
+    const cols = opInfo[0]?.values.map((v) => v[1]);
+    if (cols && cols.includes("jabatan")) {
+      db2.run(`
         CREATE TABLE operators_migrated (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           nama_operator TEXT NOT NULL,
@@ -356,18 +250,16 @@ function initTablesAndSeed(db: Database) {
         DROP TABLE operators;
         ALTER TABLE operators_migrated RENAME TO operators;
       `);
-      console.log('Migrated operators table to remove jabatan.');
+      console.log("Migrated operators table to remove jabatan.");
     }
   } catch (e) {
-    console.warn('Operator migration note:', e);
+    console.warn("Operator migration note:", e);
   }
-
-  // Migration: Ensure aktivitas_unit does not have kategori
   try {
-    const actInfo = db.exec("PRAGMA table_info(aktivitas_unit)");
-    const cols = actInfo[0]?.values.map(v => v[1]);
-    if (cols && cols.includes('kategori')) {
-      db.run(`
+    const actInfo = db2.exec("PRAGMA table_info(aktivitas_unit)");
+    const cols = actInfo[0]?.values.map((v) => v[1]);
+    if (cols && cols.includes("kategori")) {
+      db2.run(`
         CREATE TABLE aktivitas_unit_migrated (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           jenis_unit TEXT NOT NULL,
@@ -380,18 +272,16 @@ function initTablesAndSeed(db: Database) {
         DROP TABLE aktivitas_unit;
         ALTER TABLE aktivitas_unit_migrated RENAME TO aktivitas_unit;
       `);
-      console.log('Migrated aktivitas_unit table to remove kategori.');
+      console.log("Migrated aktivitas_unit table to remove kategori.");
     }
   } catch (e) {
-    console.warn('Aktivitas migration note:', e);
+    console.warn("Aktivitas migration note:", e);
   }
-
-  // Migration: Ensure hasil_input_aktivitas does not have kategori
   try {
-    const hiaInfo = db.exec("PRAGMA table_info(hasil_input_aktivitas)");
-    const cols = hiaInfo[0]?.values.map(v => v[1]);
-    if (cols && cols.includes('kategori')) {
-      db.run(`
+    const hiaInfo = db2.exec("PRAGMA table_info(hasil_input_aktivitas)");
+    const cols = hiaInfo[0]?.values.map((v) => v[1]);
+    if (cols && cols.includes("kategori")) {
+      db2.run(`
         CREATE TABLE hasil_input_aktivitas_migrated (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           nama_pengawas TEXT NOT NULL,
@@ -427,28 +317,22 @@ function initTablesAndSeed(db: Database) {
         CREATE INDEX IF NOT EXISTS idx_unit_tgl ON hasil_input_aktivitas(kode_unit, tanggal DESC);
         CREATE INDEX IF NOT EXISTS idx_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
       `);
-      console.log('Migrated hasil_input_aktivitas table to remove kategori.');
+      console.log("Migrated hasil_input_aktivitas table to remove kategori.");
     }
   } catch (e) {
-    console.warn('HasilInputAktivitas migration note:', e);
+    console.warn("HasilInputAktivitas migration note:", e);
   }
-
-  // Check if users seeded
-  const res = db.exec("SELECT COUNT(*) as cnt FROM users");
-  const userCount = res[0]?.values[0]?.[0] as number || 0;
-
+  const res = db2.exec("SELECT COUNT(*) as cnt FROM users");
+  const userCount = res[0]?.values[0]?.[0] || 0;
   if (userCount === 0) {
-    // Seed Users
-    db.run(`
+    db2.run(`
       INSERT INTO users (nama_lengkap, username, password, hak_akses) VALUES
       ('Farid Hadi', 'admin', 'admin123', 'Admin'),
       ('Budi Santoso', 'budi.santoso', 'budi123', 'Pengawas'),
       ('Agus Wijaya', 'agus.wijaya', 'agus123', 'Pengawas'),
       ('Rudi Hermawan', 'rudi.h', 'rudi123', 'Pengawas');
     `);
-
-    // Seed Units
-    db.run(`
+    db2.run(`
       INSERT INTO units (kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan, updated_at) VALUES
       ('DT-101', 'DUMP TRUCK', 'Hino FM 260 Ti', 'Budi Santoso', 4280.5, '2026-10-08 17:30:00'),
       ('DT-102', 'DUMP TRUCK', 'Scania P360 CB', 'Agus Wijaya', 3890.0, '2026-10-08 16:45:00'),
@@ -459,9 +343,7 @@ function initTablesAndSeed(db: Database) {
       ('GD-01', 'MOTOR GRADER', 'Komatsu GD511A', 'Rudi Hermawan', 3110.6, '2026-10-08 16:20:00'),
       ('WT-05', 'WATER TRUCK', 'Hino Ranger 500', 'Budi Santoso', 2490.1, '2026-10-08 15:10:00');
     `);
-
-    // Seed Aktivitas (Tanpa Kategori)
-    db.run(`
+    db2.run(`
       INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap) VALUES
       ('EXCAVATOR', 'Galian Tanah Lunak', 'm3', 'ACT-SAP-101'),
       ('EXCAVATOR', 'Loading Overburden (OB)', 'BCM', 'ACT-SAP-102'),
@@ -474,9 +356,7 @@ function initTablesAndSeed(db: Database) {
       ('MOTOR GRADER', 'Perawatan Jalan Tambang (Grading)', 'km', 'ACT-SAP-109'),
       ('WATER TRUCK', 'Penyiraman Jalan Berdebu', 'tangki', 'ACT-SAP-110');
     `);
-
-    // Seed Operators (Tanpa Jabatan)
-    db.run(`
+    db2.run(`
       INSERT INTO operators (nama_operator, nik, nama_pengawas) VALUES
       ('Joko Susilo', 'NIK-94821', 'Budi Santoso'),
       ('Hendri Kurniawan', 'NIK-94822', 'Budi Santoso'),
@@ -487,15 +367,12 @@ function initTablesAndSeed(db: Database) {
       ('Wahyu Hidayat', 'NIK-94859', 'Rudi Hermawan'),
       ('Teguh Santosa', 'NIK-94863', 'Budi Santoso');
     `);
-
-    // Seed Initial Activity Reports (hasil_input_aktivitas tanpa kategori)
-    const today = new Date().toISOString().slice(0, 10);
-    const photo1 = generateSampleFieldPhoto('HEH1', 'Loading Overburden (OB)', 'Pit Utara Blok C', 'Budi Santoso', today);
-    const photo2 = generateSampleFieldPhoto('DZ-01', 'Clearing & Grubbing Lahan', 'Front Loading 3', 'Budi Santoso', today);
-    const photo3 = generateSampleFieldPhoto('DT-102', 'Hauling Overburden ke Disposal', 'Disposal Barat', 'Agus Wijaya', today);
-    const photo4 = generateSampleFieldPhoto('EX-301', 'Galian Tanah Lunak', 'Pit Selatan ROM 1', 'Agus Wijaya', today);
-
-    db.run(`
+    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const photo1 = generateSampleFieldPhoto("HEH1", "Loading Overburden (OB)", "Pit Utara Blok C", "Budi Santoso", today);
+    const photo2 = generateSampleFieldPhoto("DZ-01", "Clearing & Grubbing Lahan", "Front Loading 3", "Budi Santoso", today);
+    const photo3 = generateSampleFieldPhoto("DT-102", "Hauling Overburden ke Disposal", "Disposal Barat", "Agus Wijaya", today);
+    const photo4 = generateSampleFieldPhoto("EX-301", "Galian Tanah Lunak", "Pit Selatan ROM 1", "Agus Wijaya", today);
+    db2.run(`
       INSERT INTO hasil_input_aktivitas 
       (nama_pengawas, tanggal, kode_unit, nama_aktivitas, kode_sap, satuan, operator, nik_operator, lokasi, shift_kerja, jam_kerja, hm_awal, hm_akhir, hm_harian_berjalan, hasil_kerja, keterangan, foto_bukti, status_unit, is_isi_solar, jumlah_liter_solar, created_at)
       VALUES
@@ -508,44 +385,39 @@ function initTablesAndSeed(db: Database) {
       ('Budi Santoso', '${today}', 'DT-101', 'Hauling Overburden ke Disposal', 'ACT-SAP-107', 'rit', 'Joko Susilo', 'NIK-94821', 'Disposal Timur', 'Malam', 10.0, 4271.0, 4280.5, 9.5, 42, 'Kondisi haul road mulus', NULL, 'OPERASI', 1, 150.0, '2026-10-08 17:30:00');
     `, [photo1, photo2, photo3, photo4]);
   } else {
-    // Backfill status_unit & solar for existing records if default or empty
     try {
-      db.run("UPDATE hasil_input_aktivitas SET status_unit = 'OPERASI' WHERE status_unit IS NULL OR status_unit = ''");
-      db.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 185.0 WHERE kode_unit = 'HEH1' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 140.0 WHERE kode_unit = 'DZ-01' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 120.0 WHERE kode_unit = 'DT-102' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 150.0 WHERE kode_unit = 'DT-101' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 110.0 WHERE kode_unit = 'DZ-02' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db.run("UPDATE hasil_input_aktivitas SET status_unit = 'STANDBY', is_isi_solar = 0, jumlah_liter_solar = 0.0 WHERE kode_unit = 'GD-01'");
+      db2.run("UPDATE hasil_input_aktivitas SET status_unit = 'OPERASI' WHERE status_unit IS NULL OR status_unit = ''");
+      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 185.0 WHERE kode_unit = 'HEH1' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
+      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 140.0 WHERE kode_unit = 'DZ-01' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
+      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 120.0 WHERE kode_unit = 'DT-102' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
+      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 150.0 WHERE kode_unit = 'DT-101' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
+      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 110.0 WHERE kode_unit = 'DZ-02' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
+      db2.run("UPDATE hasil_input_aktivitas SET status_unit = 'STANDBY', is_isi_solar = 0, jumlah_liter_solar = 0.0 WHERE kode_unit = 'GD-01'");
     } catch (e) {
-      console.warn('Could not backfill solar & status:', e);
+      console.warn("Could not backfill solar & status:", e);
     }
-    // Populate photos for existing seed rows that have foto_bukti IS NULL
-    const checkPhotos = db.exec("SELECT COUNT(*) FROM hasil_input_aktivitas WHERE foto_bukti IS NOT NULL");
-    const photoCount = checkPhotos[0]?.values[0]?.[0] as number || 0;
+    const checkPhotos = db2.exec("SELECT COUNT(*) FROM hasil_input_aktivitas WHERE foto_bukti IS NOT NULL");
+    const photoCount = checkPhotos[0]?.values[0]?.[0] || 0;
     if (photoCount === 0) {
-      const today = new Date().toISOString().slice(0, 10);
-      const photo1 = generateSampleFieldPhoto('HEH1', 'Loading Overburden (OB)', 'Pit Utara Blok C', 'Budi Santoso', today);
-      const photo2 = generateSampleFieldPhoto('DZ-01', 'Clearing & Grubbing Lahan', 'Front Loading 3', 'Budi Santoso', today);
-      const photo3 = generateSampleFieldPhoto('DT-102', 'Hauling Overburden ke Disposal', 'Disposal Barat', 'Agus Wijaya', today);
-      const photo4 = generateSampleFieldPhoto('EX-301', 'Galian Tanah Lunak', 'Pit Selatan ROM 1', 'Agus Wijaya', today);
-
+      const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const photo1 = generateSampleFieldPhoto("HEH1", "Loading Overburden (OB)", "Pit Utara Blok C", "Budi Santoso", today);
+      const photo2 = generateSampleFieldPhoto("DZ-01", "Clearing & Grubbing Lahan", "Front Loading 3", "Budi Santoso", today);
+      const photo3 = generateSampleFieldPhoto("DT-102", "Hauling Overburden ke Disposal", "Disposal Barat", "Agus Wijaya", today);
+      const photo4 = generateSampleFieldPhoto("EX-301", "Galian Tanah Lunak", "Pit Selatan ROM 1", "Agus Wijaya", today);
       try {
-        db.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'HEH1'", [photo1]);
-        db.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'DZ-01'", [photo2]);
-        db.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'DT-102'", [photo3]);
-        db.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'EX-301'", [photo4]);
+        db2.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'HEH1'", [photo1]);
+        db2.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'DZ-01'", [photo2]);
+        db2.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'DT-102'", [photo3]);
+        db2.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'EX-301'", [photo4]);
       } catch (e) {
-        console.warn('Could not backfill sample photos:', e);
+        console.warn("Could not backfill sample photos:", e);
       }
     }
   }
-
-  // Check if lokasi seeded
-  const resLok = db.exec("SELECT COUNT(*) as cnt FROM lokasi");
-  const lokCount = (resLok[0]?.values[0]?.[0] as number) || 0;
+  const resLok = db2.exec("SELECT COUNT(*) as cnt FROM lokasi");
+  const lokCount = resLok[0]?.values[0]?.[0] || 0;
   if (lokCount === 0) {
-    db.run(`
+    db2.run(`
       INSERT OR IGNORE INTO lokasi (kode_lokasi, wilayah, luas_bruto, luas_netto, created_at) VALUES
       ('001A', 'PG1', 12.50, 10.80, '2026-10-01 08:00:00'),
       ('002B', 'PG1', 15.00, 13.20, '2026-10-01 08:00:00'),
@@ -554,15 +426,13 @@ function initTablesAndSeed(db: Database) {
       ('100A', 'PG3', 30.50, 27.00, '2026-10-01 08:00:00'),
       ('101B', 'PG3', 18.20, 16.00, '2026-10-01 08:00:00');
     `);
-    console.log('Seeded master lokasi.');
+    console.log("Seeded master lokasi.");
   }
-
-  // Check if rencana_kerja seeded
-  const resRk = db.exec("SELECT COUNT(*) as cnt FROM rencana_kerja");
-  const rkCount = (resRk[0]?.values[0]?.[0] as number) || 0;
+  const resRk = db2.exec("SELECT COUNT(*) as cnt FROM rencana_kerja");
+  const rkCount = resRk[0]?.values[0]?.[0] || 0;
   if (rkCount === 0) {
-    const today = new Date().toISOString().slice(0, 10);
-    db.run(`
+    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    db2.run(`
       INSERT OR IGNORE INTO rencana_kerja (id, nama_pengawas, tanggal, status_unit, kode_unit, operator, kode_lokasi, shift_kerja, nomor_spk, status_spk, keterangan_rencana, created_at) VALUES
       ('RK-2026-001', 'Budi Santoso', '${today}', 'OPERASI', 'HEH1', 'Hendri Kurniawan', '001A', 'SIANG', NULL, 'MENUNGGU_SPK', 'Overburden stripping pit utara blok C', '${today} 06:30:00'),
       ('RK-2026-002', 'Budi Santoso', '${today}', 'OPERASI', 'DZ-01', 'Bambang Irawan', '002B', 'SIANG', 'SPK-2026-X101', 'SPK_TERBIT', 'Clearing dan land leveling area front 3', '${today} 06:45:00'),
@@ -570,49 +440,42 @@ function initTablesAndSeed(db: Database) {
       ('RK-2026-004', 'Agus Wijaya', '${today}', 'STANDBY', 'EX-301', 'Supriyanto', '004C', 'SIANG', NULL, 'MENUNGGU_SPK', 'Standby perapihan bench dan inspeksi', '${today} 07:15:00'),
       ('RK-2026-005', 'Rudi Hermawan', '${today}', 'OPERASI', 'GD-01', 'Ahmad Zaki', '100A', 'SIANG', 'SPK-2026-X103', 'SPK_TERBIT', 'Grading main haul road km 2-6', '${today} 07:30:00');
     `);
-    console.log('Seeded rencana_kerja.');
+    console.log("Seeded rencana_kerja.");
   }
-
-  // Backfill nomor_spk and kode_lokasi on existing hasil_input_aktivitas
   try {
-    db.run("UPDATE hasil_input_aktivitas SET kode_lokasi = '001A' WHERE kode_lokasi IS NULL OR kode_lokasi = ''");
-    db.run("UPDATE hasil_input_aktivitas SET nomor_spk = 'SPK-2026-X102' WHERE kode_unit = 'DT-102' AND (nomor_spk IS NULL OR nomor_spk = '')");
-    db.run("UPDATE hasil_input_aktivitas SET nomor_spk = 'SPK-2026-X101' WHERE kode_unit = 'DZ-01' AND (nomor_spk IS NULL OR nomor_spk = '')");
+    db2.run("UPDATE hasil_input_aktivitas SET kode_lokasi = '001A' WHERE kode_lokasi IS NULL OR kode_lokasi = ''");
+    db2.run("UPDATE hasil_input_aktivitas SET nomor_spk = 'SPK-2026-X102' WHERE kode_unit = 'DT-102' AND (nomor_spk IS NULL OR nomor_spk = '')");
+    db2.run("UPDATE hasil_input_aktivitas SET nomor_spk = 'SPK-2026-X101' WHERE kode_unit = 'DZ-01' AND (nomor_spk IS NULL OR nomor_spk = '')");
   } catch (e) {
-    console.warn('Backfill spk note:', e);
+    console.warn("Backfill spk note:", e);
   }
 }
-
-// Helper query function returning array of objects
-export function queryAll<T = Record<string, unknown>>(sql: string, params: SqlValue[] = []): T[] {
-  if (!dbInstance) throw new Error('Database not initialized');
+function queryAll(sql, params = []) {
+  if (!dbInstance) throw new Error("Database not initialized");
   const stmt = dbInstance.prepare(sql);
   if (params.length > 0) {
     stmt.bind(params);
   }
-  const results: T[] = [];
+  const results = [];
   while (stmt.step()) {
-    results.push(stmt.getAsObject() as unknown as T);
+    results.push(stmt.getAsObject());
   }
   stmt.free();
   return results;
 }
-
-export function queryOne<T = Record<string, unknown>>(sql: string, params: SqlValue[] = []): T | null {
-  const all = queryAll<T>(sql, params);
+function queryOne(sql, params = []) {
+  const all = queryAll(sql, params);
   return all.length > 0 ? all[0] : null;
 }
-
-export function execute(sql: string, params: SqlValue[] = []): { lastInsertRowId: number; changes: number } {
-  if (!dbInstance) throw new Error('Database not initialized');
+function execute(sql, params = []) {
+  if (!dbInstance) throw new Error("Database not initialized");
   dbInstance.run(sql, params);
   const rowIdRes = dbInstance.exec("SELECT last_insert_rowid() as id, changes() as chg");
-  const lastInsertRowId = (rowIdRes[0]?.values[0]?.[0] as number) || 0;
-  const changes = (rowIdRes[0]?.values[0]?.[1] as number) || 0;
+  const lastInsertRowId = rowIdRes[0]?.values[0]?.[0] || 0;
+  const changes = rowIdRes[0]?.values[0]?.[1] || 0;
   saveDb();
   return { lastInsertRowId, changes };
 }
-
 const db = {
   getDb,
   saveDb,
@@ -621,6 +484,14 @@ const db = {
   execute,
   generateSampleFieldPhoto
 };
-
-export default db;
-export { db };
+var db_default = db;
+export {
+  db,
+  db_default as default,
+  execute,
+  generateSampleFieldPhoto,
+  getDb,
+  queryAll,
+  queryOne,
+  saveDb
+};
