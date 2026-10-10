@@ -17,7 +17,10 @@ import {
   Building2,
   HardHat,
   Truck,
-  UserCheck
+  UserCheck,
+  Lock,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { RencanaKerja, Unit, Operator, Lokasi } from '../types';
 
@@ -30,6 +33,7 @@ interface RencanaKerjaViewProps {
   onRefresh: () => void;
   onTerbitkanSpk: (id: string, nomorSpk: string) => Promise<void>;
   onCreateRencana: (data: Partial<RencanaKerja>) => Promise<void>;
+  onUpdateRencana?: (id: string, data: Partial<RencanaKerja>) => Promise<void>;
   onDeleteRencana: (id: string) => Promise<void>;
 }
 
@@ -42,8 +46,19 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   onRefresh,
   onTerbitkanSpk,
   onCreateRencana,
+  onUpdateRencana,
   onDeleteRencana
 }) => {
+  // Helper proteksi integritas data: Cek apakah rencana kerja sudah direalisasikan di lapangan
+  const isRencanaRealized = (row: RencanaKerja): boolean => {
+    return (
+      row.status_spk === 'REALISASI_SELESAI' ||
+      (row.status_spk as string) === 'TEREALISASI' ||
+      Boolean(row.is_realized) ||
+      (typeof row.realisasi_count === 'number' && row.realisasi_count > 0)
+    );
+  };
+
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPengawas, setFilterPengawas] = useState('Semua');
@@ -57,6 +72,20 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Edit Rencana state
+  const [editModalTarget, setEditModalTarget] = useState<RencanaKerja | null>(null);
+  const [editPengawas, setEditPengawas] = useState('');
+  const [editTanggal, setEditTanggal] = useState('');
+  const [editKodeUnit, setEditKodeUnit] = useState('');
+  const [editOperator, setEditOperator] = useState('');
+  const [editKodeLokasi, setEditKodeLokasi] = useState('');
+  const [editShift, setEditShift] = useState<'SIANG' | 'MALAM'>('SIANG');
+  const [editStatusUnit, setEditStatusUnit] = useState<'OPERASI' | 'STANDBY' | 'BREAKDOWN'>('OPERASI');
+  const [editNomorSpk, setEditNomorSpk] = useState('');
+  const [editKeterangan, setEditKeterangan] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const [deleteTarget, setDeleteTarget] = useState<RencanaKerja | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -75,6 +104,8 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
   // Filtered rows
   const filteredList = rencanaList.filter(item => {
+    const isRealized = isRencanaRealized(item);
+
     if (searchTerm.trim() !== '') {
       const q = searchTerm.toLowerCase();
       const match = 
@@ -91,8 +122,12 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
       return false;
     }
 
-    if (filterStatusSpk !== 'Semua' && item.status_spk !== filterStatusSpk) {
-      return false;
+    if (filterStatusSpk !== 'Semua') {
+      if (filterStatusSpk === 'REALISASI_SELESAI' || filterStatusSpk === 'TEREALISASI') {
+        if (!isRealized) return false;
+      } else if (item.status_spk !== filterStatusSpk) {
+        return false;
+      }
     }
 
     if (filterTanggal && item.tanggal !== filterTanggal) {
@@ -109,8 +144,71 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
     setFilterTanggal('');
   };
 
+  // Open Edit Rencana Modal
+  const handleOpenEditModal = (rk: RencanaKerja) => {
+    if (isRencanaRealized(rk)) {
+      alert('Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!');
+      return;
+    }
+    setEditModalTarget(rk);
+    setEditPengawas(rk.nama_pengawas);
+    setEditTanggal(rk.tanggal);
+    setEditKodeUnit(rk.kode_unit);
+    setEditOperator(rk.operator);
+    setEditKodeLokasi(rk.kode_lokasi);
+    setEditShift((rk.shift_kerja || '').toUpperCase() === 'MALAM' ? 'MALAM' : 'SIANG');
+    setEditStatusUnit(rk.status_unit || 'OPERASI');
+    setEditNomorSpk(rk.nomor_spk || '');
+    setEditKeterangan(rk.keterangan_rencana || '');
+  };
+
+  // Submit Edit Rencana
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalTarget) return;
+
+    if (isRencanaRealized(editModalTarget)) {
+      alert('Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!');
+      setEditModalTarget(null);
+      return;
+    }
+
+    if (!editPengawas || !editKodeUnit || !editOperator || !editKodeLokasi) {
+      alert('Lengkapi seluruh field wajib: Pengawas, Unit, Operator, dan Lokasi.');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      if (onUpdateRencana) {
+        await onUpdateRencana(editModalTarget.id, {
+          nama_pengawas: editPengawas,
+          tanggal: editTanggal,
+          kode_unit: editKodeUnit,
+          operator: editOperator,
+          kode_lokasi: editKodeLokasi,
+          shift_kerja: editShift,
+          status_unit: editStatusUnit,
+          nomor_spk: editNomorSpk.trim() || undefined,
+          keterangan_rencana: editKeterangan
+        });
+      }
+      setEditModalTarget(null);
+      setFeedbackNotice(`Rencana kerja #${editModalTarget.id} berhasil diperbarui.`);
+      setTimeout(() => setFeedbackNotice(null), 3500);
+    } catch (err: unknown) {
+      alert((err as Error).message || 'Gagal memperbarui rencana kerja.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // Open SPK issuance modal
   const handleOpenSpkModal = (rk: RencanaKerja) => {
+    if (isRencanaRealized(rk)) {
+      alert('Rencana kerja sudah direalisasikan di lapangan dan nomor SPK tidak dapat diubah!');
+      return;
+    }
     setSpkModalTarget(rk);
     setSpkInputValue(rk.nomor_spk || `SPK-${new Date().getFullYear()}-X${Math.floor(100 + Math.random() * 900)}`);
   };
@@ -126,6 +224,12 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   const handleSubmitSpk = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!spkModalTarget || !spkInputValue.trim()) return;
+
+    if (isRencanaRealized(spkModalTarget)) {
+      alert('Rencana kerja sudah direalisasikan di lapangan dan nomor SPK tidak dapat diubah!');
+      setSpkModalTarget(null);
+      return;
+    }
 
     setIsSubmittingSpk(true);
     try {
@@ -178,6 +282,13 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   // Delete submit
   const handleDeleteSubmit = async () => {
     if (!deleteTarget) return;
+
+    if (isRencanaRealized(deleteTarget)) {
+      alert('Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!');
+      setDeleteTarget(null);
+      return;
+    }
+
     setIsDeleting(true);
     try {
       await onDeleteRencana(deleteTarget.id);
@@ -193,9 +304,9 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
   // KPI Quick Stats for Rencana Kerja
   const totalRencana = rencanaList.length;
-  const menungguSpkCount = rencanaList.filter(r => r.status_spk === 'MENUNGGU_SPK').length;
-  const spkTerbitCount = rencanaList.filter(r => r.status_spk === 'SPK_TERBIT').length;
-  const selesaiCount = rencanaList.filter(r => r.status_spk === 'REALISASI_SELESAI').length;
+  const menungguSpkCount = rencanaList.filter(r => r.status_spk === 'MENUNGGU_SPK' && !isRencanaRealized(r)).length;
+  const spkTerbitCount = rencanaList.filter(r => r.status_spk === 'SPK_TERBIT' && !isRencanaRealized(r)).length;
+  const selesaiCount = rencanaList.filter(isRencanaRealized).length;
 
   return (
     <div className="space-y-6">
@@ -390,9 +501,9 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                 </tr>
               ) : (
                 filteredList.map((row) => {
-                  const isMenungguSpk = row.status_spk === 'MENUNGGU_SPK';
-                  const isSpkTerbit = row.status_spk === 'SPK_TERBIT';
-                  const isSelesai = row.status_spk === 'REALISASI_SELESAI';
+                  const isRealized = isRencanaRealized(row);
+                  const isMenungguSpk = row.status_spk === 'MENUNGGU_SPK' && !isRealized;
+                  const isSpkTerbit = row.status_spk === 'SPK_TERBIT' && !isRealized;
 
                   return (
                     <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
@@ -494,40 +605,78 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                             SPK TERBIT
                           </span>
                         )}
-                        {isSelesai && (
+                        {isRealized && (
                           <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
                             <CheckCircle className="w-3 h-3 text-emerald-600" />
-                            REALISASI SELESAI
+                            TEREALISASI
                           </span>
                         )}
                       </td>
 
                       {/* Aksi */}
                       <td className="py-3 px-3 text-center whitespace-nowrap sticky right-0 bg-white/95 group-hover:bg-slate-50/95">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Tombol Terbitkan / Edit Nomor SPK */}
-                          <button
-                            onClick={() => handleOpenSpkModal(row)}
-                            title={row.nomor_spk ? 'Ubah / Edit Nomor SPK' : 'Terbitkan Nomor SPK untuk dikirim ke Android'}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                              isMenungguSpk
-                                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs'
-                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                            }`}
-                          >
-                            <FileEdit className="w-3 h-3" />
-                            <span>{row.nomor_spk ? 'Edit SPK' : 'Terbitkan SPK'}</span>
-                          </button>
+                        {isRealized ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Badge Hijau "Terealisasi" menggantikan aksi aktif */}
+                            <span 
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs"
+                              title="Rencana kerja ini telah direalisasikan di lapangan oleh pengawas dan datanya terkunci otomatis."
+                            >
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Terealisasi</span>
+                            </span>
 
-                          {/* Tombol Hapus */}
-                          <button
-                            onClick={() => setDeleteTarget(row)}
-                            title="Hapus Rencana Kerja"
-                            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                            {/* Tombol Terkunci (Disabled) */}
+                            <button
+                              disabled
+                              title="Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!"
+                              className="p-1 rounded text-slate-300 cursor-not-allowed opacity-40 hover:bg-transparent"
+                            >
+                              <FileEdit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              disabled
+                              title="Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!"
+                              className="p-1 rounded text-slate-300 cursor-not-allowed opacity-40 hover:bg-transparent"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Tombol Edit Rencana */}
+                            <button
+                              onClick={() => handleOpenEditModal(row)}
+                              title="Edit Data Rencana Kerja (Unit, Operator, Lokasi, Shift)"
+                              className="p-1.5 rounded-md text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-transparent hover:border-blue-200 transition-all cursor-pointer"
+                            >
+                              <FileEdit className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Tombol Terbitkan / Edit Nomor SPK */}
+                            <button
+                              onClick={() => handleOpenSpkModal(row)}
+                              title={row.nomor_spk ? 'Ubah Nomor SPK' : 'Terbitkan Nomor SPK untuk dikirim ke Android'}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                                isMenungguSpk
+                                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                              }`}
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>{row.nomor_spk ? 'Edit SPK' : 'Terbitkan SPK'}</span>
+                            </button>
+
+                            {/* Tombol Hapus */}
+                            <button
+                              onClick={() => setDeleteTarget(row)}
+                              title="Hapus Rencana Kerja"
+                              className="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </td>
 
                     </tr>
@@ -586,6 +735,18 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
               </div>
             </div>
 
+            {isRencanaRealized(spkModalTarget) && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-start gap-2">
+                <Lock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-bold">Rencana Kerja Sudah Terealisasi di Lapangan</div>
+                  <div className="text-[11px] text-amber-800 mt-0.5">
+                    Nomor SPK dan identitas rencana yang sudah dipakai tidak dapat diubah guna mencegah inkonsistensi data realisasi lapangan.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmitSpk} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -595,15 +756,17 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                   <input
                     type="text"
                     required
+                    disabled={isRencanaRealized(spkModalTarget)}
                     placeholder="Contoh: SPK-2026-X101"
                     value={spkInputValue}
                     onChange={(e) => setSpkInputValue(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-emerald-500 bg-white"
+                    className="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                   />
                   <button
                     type="button"
+                    disabled={isRencanaRealized(spkModalTarget)}
                     onClick={handleAutoGenerateSpk}
-                    className="px-2.5 py-2 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
+                    className="px-2.5 py-2 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Buat kode acak SPK"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-600" />
@@ -625,8 +788,8 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingSpk || !spkInputValue.trim()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                  disabled={isSubmittingSpk || !spkInputValue.trim() || isRencanaRealized(spkModalTarget)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>{isSubmittingSpk ? 'Menyimpan & Broadcast...' : 'Terbitkan & Kirim ke Android'}</span>
@@ -826,6 +989,219 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
         </div>
       )}
 
+      {/* MODAL EDIT RENCANA KERJA */}
+      {editModalTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-5 space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-700 border border-blue-200">
+                  <FileEdit className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Edit Rencana Kerja Fleet ({editModalTarget.id})
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Perbarui penugasan sebelum input realisasi lapangan dimulai
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditModalTarget(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {isRencanaRealized(editModalTarget) && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-start gap-2">
+                <Lock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-bold">Rencana Kerja Terkunci</div>
+                  <div className="text-[11px] text-amber-800 mt-0.5">
+                    Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleEditSubmit} className="space-y-3.5 text-xs">
+              
+              <div className="grid grid-cols-2 gap-3">
+                {/* Tanggal */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tanggal</label>
+                  <input
+                    type="date"
+                    required
+                    disabled={isRencanaRealized(editModalTarget)}
+                    value={editTanggal}
+                    onChange={(e) => setEditTanggal(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                  />
+                </div>
+
+                {/* Shift */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Shift Kerja</label>
+                  <select
+                    disabled={isRencanaRealized(editModalTarget)}
+                    value={editShift}
+                    onChange={(e) => setEditShift(e.target.value as 'SIANG' | 'MALAM')}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="SIANG">Shift Siang</option>
+                    <option value="MALAM">Shift Malam</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Pengawas */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Pengawas</label>
+                <select
+                  required
+                  disabled={isRencanaRealized(editModalTarget)}
+                  value={editPengawas}
+                  onChange={(e) => setEditPengawas(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  <option value="">-- Pilih Pengawas --</option>
+                  {supervisors.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Unit */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Kode Unit {isRencanaRealized(editModalTarget) && <span className="text-rose-500">(Terkunci)</span>}
+                  </label>
+                  <select
+                    required
+                    disabled={isRencanaRealized(editModalTarget)}
+                    value={editKodeUnit}
+                    onChange={(e) => setEditKodeUnit(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 font-mono disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="">-- Pilih Unit --</option>
+                    {units.map(u => (
+                      <option key={u.kode_unit} value={u.kode_unit}>{u.kode_unit} - {u.model_unit}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status Unit */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Status Unit</label>
+                  <select
+                    disabled={isRencanaRealized(editModalTarget)}
+                    value={editStatusUnit}
+                    onChange={(e) => setEditStatusUnit(e.target.value as 'OPERASI' | 'STANDBY' | 'BREAKDOWN')}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 font-bold disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="OPERASI">OPERASI</option>
+                    <option value="STANDBY">STANDBY</option>
+                    <option value="BREAKDOWN">BREAKDOWN</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Operator */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Operator {isRencanaRealized(editModalTarget) && <span className="text-rose-500">(Terkunci)</span>}
+                  </label>
+                  <select
+                    required
+                    disabled={isRencanaRealized(editModalTarget)}
+                    value={editOperator}
+                    onChange={(e) => setEditOperator(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="">-- Pilih Operator --</option>
+                    {operators.map(o => (
+                      <option key={o.nik} value={o.nama_operator}>{o.nama_operator} ({o.nik})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Lokasi */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Kode Lokasi</label>
+                  <select
+                    required
+                    disabled={isRencanaRealized(editModalTarget)}
+                    value={editKodeLokasi}
+                    onChange={(e) => setEditKodeLokasi(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="">-- Pilih Lokasi --</option>
+                    {lokasiList.map(l => (
+                      <option key={l.kode_lokasi} value={l.kode_lokasi}>{l.kode_lokasi} ({l.wilayah})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Nomor SPK */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Nomor SPK {isRencanaRealized(editModalTarget) && <span className="text-rose-500">(Terkunci)</span>}
+                </label>
+                <input
+                  type="text"
+                  disabled={isRencanaRealized(editModalTarget)}
+                  placeholder="Contoh: SPK-2026-X101"
+                  value={editNomorSpk}
+                  onChange={(e) => setEditNomorSpk(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs uppercase font-mono focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                />
+              </div>
+
+              {/* Keterangan */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Keterangan Rencana</label>
+                <textarea
+                  rows={2}
+                  disabled={isRencanaRealized(editModalTarget)}
+                  placeholder="Catatan penugasan atau instruksi khusus..."
+                  value={editKeterangan}
+                  onChange={(e) => setEditKeterangan(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditModalTarget(null)}
+                  className="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating || isRencanaRealized(editModalTarget)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-2xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FileEdit className="w-3.5 h-3.5" />
+                  <span>{isUpdating ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
       {/* MODAL HAPUS KONFIRMASI */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in">
@@ -836,23 +1212,39 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
               </div>
               <h3 className="font-bold text-sm text-slate-900">Konfirmasi Hapus</h3>
             </div>
-            <p className="text-xs text-slate-600">
-              Apakah Anda yakin ingin menghapus rencana kerja untuk unit <span className="font-bold text-slate-900">{deleteTarget.kode_unit}</span> ({deleteTarget.nama_pengawas})? Tindakan ini tidak dapat dibatalkan.
-            </p>
+
+            {isRencanaRealized(deleteTarget) ? (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Rencana Sudah Terealisasi</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600">
+                Apakah Anda yakin ingin menghapus rencana kerja untuk unit <span className="font-bold text-slate-900">{deleteTarget.kode_unit}</span> ({deleteTarget.nama_pengawas})? Tindakan ini tidak dapat dibatalkan.
+              </p>
+            )}
+
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 onClick={() => setDeleteTarget(null)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                Batal
+                {isRencanaRealized(deleteTarget) ? 'Tutup' : 'Batal'}
               </button>
-              <button
-                onClick={handleDeleteSubmit}
-                disabled={isDeleting}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {isDeleting ? 'Menghapus...' : 'Ya, Hapus'}
-              </button>
+              {!isRencanaRealized(deleteTarget) && (
+                <button
+                  onClick={handleDeleteSubmit}
+                  disabled={isDeleting}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isDeleting ? 'Menghapus...' : 'Ya, Hapus'}
+                </button>
+              )}
             </div>
           </div>
         </div>

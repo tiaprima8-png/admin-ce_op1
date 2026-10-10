@@ -18,7 +18,7 @@ import {
   Sparkles,
   Pencil
 } from 'lucide-react';
-import { HasilInputAktivitas, Unit, AktivitasUnit, Operator } from '../types';
+import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, MasterKendala } from '../types';
 import { exportToExcel } from '../utils/export';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
@@ -51,6 +51,7 @@ interface ActivityMonitorProps {
   aktivitasList: AktivitasUnit[];
   operators: Operator[];
   supervisors: string[];
+  kendalaList?: MasterKendala[];
   newActivityIds: Set<number | string>;
   onOpenManualModal: () => void;
   onEditActivity: (activity: HasilInputAktivitas) => void;
@@ -65,6 +66,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   aktivitasList,
   operators,
   supervisors,
+  kendalaList = [],
   newActivityIds,
   onOpenManualModal,
   onEditActivity,
@@ -78,7 +80,20 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [selectedUnit, setSelectedUnit] = useState('Semua');
   const [selectedShift, setSelectedShift] = useState('Semua');
   const [selectedStatus, setSelectedStatus] = useState('Semua');
+  const [selectedKendala, setSelectedKendala] = useState('Semua');
   const [selectedDate, setSelectedDate] = useState('');
+
+  // Extract all distinct kendala names from master catalog & existing activities
+  const availableKendalaList = React.useMemo(() => {
+    const listFromMaster = (kendalaList || []).map(k => k.nama_kendala);
+    const listFromActivities = activities.flatMap(a => 
+      parseKendalaList(a.kendala_list).map(k => k.nama_kendala)
+    );
+    const combined = Array.from(new Set([...listFromMaster, ...listFromActivities]))
+      .map(k => k ? k.trim() : '')
+      .filter((k): k is string => Boolean(k));
+    return combined.sort((a, b) => a.localeCompare('id'));
+  }, [kendalaList, activities]);
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<HasilInputAktivitas | null>(null);
@@ -122,6 +137,17 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       return false;
     }
 
+    // Filter berdasarkan Jenis Kendala
+    if (selectedKendala !== 'Semua') {
+      const itemKendalaList = parseKendalaList(item.kendala_list);
+      const hasMatchingKendala = itemKendalaList.some(k => 
+        (k.nama_kendala || '').toLowerCase().trim() === selectedKendala.toLowerCase().trim()
+      );
+      if (!hasMatchingKendala) {
+        return false;
+      }
+    }
+
     if (selectedDate && item.tanggal !== selectedDate) {
       return false;
     }
@@ -141,6 +167,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     setSelectedUnit('Semua');
     setSelectedShift('Semua');
     setSelectedStatus('Semua');
+    setSelectedKendala('Semua');
     setSelectedDate('');
     setCurrentPage(1);
   };
@@ -300,6 +327,27 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             <option value="BREAKDOWN">Status: BREAKDOWN</option>
           </select>
 
+          {/* Filter Jenis Kendala */}
+          <select
+            value={selectedKendala}
+            onChange={(e) => {
+              setSelectedKendala(e.target.value);
+              setCurrentPage(1);
+            }}
+            className={`px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer font-medium transition-colors ${
+              selectedKendala !== 'Semua'
+                ? 'border-amber-400 bg-amber-50 text-amber-900 font-bold ring-1 ring-amber-300'
+                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 focus:ring-1 focus:ring-emerald-500'
+            }`}
+          >
+            <option value="Semua">Kendala: Semua</option>
+            {availableKendalaList.map((k) => (
+              <option key={k} value={k}>
+                Kendala: {k}
+              </option>
+            ))}
+          </select>
+
           {/* Tanggal */}
           <input
             type="date"
@@ -311,7 +359,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             className="px-2 py-1 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500"
           />
 
-          {(searchTerm || selectedPengawas !== 'Semua' || selectedUnit !== 'Semua' || selectedShift !== 'Semua' || selectedStatus !== 'Semua' || selectedDate) && (
+          {(searchTerm || selectedPengawas !== 'Semua' || selectedUnit !== 'Semua' || selectedShift !== 'Semua' || selectedStatus !== 'Semua' || selectedKendala !== 'Semua' || selectedDate) && (
             <button
               onClick={resetFilters}
               className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 hover:underline px-2 py-1 rounded cursor-pointer"

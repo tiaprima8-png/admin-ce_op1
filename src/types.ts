@@ -47,7 +47,7 @@ export interface Operator {
 
 export type UnitStatus = 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
 
-export type StatusSpk = 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
+export type StatusSpk = 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI' | 'TEREALISASI';
 
 export interface Lokasi {
   kode_lokasi: string;
@@ -71,6 +71,8 @@ export interface RencanaKerja {
   nomor_spk?: string | null;
   status_spk: StatusSpk;
   keterangan_rencana?: string | null;
+  is_realized?: boolean;
+  realisasi_count?: number;
   created_at: string;
   updated_at?: string;
 }

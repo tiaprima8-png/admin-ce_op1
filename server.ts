@@ -20,21 +20,84 @@ import db, {
   type LokasiRow,
   type RencanaKerjaRow,
   type MasterKendalaRow,
-  type AppSettingRow
+  type AppSettingRow,
+  type AktivitasKendalaRow
 } from './server/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === 'production';
-// Port configuration: Read dynamic process.env.PORT if provided, defaulting to 3000 for AI Studio
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+// Port & Host configuration: Read CLI args (--port, --host) or environment variables, defaulting to 3000 / 0.0.0.0 for AI Studio
+function parsePort(): number {
+  const portArgIdx = process.argv.indexOf('--port');
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    const val = parseInt(process.argv[portArgIdx + 1], 10);
+    if (!isNaN(val)) return val;
+  }
+  if (process.env.PORT) {
+    const val = parseInt(process.env.PORT, 10);
+    if (!isNaN(val)) return val;
+  }
+  return 3000;
+}
+
+function parseHost(): string {
+  const hostArgIdx = process.argv.indexOf('--host');
+  if (hostArgIdx !== -1 && process.argv[hostArgIdx + 1]) {
+    return process.argv[hostArgIdx + 1];
+  }
+  return process.env.HOST || '0.0.0.0';
+}
+
+const PORT = parsePort();
+const HOST = parseHost();
 
 // Multer memory storage configuration for multipart/form-data photo uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 30 * 1024 * 1024 } // 30MB
 });
+
+// Helper proteksi integritas: Cek apakah rencana kerja sudah memiliki realisasi di lapangan
+function checkRencanaRealized(rencanaId: string, nomorSpk?: string | null): boolean {
+  const plan = queryOne<RencanaKerjaRow>('SELECT * FROM rencana_kerja WHERE id = ?', [rencanaId]);
+  if (!plan) return false;
+
+  if (plan.status_spk === 'REALISASI_SELESAI' || (plan.status_spk as string) === 'TEREALISASI') {
+    return true;
+  }
+
+  // 1. Cek relasi ke tabel hasil_input_aktivitas (berdasarkan rencana_id atau nomor_spk)
+  const resById = queryOne<{ cnt: number }>(
+    'SELECT COUNT(*) as cnt FROM hasil_input_aktivitas WHERE rencana_id = ?',
+    [rencanaId]
+  );
+  if (resById && resById.cnt > 0) return true;
+
+  const spk = (nomorSpk || plan.nomor_spk);
+  if (spk && String(spk).trim() !== '') {
+    const resBySpk = queryOne<{ cnt: number }>(
+      'SELECT COUNT(*) as cnt FROM hasil_input_aktivitas WHERE nomor_spk = ?',
+      [String(spk).trim()]
+    );
+    if (resBySpk && resBySpk.cnt > 0) return true;
+  }
+
+  // 2. Cek relasi ke tabel aktivitas_unit (jika ada data realisasi yang mereferensikan rencana_id)
+  try {
+    const resByAu = queryOne<{ cnt: number }>(
+      'SELECT COUNT(*) as cnt FROM aktivitas_unit WHERE rencana_id = ?',
+      [rencanaId]
+    );
+    if (resByAu && resByAu.cnt > 0) return true;
+  } catch {
+    // Abaikan jika kolom rencana_id belum ada
+  }
+
+  return false;
+}
 
 async function startServer() {
   // Initialize Database
@@ -157,9 +220,22 @@ async function startServer() {
   });
 
   // 1B. RENCANA KERJA ENDPOINTS (GET, POST, PUT TERBITKAN-SPK, DELETE)
+  // Dukungan sinkronisasi Offline Mobile: selalu menyertakan nomor_spk & status_spk dengan filter tanggal & pengawas
   app.get('/api/rencana-kerja', (req: Request, res: Response) => {
     try {
-      const { search, pengawas, pengawas_id, status_spk, tanggal } = req.query;
+      const {
+        search,
+        pengawas,
+        nama_pengawas,
+        pengawas_id,
+        status_spk,
+        tanggal,
+        date,
+        tgl,
+        tanggal_awal,
+        tanggal_akhir
+      } = req.query;
+
       let sql = `
         SELECT 
           r.*,
@@ -172,17 +248,22 @@ async function startServer() {
       `;
       const params: (string | number)[] = [];
 
-      if (search && typeof search === 'string' && search.trim() !== '') {
-        const s = `%${search.trim()}%`;
-        sql += ` AND (r.nama_pengawas LIKE ? OR r.kode_unit LIKE ? OR r.operator LIKE ? OR r.kode_lokasi LIKE ? OR r.nomor_spk LIKE ?)`;
-        params.push(s, s, s, s, s);
-      }
-
-      const rawPengawasFilter = (pengawas_id || pengawas) as string | undefined;
-      if (rawPengawasFilter && typeof rawPengawasFilter === 'string' && rawPengawasFilter.trim() !== '' && rawPengawasFilter !== 'Semua') {
-        const p = rawPengawasFilter.trim();
+      // Filter pengawas (mendukung query param pengawas, nama_pengawas, maupun pengawas_id untuk mobile app)
+      const rawPengawas = (pengawas || nama_pengawas || pengawas_id) as string | undefined;
+      if (rawPengawas && typeof rawPengawas === 'string' && rawPengawas.trim() !== '' && rawPengawas !== 'Semua') {
+        const p = rawPengawas.trim();
         sql += ' AND (r.nama_pengawas = ? OR r.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE username = ? OR CAST(id AS TEXT) = ?))';
         params.push(p, p, p);
+      }
+
+      // Filter tanggal (mendukung query param tanggal, date, tgl, atau range tanggal_awal & tanggal_akhir)
+      const filterTgl = (tanggal || date || tgl) as string | undefined;
+      if (filterTgl && typeof filterTgl === 'string' && filterTgl.trim() !== '') {
+        sql += ' AND r.tanggal = ?';
+        params.push(filterTgl.trim());
+      } else if (tanggal_awal && tanggal_akhir) {
+        sql += ' AND r.tanggal BETWEEN ? AND ?';
+        params.push(String(tanggal_awal).trim(), String(tanggal_akhir).trim());
       }
 
       if (status_spk && typeof status_spk === 'string' && status_spk !== 'Semua') {
@@ -190,22 +271,49 @@ async function startServer() {
         params.push(status_spk);
       }
 
-      if (tanggal && typeof tanggal === 'string' && tanggal.trim() !== '') {
-        sql += ' AND r.tanggal = ?';
-        params.push(tanggal.trim());
+      if (search && typeof search === 'string' && search.trim() !== '') {
+        const s = `%${search.trim()}%`;
+        sql += ` AND (r.nama_pengawas LIKE ? OR r.kode_unit LIKE ? OR r.operator LIKE ? OR r.kode_lokasi LIKE ? OR r.nomor_spk LIKE ?)`;
+        params.push(s, s, s, s, s);
       }
 
       sql += ' ORDER BY r.tanggal DESC, r.created_at DESC';
 
       const rows = queryAll<RencanaKerjaRow>(sql, params);
 
-      // Pastikan field nomor_spk, status_spk, dan updated_at selalu disertakan dalam response JSON
-      const formattedRows = rows.map(r => ({
-        ...r,
-        nomor_spk: r.nomor_spk !== undefined && r.nomor_spk !== null && r.nomor_spk !== '' ? String(r.nomor_spk) : null,
-        status_spk: (r.status_spk as string) || (r.nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK'),
-        updated_at: r.updated_at || r.created_at
-      }));
+      // Pastikan field nomor_spk, status_spk, is_realized, realisasi_count, dan updated_at selalu disertakan dalam response JSON
+      const formattedRows = rows.map(r => {
+        const cleanedNomorSpk = r.nomor_spk !== undefined && r.nomor_spk !== null && String(r.nomor_spk).trim() !== ''
+          ? String(r.nomor_spk).trim()
+          : null;
+
+        let activityCount = 0;
+        try {
+          const actRow = queryOne<{ cnt: number }>(
+            'SELECT COUNT(*) as cnt FROM hasil_input_aktivitas WHERE rencana_id = ? OR (nomor_spk IS NOT NULL AND nomor_spk != "" AND nomor_spk = ?)',
+            [r.id, cleanedNomorSpk || '']
+          );
+          activityCount = actRow ? actRow.cnt : 0;
+        } catch {
+          activityCount = 0;
+        }
+
+        const isDirectRealized = r.status_spk === 'REALISASI_SELESAI' || (r.status_spk as string) === 'TEREALISASI';
+        const isRealized = isDirectRealized || activityCount > 0;
+        const fallbackStatus = cleanedNomorSpk ? 'SPK_TERBIT' : 'MENUNGGU_SPK';
+        const cleanedStatusSpk = isRealized 
+          ? ((r.status_spk as string) === 'TEREALISASI' ? 'TEREALISASI' : 'REALISASI_SELESAI') 
+          : ((r.status_spk as string) || fallbackStatus);
+
+        return {
+          ...r,
+          nomor_spk: cleanedNomorSpk,
+          status_spk: cleanedStatusSpk,
+          is_realized: isRealized,
+          realisasi_count: activityCount,
+          updated_at: r.updated_at || r.created_at
+        };
+      });
 
       res.json({
         status: 'success',
@@ -308,7 +416,23 @@ async function startServer() {
         return res.status(400).json({ error: 'Nomor SPK wajib diisi.' });
       }
 
+      const plan = queryOne<RencanaKerjaRow>('SELECT * FROM rencana_kerja WHERE id = ?', [id]);
+      if (!plan) {
+        return res.status(404).json({ error: 'Rencana kerja tidak ditemukan.' });
+      }
+
       const cleanSpk = nomor_spk.trim();
+
+      // Proteksi Integritas: Cegah perubahan nomor SPK jika rencana kerja sudah direalisasikan di lapangan
+      if (checkRencanaRealized(id, plan.nomor_spk)) {
+        if (plan.nomor_spk && plan.nomor_spk.trim() !== cleanSpk) {
+          return res.status(400).json({
+            status: 'error',
+            error: 'Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!'
+          });
+        }
+      }
+
       const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
       execute(
         `UPDATE rencana_kerja SET nomor_spk = ?, status_spk = 'SPK_TERBIT', updated_at = ? WHERE id = ?`,
@@ -387,6 +511,11 @@ async function startServer() {
   app.put('/api/rencana-kerja/:id', (req: Request, res: Response) => {
     try {
       const id = req.params.id;
+      const plan = queryOne<RencanaKerjaRow>('SELECT * FROM rencana_kerja WHERE id = ?', [id]);
+      if (!plan) {
+        return res.status(404).json({ error: 'Rencana kerja tidak ditemukan.' });
+      }
+
       const {
         nama_pengawas,
         tanggal,
@@ -400,16 +529,48 @@ async function startServer() {
         keterangan_rencana
       } = req.body;
 
+      // Proteksi Integritas Data:
+      // Cek apakah rencana kerja sudah memiliki realisasi di lapangan
+      const isRealized = checkRencanaRealized(id, plan.nomor_spk);
+
+      if (isRealized) {
+        // Tolak penghapusan dan perubahan data kritis (Unit/Operator/Nomor SPK) dengan error 400
+        const isUnitChanged = kode_unit !== undefined && kode_unit.trim() !== '' && kode_unit.trim() !== plan.kode_unit;
+        const isOperatorChanged = operator !== undefined && operator.trim() !== '' && operator.trim() !== plan.operator;
+        const isNomorSpkChanged = nomor_spk !== undefined && nomor_spk !== null && String(nomor_spk).trim() !== (plan.nomor_spk || '').trim();
+
+        if (isUnitChanged || isOperatorChanged || isNomorSpkChanged) {
+          return res.status(400).json({
+            status: 'error',
+            error: 'Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!'
+          });
+        }
+      }
+
+      const cleanSpk = nomor_spk !== undefined 
+        ? (nomor_spk && String(nomor_spk).trim() !== '' ? String(nomor_spk).trim() : null) 
+        : plan.nomor_spk;
+      const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
       execute(`
         UPDATE rencana_kerja SET
           nama_pengawas = ?, tanggal = ?, status_unit = ?, kode_unit = ?,
           operator = ?, kode_lokasi = ?, shift_kerja = ?, nomor_spk = ?,
-          status_spk = ?, keterangan_rencana = ?
+          status_spk = ?, keterangan_rencana = ?, updated_at = ?
         WHERE id = ?
       `, [
-        nama_pengawas, tanggal, status_unit, kode_unit,
-        operator, kode_lokasi, shift_kerja, nomor_spk || null,
-        status_spk, keterangan_rencana || '', id
+        nama_pengawas !== undefined ? nama_pengawas : plan.nama_pengawas,
+        tanggal !== undefined ? tanggal : plan.tanggal,
+        status_unit !== undefined ? status_unit : plan.status_unit,
+        kode_unit !== undefined ? kode_unit : plan.kode_unit,
+        operator !== undefined ? operator : plan.operator,
+        kode_lokasi !== undefined ? kode_lokasi : plan.kode_lokasi,
+        shift_kerja !== undefined ? shift_kerja : plan.shift_kerja,
+        cleanSpk,
+        status_spk !== undefined ? status_spk : (isRealized ? 'REALISASI_SELESAI' : plan.status_spk),
+        keterangan_rencana !== undefined ? keterangan_rencana : (plan.keterangan_rencana || ''),
+        now,
+        id
       ]);
 
       const updatedRow = queryOne<RencanaKerjaRow>(`
@@ -436,6 +597,20 @@ async function startServer() {
   app.delete('/api/rencana-kerja/:id', (req: Request, res: Response) => {
     try {
       const id = req.params.id;
+      const plan = queryOne<RencanaKerjaRow>('SELECT * FROM rencana_kerja WHERE id = ?', [id]);
+      if (!plan) {
+        return res.status(404).json({ error: 'Rencana kerja tidak ditemukan.' });
+      }
+
+      // Proteksi Integritas Data:
+      // Tolak penghapusan jika rencana kerja sudah direalisasikan
+      if (checkRencanaRealized(id, plan.nomor_spk)) {
+        return res.status(400).json({
+          status: 'error',
+          error: 'Rencana kerja sudah direalisasikan di lapangan dan tidak dapat dihapus/diubah!'
+        });
+      }
+
       execute('DELETE FROM rencana_kerja WHERE id = ?', [id]);
 
       broadcast({
@@ -640,11 +815,81 @@ async function startServer() {
     }
   });
 
+  // REST API ENDPOINTS: aktivitas_kendala
+  app.get('/api/aktivitas-kendala', (req: Request, res: Response) => {
+    try {
+      const { id_aktivitas } = req.query;
+      let sql = 'SELECT * FROM aktivitas_kendala';
+      const params: (string | number)[] = [];
+      if (id_aktivitas) {
+        sql += ' WHERE id_aktivitas = ?';
+        params.push(String(id_aktivitas));
+      }
+      sql += ' ORDER BY id ASC';
+      const rows = queryAll<AktivitasKendalaRow>(sql, params);
+      res.json({ status: 'success', data: rows });
+    } catch (err: unknown) {
+      console.error('Error fetching aktivitas kendala:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.get('/api/aktivitas-kendala/:id_aktivitas', (req: Request, res: Response) => {
+    try {
+      const idAktivitas = req.params.id_aktivitas;
+      const rows = queryAll<AktivitasKendalaRow>(
+        'SELECT * FROM aktivitas_kendala WHERE id_aktivitas = ? ORDER BY id ASC',
+        [idAktivitas]
+      );
+      res.json({ status: 'success', data: rows });
+    } catch (err: unknown) {
+      console.error('Error fetching aktivitas kendala by id_aktivitas:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/aktivitas-kendala', (req: Request, res: Response) => {
+    try {
+      const { id_aktivitas, id_kendala, nama_kendala, waktu_mulai, waktu_selesai, durasi_menit } = req.body;
+      if (!nama_kendala) {
+        return res.status(400).json({ error: 'nama_kendala wajib diisi.' });
+      }
+      const durasi = durasi_menit !== undefined && durasi_menit !== null && durasi_menit !== ''
+        ? parseInt(String(durasi_menit), 10)
+        : null;
+      const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const resDb = execute(
+        `INSERT INTO aktivitas_kendala (id_aktivitas, id_kendala, nama_kendala, waktu_mulai, waktu_selesai, durasi_menit, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id_aktivitas || null, id_kendala || null, nama_kendala, waktu_mulai || null, waktu_selesai || null, durasi, createdAt]
+      );
+      const inserted = queryOne<AktivitasKendalaRow>('SELECT * FROM aktivitas_kendala WHERE id = ?', [resDb.lastInsertRowId]);
+      res.status(201).json({ status: 'success', data: inserted });
+    } catch (err: unknown) {
+      console.error('Error adding aktivitas kendala:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.delete('/api/aktivitas-kendala/:id', (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      execute('DELETE FROM aktivitas_kendala WHERE id = ?', [id]);
+      res.json({ status: 'success', message: 'Data aktivitas kendala berhasil dihapus.' });
+    } catch (err: unknown) {
+      console.error('Error deleting aktivitas kendala:', err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // 2. POST /api/aktivitas-unit
   // Atomic transaction from Android app or manual dashboard entry (supports Base64 JSON & multipart/form-data)
   app.post('/api/aktivitas-unit', upload.single('foto_bukti') as unknown as express.RequestHandler, (req: Request, res: Response) => {
     try {
       const {
+        client_transaction_id,
+        clientTransactionId,
+        transaction_id,
         rencana_id,
         nama_pengawas,
         tanggal,
@@ -671,8 +916,45 @@ async function startServer() {
         stik_akhir: rawStikAkhir,
         kendala_list: rawKendalaList,
         is_hm_awal_corrected: rawIsHmAwalCorrected,
-        alasan_koreksi_hm: rawAlasanKoreksiHm
+        alasan_koreksi_hm: rawAlasanKoreksiHm,
+        is_reset_meteran: rawIsResetMeteran,
+        reset_meteran: rawResetMeteran,
+        is_reset_hm: rawIsResetHm,
+        reset_hm: rawResetHm,
+        is_hm_reset: rawIsHmReset
       } = req.body;
+
+      // 1. Idempotency Check pada POST /api/aktivitas-unit
+      // Sebelum insert, periksa apakah client_transaction_id sudah ada di database.
+      // Jika sudah ada, jangan insert ganda; kembalikan response status 200 dengan data yang sudah tersimpan.
+      const rawTxId = client_transaction_id || clientTransactionId || transaction_id;
+      const validTxId = rawTxId && typeof rawTxId === 'string' && rawTxId.trim() !== '' ? rawTxId.trim() : null;
+
+      if (validTxId) {
+        const existingRow = queryOne<HasilInputAktivitasRow>(
+          'SELECT * FROM hasil_input_aktivitas WHERE client_transaction_id = ?',
+          [validTxId]
+        );
+        if (existingRow) {
+          console.log(`⚡ [IDEMPOTENT] Aktivitas dengan UUID ${validTxId} sudah tersimpan. Mengembalikan response status 200.`);
+          let formattedKendala = null;
+          if (existingRow.kendala_list) {
+            try {
+              formattedKendala = JSON.parse(existingRow.kendala_list);
+            } catch {
+              formattedKendala = existingRow.kendala_list;
+            }
+          }
+          return res.status(200).json({
+            status: 'success',
+            message: 'Data sudah tersimpan sebelumnya (idempotent duplicate prevention)',
+            data: {
+              ...existingRow,
+              kendala_list: formattedKendala
+            }
+          });
+        }
+      }
 
       // Extract foto_bukti either from multipart/form-data file upload or Base64 JSON string
       let foto_bukti = req.body.foto_bukti || null;
@@ -682,15 +964,33 @@ async function startServer() {
 
       if (!nama_pengawas || !kode_unit || !nama_aktivitas || hm_awal === undefined || hm_akhir === undefined) {
         return res.status(400).json({
+          status: 'error',
           error: 'Field wajib tidak lengkap: nama_pengawas, kode_unit, nama_aktivitas, hm_awal, dan hm_akhir diperlukan.'
         });
       }
 
       const numHmAwal = parseFloat(hm_awal) || 0;
       const numHmAkhir = parseFloat(hm_akhir) || 0;
+
+      // 2A. Validasi HM: Tolak dengan status 400 jika hm_akhir < hm_awal (kecuali flag reset meteran bernilai true)
+      const isResetMeteran = (
+        rawIsResetMeteran === true || rawIsResetMeteran === 1 || rawIsResetMeteran === '1' || rawIsResetMeteran === 'true' ||
+        rawResetMeteran === true || rawResetMeteran === 1 || rawResetMeteran === '1' || rawResetMeteran === 'true' ||
+        rawIsResetHm === true || rawIsResetHm === 1 || rawIsResetHm === '1' || rawIsResetHm === 'true' ||
+        rawResetHm === true || rawResetHm === 1 || rawResetHm === '1' || rawResetHm === 'true' ||
+        rawIsHmReset === true || rawIsHmReset === 1 || rawIsHmReset === '1' || rawIsHmReset === 'true'
+      );
+
+      if (numHmAkhir < numHmAwal && !isResetMeteran) {
+        return res.status(400).json({
+          status: 'error',
+          error: `HM Akhir (${numHmAkhir}) tidak boleh lebih kecil dari HM Awal (${numHmAwal}) kecuali flag reset meteran bernilai true.`
+        });
+      }
+
       const calculatedHmBerjalan = hm_harian_berjalan !== undefined 
         ? parseFloat(hm_harian_berjalan) 
-        : Math.round((numHmAkhir - numHmAwal) * 10) / 10;
+        : (isResetMeteran && numHmAkhir < numHmAwal ? numHmAkhir : Math.round((numHmAkhir - numHmAwal) * 10) / 10);
       const numJamKerja = parseFloat(jam_kerja) || 0;
       const numHasilKerja = parseFloat(hasil_kerja) || 0;
       const currentDate = tanggal || new Date().toISOString().slice(0, 10);
@@ -700,14 +1000,71 @@ async function startServer() {
       const statusUnitStr = (rawStatusUnit || 'OPERASI').toUpperCase();
       const status_unit = ['OPERASI', 'STANDBY', 'BREAKDOWN'].includes(statusUnitStr) ? statusUnitStr : 'OPERASI';
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
-      const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawJumlahLiterSolar) || 0) : 0;
+      const rawLiterSolar = rawJumlahLiterSolar ?? req.body.total_isi_solar ?? req.body.isi_solar ?? 0;
+      const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawLiterSolar) || 0) : 0;
 
-      // Stik BBM & Kendala handling
-      const numStikAwal = rawStikAwal !== undefined && rawStikAwal !== null && rawStikAwal !== '' ? parseFloat(rawStikAwal) : null;
-      const numStikAkhir = rawStikAkhir !== undefined && rawStikAkhir !== null && rawStikAkhir !== '' ? parseFloat(rawStikAkhir) : null;
+      // Stik BBM parsing (stik_awal / stik_solar_awal, stik_akhir / stik_solar_akhir)
+      const rawStikAwalVal = rawStikAwal ?? req.body.stik_solar_awal;
+      const rawStikAkhirVal = rawStikAkhir ?? req.body.stik_solar_akhir;
+      const numStikAwal = rawStikAwalVal !== undefined && rawStikAwalVal !== null && rawStikAwalVal !== '' ? parseFloat(rawStikAwalVal) : null;
+      const numStikAkhir = rawStikAkhirVal !== undefined && rawStikAkhirVal !== null && rawStikAkhirVal !== '' ? parseFloat(rawStikAkhirVal) : null;
+
+      // 2B. Validasi Formula Solar: (stik_solar_awal + total_isi_solar) - stik_solar_akhir. Cegah nilai minus yang tidak logis
+      if (jumlah_liter_solar < 0) {
+        return res.status(400).json({
+          status: 'error',
+          error: 'Jumlah pengisian solar tidak boleh bernilai negatif.'
+        });
+      }
+
+      if (numStikAwal !== null && numStikAkhir !== null) {
+        if (numStikAwal < 0 || numStikAkhir < 0) {
+          return res.status(400).json({
+            status: 'error',
+            error: 'Nilai stik solar awal maupun akhir tidak boleh bernilai negatif.'
+          });
+        }
+
+        const totalIsiSolar = is_isi_solar === 1 ? jumlah_liter_solar : 0;
+        const totalSolarTersedia = numStikAwal + totalIsiSolar;
+        const konsumsiSolar = Math.round((totalSolarTersedia - numStikAkhir) * 100) / 100;
+
+        if (konsumsiSolar < 0) {
+          return res.status(400).json({
+            status: 'error',
+            error: `Konsumsi solar tidak logis (${konsumsiSolar} Liter). Nilai stik akhir (${numStikAkhir}) melebihi total solar tersedia (stik awal ${numStikAwal} + isi solar ${totalIsiSolar} = ${totalSolarTersedia} Liter).`
+          });
+        }
+      }
+
+      // Kendala parsing & normalization
       let kendalaListStr: string | null = null;
-      if (rawKendalaList) {
-        kendalaListStr = typeof rawKendalaList === 'string' ? rawKendalaList : JSON.stringify(rawKendalaList);
+      let kendalaArray: Array<{
+        id_kendala?: string | number;
+        id?: string | number;
+        nama_kendala?: string;
+        nama?: string;
+        waktu_mulai?: string;
+        waktu_selesai?: string;
+        durasi_menit?: string | number;
+      }> = [];
+
+      const rawKendalaInput = rawKendalaList ?? req.body.kendala ?? req.body.rincian_kendala;
+      if (rawKendalaInput) {
+        if (Array.isArray(rawKendalaInput)) {
+          kendalaArray = rawKendalaInput;
+          kendalaListStr = JSON.stringify(rawKendalaInput);
+        } else if (typeof rawKendalaInput === 'string' && rawKendalaInput.trim() !== '') {
+          kendalaListStr = rawKendalaInput.trim();
+          try {
+            const parsed = JSON.parse(kendalaListStr);
+            if (Array.isArray(parsed)) {
+              kendalaArray = parsed;
+            }
+          } catch {
+            // Raw string format
+          }
+        }
       }
 
       // HM Awal Correction Audit handling
@@ -720,18 +1077,20 @@ async function startServer() {
       const lokasi = (rawLokasi || rawKodeLokasi || 'Pit Operasional').toString().trim();
       const shift_kerja = (rawShiftKerja || 'SIANG').toUpperCase() === 'MALAM' ? 'Malam' : 'Siang';
 
-      // 1. Simpan baris baru ke tabel hasil_input_aktivitas
+      // 1. Simpan baris baru ke tabel hasil_input_aktivitas (dengan client_transaction_id)
       const insertSql = `
         INSERT INTO hasil_input_aktivitas (
+          client_transaction_id,
           rencana_id, nama_pengawas, tanggal, kode_unit, nama_aktivitas, kode_sap, satuan,
           operator, nik_operator, kode_lokasi, lokasi, nomor_spk, shift_kerja, jam_kerja, hm_awal, hm_akhir,
           hm_harian_berjalan, hasil_kerja, keterangan, foto_bukti,
           status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, kendala_list,
           is_hm_awal_corrected, alasan_koreksi_hm, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const insertResult = execute(insertSql, [
+        validTxId,
         rencana_id || null,
         nama_pengawas,
         currentDate,
@@ -764,6 +1123,38 @@ async function startServer() {
       ]);
 
       const newRowId = insertResult.lastInsertRowId;
+
+      // 2C. Simpan data rincian kendala ke tabel aktivitas_kendala secara terstruktur
+      if (kendalaArray.length > 0) {
+        for (const item of kendalaArray) {
+          if (!item) continue;
+          const namaKendala = item.nama_kendala || item.nama || 'Kendala Operasional';
+          const idKendala = item.id_kendala || item.id ? String(item.id_kendala || item.id) : null;
+          const waktuMulai = item.waktu_mulai ? String(item.waktu_mulai).trim() : null;
+          const waktuSelesai = item.waktu_selesai ? String(item.waktu_selesai).trim() : null;
+          const durasi = item.durasi_menit !== undefined && item.durasi_menit !== null && item.durasi_menit !== ''
+            ? parseInt(String(item.durasi_menit), 10)
+            : null;
+
+          try {
+            execute(
+              `INSERT INTO aktivitas_kendala (id_aktivitas, id_kendala, nama_kendala, waktu_mulai, waktu_selesai, durasi_menit, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [
+                newRowId,
+                idKendala,
+                namaKendala,
+                waktuMulai,
+                waktuSelesai,
+                isNaN(durasi as number) ? null : durasi,
+                createdAt
+              ]
+            );
+          } catch (errAk) {
+            console.warn('Error inserting into aktivitas_kendala:', errAk);
+          }
+        }
+      }
 
       // 2. Update kolom hm_unit_terakhir_diinputkan di tabel units menjadi hm_akhir yang baru
       const updateUnitSql = `
@@ -803,6 +1194,35 @@ async function startServer() {
           }
         } catch (e) {
           console.warn('Error updating linked rencana_kerja status:', e);
+        }
+      } else if (nomor_spk && String(nomor_spk).trim() !== '') {
+        try {
+          const matchPlan = queryOne<RencanaKerjaRow>(
+            'SELECT id FROM rencana_kerja WHERE nomor_spk = ?',
+            [String(nomor_spk).trim()]
+          );
+          if (matchPlan) {
+            execute(
+              `UPDATE rencana_kerja SET status_spk = 'REALISASI_SELESAI' WHERE id = ?`,
+              [matchPlan.id]
+            );
+            const updatedPlan = queryOne<RencanaKerjaRow>(`
+              SELECT r.*, u.model_unit, l.wilayah
+              FROM rencana_kerja r
+              LEFT JOIN units u ON r.kode_unit = u.kode_unit
+              LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+              WHERE r.id = ?
+            `, [matchPlan.id]);
+            if (updatedPlan) {
+              broadcast({
+                event: 'UPDATE_RENCANA',
+                data: updatedPlan,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Error updating linked rencana by nomor_spk:', e);
         }
       }
 
@@ -1384,11 +1804,17 @@ async function startServer() {
 
   app.post('/api/aktivitas', (req: Request, res: Response) => {
     try {
-      const { jenis_unit, nama_aktivitas, satuan, kode_sap } = req.body;
+      const { client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap } = req.body;
+      if (client_transaction_id) {
+        const existing = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE client_transaction_id = ?', [client_transaction_id]);
+        if (existing) {
+          return res.status(200).json(existing);
+        }
+      }
       const resDb = execute(`
-        INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap)
-        VALUES (?, ?, ?, ?)
-      `, [jenis_unit, nama_aktivitas, satuan, kode_sap]);
+        INSERT INTO aktivitas_unit (client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap)
+        VALUES (?, ?, ?, ?, ?)
+      `, [client_transaction_id || null, jenis_unit, nama_aktivitas, satuan, kode_sap]);
 
       const inserted = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE id = ?', [resDb.lastInsertRowId]);
       res.status(201).json(inserted);
@@ -1709,10 +2135,11 @@ async function startServer() {
     });
   }
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`🚀 RKCE (Rencana Kerja Unit Civil Engineering) Server running at http://0.0.0.0:${PORT}`);
-    console.log(`🔌 WebSocket server listening on ws://0.0.0.0:${PORT}/ws`);
+  server.listen(PORT, HOST, () => {
+    console.log(`  ➜  Local:   http://localhost:${PORT}/`);
+    console.log(`  ➜  Network: http://${HOST}:${PORT}/`);
+    console.log(`🚀 RKCE (Rencana Kerja Unit Civil Engineering) Server running at http://${HOST}:${PORT}`);
+    console.log(`🔌 WebSocket server listening on ws://${HOST}:${PORT}/ws`);
   });
 }
 

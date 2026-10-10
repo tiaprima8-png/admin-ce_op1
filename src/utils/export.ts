@@ -1,28 +1,51 @@
 import * as XLSX from 'xlsx';
 import { HasilInputAktivitas, UnitAnalyticsRow, AktivitasAnalyticsRow, AnalyticsSummary } from '../types';
 
-function formatKendalaForExcel(kendala: unknown): string {
+export function formatKendalaForExcel(kendala: unknown): string {
   if (!kendala) return '-';
-  let items: Array<{ nama_kendala?: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }> = [];
+  let items: Array<{
+    nama_kendala?: string;
+    nama?: string;
+    waktu_mulai?: string;
+    waktu_selesai?: string;
+    durasi_menit?: number | string;
+  }> = [];
+
   if (Array.isArray(kendala)) {
     items = kendala;
   } else if (typeof kendala === 'string') {
+    const trimmed = kendala.trim();
+    if (!trimmed || trimmed === '-' || trimmed === '[]' || trimmed === 'null') return '-';
     try {
-      const parsed = JSON.parse(kendala);
-      if (Array.isArray(parsed)) items = parsed;
-      else return kendala;
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        items = [parsed];
+      } else {
+        return String(parsed);
+      }
     } catch {
-      return kendala;
+      return trimmed;
     }
   }
+
   if (!items || items.length === 0) return '-';
-  return items.map((k, idx) => {
-    const nama = k.nama_kendala || 'Kendala';
-    const range = (k.waktu_mulai && k.waktu_selesai) ? `${k.waktu_mulai} - ${k.waktu_selesai}` : '';
-    const durasi = k.durasi_menit !== undefined ? `${k.durasi_menit} menit` : '';
-    const detail = [range, durasi].filter(Boolean).join(' | ');
-    return `${idx + 1}. ${nama}${detail ? ` (${detail})` : ''}`;
-  }).join('; ');
+
+  const formattedParts = items.map((k) => {
+    if (!k) return '';
+    const nama = (k.nama_kendala || k.nama || 'Kendala Operasional').trim();
+    const hasRange = Boolean(k.waktu_mulai && k.waktu_selesai);
+    const range = hasRange ? `${k.waktu_mulai} - ${k.waktu_selesai}` : (k.waktu_mulai || k.waktu_selesai || '');
+    const durasi = k.durasi_menit !== undefined && k.durasi_menit !== null && k.durasi_menit !== ''
+      ? `${k.durasi_menit} mnt`
+      : '';
+
+    const detailTiming = [range, durasi].filter(Boolean).join(', ');
+    return detailTiming ? `${nama} (${detailTiming})` : nama;
+  }).filter(Boolean);
+
+  return formattedParts.length > 0 ? formattedParts.join('; ') : '-';
 }
 
 export function exportToExcel(
@@ -34,34 +57,53 @@ export function exportToExcel(
   }
 
   // Map rows with clean enterprise Indonesian column names
-  const rows = data.map((item, index) => ({
-    'No': index + 1,
-    'Nomor SPK': item.nomor_spk || '-',
-    'Tanggal': item.tanggal,
-    'Shift': item.shift_kerja ? item.shift_kerja.toUpperCase() : 'SIANG',
-    'Pengawas': item.nama_pengawas,
-    'Kode Unit': item.kode_unit,
-    'Status Unit': item.status_unit || 'OPERASI',
-    'HM Awal': item.hm_awal,
-    'Koreksi HM Awal': (item.is_hm_awal_corrected === 1 || item.is_hm_awal_corrected === true) ? 'YA' : 'TIDAK',
-    'Alasan Koreksi HM': item.alasan_koreksi_hm || '-',
-    'HM Akhir': item.hm_akhir,
-    'HM Berjalan': item.hm_harian_berjalan,
-    'Jam Kerja (Jam)': item.jam_kerja,
-    'Stik Solar Awal': item.stik_awal !== undefined && item.stik_awal !== null ? item.stik_awal : '-',
-    'Stik Solar Akhir': item.stik_akhir !== undefined && item.stik_akhir !== null ? item.stik_akhir : '-',
-    'Konsumsi Solar (Liter)': item.jumlah_liter_solar && item.jumlah_liter_solar > 0 ? item.jumlah_liter_solar : 0,
-    'Nama Aktivitas': item.nama_aktivitas,
-    'Kode SAP': item.kode_sap,
-    'Satuan': item.satuan,
-    'Hasil Kerja': item.hasil_kerja,
-    'Daftar Kendala (Nama, Waktu Mulai, Waktu Selesai, Total Menit)': formatKendalaForExcel(item.kendala_list),
-    'Keterangan Lapangan': item.keterangan || '-',
-    'Operator': item.operator,
-    'NIK Operator': item.nik_operator,
-    'Kode Lokasi': item.kode_lokasi || item.lokasi,
-    'Foto Bukti': item.foto_bukti ? 'Ada Foto Bukti' : 'Tanpa Foto'
-  }));
+  const rows = data.map((item, index) => {
+    const isKoreksi = Boolean(item.is_hm_awal_corrected);
+    const stikAwal = item.stik_awal !== undefined && item.stik_awal !== null ? Number(item.stik_awal) : '-';
+    const stikAkhir = item.stik_akhir !== undefined && item.stik_akhir !== null ? Number(item.stik_akhir) : '-';
+    const totalIsiSolar = Boolean(item.is_isi_solar) && item.jumlah_liter_solar
+      ? Number(item.jumlah_liter_solar)
+      : 0;
+
+    // Formula konsumsi solar: (stik_awal + total_isi_solar) - stik_akhir jika kedua stik tersedia
+    let konsumsiSolarText: string | number = '-';
+    if (typeof stikAwal === 'number' && typeof stikAkhir === 'number') {
+      const konsumsi = (stikAwal + totalIsiSolar) - stikAkhir;
+      konsumsiSolarText = Math.round(konsumsi * 100) / 100;
+    } else if (totalIsiSolar > 0) {
+      konsumsiSolarText = totalIsiSolar;
+    }
+
+    return {
+      'No': index + 1,
+      'Nomor SPK': item.nomor_spk || '-',
+      'Tanggal': item.tanggal,
+      'Shift': item.shift_kerja ? item.shift_kerja.toUpperCase() : 'SIANG',
+      'Pengawas': item.nama_pengawas,
+      'Kode Unit': item.kode_unit,
+      'Status Unit': item.status_unit || 'OPERASI',
+      'HM Awal': item.hm_awal,
+      'HM Akhir': item.hm_akhir,
+      'HM Berjalan': item.hm_harian_berjalan,
+      'Status Koreksi HM': isKoreksi ? 'YA (Koreksi Meteran)' : 'NORMAL',
+      'Alasan Koreksi HM': item.alasan_koreksi_hm || '-',
+      'Jam Kerja (Jam)': item.jam_kerja,
+      'Stik Solar Awal': stikAwal,
+      'Stik Solar Akhir': stikAkhir,
+      'Pengisian Solar (Liter)': totalIsiSolar,
+      'Konsumsi Solar (Liter)': konsumsiSolarText,
+      'Nama Aktivitas': item.nama_aktivitas,
+      'Kode SAP': item.kode_sap,
+      'Satuan': item.satuan,
+      'Hasil Kerja': item.hasil_kerja,
+      'Kendala Lapangan': formatKendalaForExcel(item.kendala_list),
+      'Keterangan Lapangan': item.keterangan || '-',
+      'Operator': item.operator,
+      'NIK Operator': item.nik_operator,
+      'Kode Lokasi': item.kode_lokasi || item.lokasi,
+      'Foto Bukti': item.foto_bukti ? 'Ada Foto Bukti' : 'Tanpa Foto'
+    };
+  });
 
   const worksheet = XLSX.utils.json_to_sheet(rows);
 
@@ -75,19 +117,20 @@ export function exportToExcel(
     { wch: 12 }, // Kode Unit
     { wch: 14 }, // Status Unit
     { wch: 12 }, // HM Awal
-    { wch: 16 }, // Koreksi HM Awal
-    { wch: 28 }, // Alasan Koreksi HM
     { wch: 12 }, // HM Akhir
     { wch: 14 }, // HM Berjalan
+    { wch: 22 }, // Status Koreksi HM
+    { wch: 28 }, // Alasan Koreksi HM
     { wch: 16 }, // Jam Kerja
-    { wch: 15 }, // Stik Solar Awal
-    { wch: 15 }, // Stik Solar Akhir
-    { wch: 22 }, // Konsumsi Solar
+    { wch: 16 }, // Stik Solar Awal
+    { wch: 16 }, // Stik Solar Akhir
+    { wch: 22 }, // Pengisian Solar (Liter)
+    { wch: 22 }, // Konsumsi Solar (Liter)
     { wch: 30 }, // Nama Aktivitas
     { wch: 14 }, // Kode SAP
     { wch: 10 }, // Satuan
     { wch: 14 }, // Hasil Kerja
-    { wch: 45 }, // Daftar Kendala
+    { wch: 50 }, // Kendala Lapangan
     { wch: 35 }, // Keterangan Lapangan
     { wch: 20 }, // Operator
     { wch: 14 }, // NIK Operator

@@ -294,6 +294,20 @@ export default function App() {
     setRencanaList(prev => prev.filter(r => r.id !== id));
   };
 
+  const handleUpdateRencana = async (id: string, data: Partial<RencanaKerja>) => {
+    const res = await fetch(`/api/rencana-kerja/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Gagal memperbarui rencana kerja.');
+    }
+    const json = await res.json();
+    setRencanaList(prev => prev.map(r => r.id === id ? json.data : r));
+  };
+
   // --- Handlers for Master Lokasi ---
   const handleSaveLokasi = async (lokasi: Lokasi) => {
     const res = await fetch('/api/master/lokasi', {
@@ -625,6 +639,7 @@ export default function App() {
                 aktivitasList={aktivitasList}
                 operators={operators}
                 supervisors={supervisors}
+                kendalaList={kendalaList}
                 newActivityIds={newActivityIds}
                 onOpenManualModal={() => setIsManualModalOpen(true)}
                 onEditActivity={(item) => setEditingActivity(item)}
@@ -646,6 +661,7 @@ export default function App() {
               onRefresh={fetchRencanaList}
               onTerbitkanSpk={handleTerbitkanSpk}
               onCreateRencana={handleCreateRencana}
+              onUpdateRencana={handleUpdateRencana}
               onDeleteRencana={handleDeleteRencana}
             />
           )}
