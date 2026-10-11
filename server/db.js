@@ -21,6 +21,14 @@ async function getDb() {
   } else {
     dbInstance = new SQL.Database();
   }
+  try {
+    dbInstance.run("PRAGMA journal_mode = WAL;");
+    dbInstance.run("PRAGMA busy_timeout = 5000;");
+    dbInstance.run("PRAGMA synchronous = NORMAL;");
+    console.log("\u26A1 [SQLITE-CONFIG] WAL mode, busy_timeout = 5000ms, dan synchronous = NORMAL aktif.");
+  } catch (errPragma) {
+    console.warn("Note on SQLite WAL & busy_timeout configuration:", errPragma);
+  }
   initTablesAndSeed(dbInstance);
   saveDb();
   return dbInstance;
@@ -123,6 +131,7 @@ function initTablesAndSeed(db2) {
       hm_unit_terakhir_diinputkan REAL DEFAULT 0,
       hm_min_standar REAL DEFAULT NULL,
       hm_max_standar REAL DEFAULT NULL,
+      status_aktif INTEGER DEFAULT 1,
       updated_at TEXT NOT NULL
     );
 
@@ -135,19 +144,22 @@ function initTablesAndSeed(db2) {
 
     CREATE TABLE IF NOT EXISTS aktivitas_unit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_transaction_id TEXT UNIQUE,
       jenis_unit TEXT NOT NULL,
       nama_aktivitas TEXT NOT NULL,
       satuan TEXT NOT NULL,
       kode_sap TEXT NOT NULL,
       is_hm_awal_corrected INTEGER DEFAULT 0,
-      alasan_koreksi_hm TEXT DEFAULT NULL
+      alasan_koreksi_hm TEXT DEFAULT NULL,
+      status_aktif INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS operators (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nama_operator TEXT NOT NULL,
       nik TEXT NOT NULL UNIQUE,
-      nama_pengawas TEXT NOT NULL
+      nama_pengawas TEXT NOT NULL,
+      status_aktif INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS lokasi (
@@ -155,6 +167,7 @@ function initTablesAndSeed(db2) {
       wilayah TEXT NOT NULL,
       luas_bruto REAL NOT NULL DEFAULT 0.00,
       luas_netto REAL NOT NULL DEFAULT 0.00,
+      status_aktif INTEGER DEFAULT 1,
       created_at TEXT NOT NULL
     );
 
@@ -170,7 +183,8 @@ function initTablesAndSeed(db2) {
       nomor_spk TEXT,
       status_spk TEXT DEFAULT 'MENUNGGU_SPK',
       keterangan_rencana TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      updated_at TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_rk_tgl ON rencana_kerja(tanggal DESC);
@@ -185,6 +199,7 @@ function initTablesAndSeed(db2) {
 
     CREATE TABLE IF NOT EXISTS hasil_input_aktivitas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_transaction_id TEXT UNIQUE,
       rencana_id TEXT,
       nama_pengawas TEXT NOT NULL,
       tanggal TEXT NOT NULL,
@@ -218,6 +233,18 @@ function initTablesAndSeed(db2) {
 
     CREATE INDEX IF NOT EXISTS idx_unit_tgl ON hasil_input_aktivitas(kode_unit, tanggal DESC);
     CREATE INDEX IF NOT EXISTS idx_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
+
+    CREATE TABLE IF NOT EXISTS aktivitas_kendala (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id_aktivitas INTEGER NOT NULL,
+      id_kendala TEXT,
+      nama_kendala TEXT NOT NULL,
+      waktu_mulai TEXT,
+      waktu_selesai TEXT,
+      durasi_menit REAL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ak_aktivitas ON aktivitas_kendala(id_aktivitas);
   `);
   try {
     db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN foto_bukti TEXT;");
@@ -270,6 +297,20 @@ function initTablesAndSeed(db2) {
       db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN alasan_koreksi_hm TEXT DEFAULT NULL;");
       console.log("Added alasan_koreksi_hm column to hasil_input_aktivitas");
     }
+    if (cols && !cols.includes("client_transaction_id")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN client_transaction_id TEXT DEFAULT NULL;");
+      try {
+        db2.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_client_tx ON hasil_input_aktivitas(client_transaction_id);");
+      } catch (idxErr) {
+        console.warn("Index on client_transaction_id already exists or ignored:", idxErr);
+      }
+      console.log("Added client_transaction_id column to hasil_input_aktivitas");
+    }
+    if (cols && !cols.includes("tanggal_kerja")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN tanggal_kerja TEXT DEFAULT NULL;");
+      db2.run("UPDATE hasil_input_aktivitas SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
+      console.log("Added tanggal_kerja column to hasil_input_aktivitas");
+    }
     const actInfo = db2.exec("PRAGMA table_info(aktivitas_unit)");
     const actCols = actInfo[0]?.values.map((v) => v[1]);
     if (actCols && !actCols.includes("is_hm_awal_corrected")) {
@@ -280,15 +321,71 @@ function initTablesAndSeed(db2) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN alasan_koreksi_hm TEXT DEFAULT NULL;");
       console.log("Added alasan_koreksi_hm column to aktivitas_unit");
     }
+    if (actCols && !actCols.includes("client_transaction_id")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN client_transaction_id TEXT DEFAULT NULL;");
+      console.log("Added client_transaction_id column to aktivitas_unit");
+    }
+    const rkInfo = db2.exec("PRAGMA table_info(rencana_kerja)");
+    const rkCols = rkInfo[0]?.values.map((v) => v[1]);
+    if (rkCols && !rkCols.includes("updated_at")) {
+      db2.run("ALTER TABLE rencana_kerja ADD COLUMN updated_at TEXT DEFAULT NULL;");
+      db2.run("UPDATE rencana_kerja SET updated_at = created_at WHERE updated_at IS NULL;");
+      console.log("Added updated_at column to rencana_kerja");
+    }
+    if (rkCols && !rkCols.includes("tanggal_kerja")) {
+      db2.run("ALTER TABLE rencana_kerja ADD COLUMN tanggal_kerja TEXT DEFAULT NULL;");
+      db2.run("UPDATE rencana_kerja SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
+      console.log("Added tanggal_kerja column to rencana_kerja");
+    }
+    db2.run(`
+      CREATE TABLE IF NOT EXISTS aktivitas_kendala (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_aktivitas INTEGER NOT NULL,
+        id_kendala TEXT,
+        nama_kendala TEXT NOT NULL,
+        waktu_mulai TEXT,
+        waktu_selesai TEXT,
+        durasi_menit REAL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_ak_aktivitas ON aktivitas_kendala(id_aktivitas);
+    `);
     const unitsInfo = db2.exec("PRAGMA table_info(units)");
     const unitsCols = unitsInfo[0]?.values.map((v) => v[1]);
-    if (unitsCols && !unitsCols.includes("hm_min_standar")) {
-      db2.run("ALTER TABLE units ADD COLUMN hm_min_standar REAL DEFAULT NULL;");
-      console.log("Added hm_min_standar column to units");
+    if (unitsCols && !unitsCols.includes("status_aktif")) {
+      db2.run("ALTER TABLE units ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db2.run("UPDATE units SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log("Added status_aktif column to units");
     }
-    if (unitsCols && !unitsCols.includes("hm_max_standar")) {
-      db2.run("ALTER TABLE units ADD COLUMN hm_max_standar REAL DEFAULT NULL;");
-      console.log("Added hm_max_standar column to units");
+    if (actCols && !actCols.includes("status_aktif")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db2.run("UPDATE aktivitas_unit SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log("Added status_aktif column to aktivitas_unit");
+    }
+    const opsInfo = db2.exec("PRAGMA table_info(operators)");
+    const opsCols = opsInfo[0]?.values.map((v) => v[1]);
+    if (opsCols && !opsCols.includes("status_aktif")) {
+      db2.run("ALTER TABLE operators ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db2.run("UPDATE operators SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log("Added status_aktif column to operators");
+    }
+    const lokInfo = db2.exec("PRAGMA table_info(lokasi)");
+    const lokCols = lokInfo[0]?.values.map((v) => v[1]);
+    if (lokCols && !lokCols.includes("status_aktif")) {
+      db2.run("ALTER TABLE lokasi ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db2.run("UPDATE lokasi SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log("Added status_aktif column to lokasi");
+    }
+    const kendalaInfo = db2.exec("PRAGMA table_info(master_kendala)");
+    const kendalaCols = kendalaInfo[0]?.values.map((v) => v[1]);
+    if (kendalaCols && !kendalaCols.includes("status_aktif")) {
+      db2.run("ALTER TABLE master_kendala ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db2.run("UPDATE master_kendala SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log("Added status_aktif column to master_kendala");
+    }
+    try {
+      db2.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_client_tx ON hasil_input_aktivitas(client_transaction_id);");
+    } catch {
     }
     db2.run(`
       CREATE TABLE IF NOT EXISTS app_settings (
