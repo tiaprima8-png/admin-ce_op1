@@ -79,6 +79,35 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
     }
   };
 
+
+
+  const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
+
+  const handleToggleStatus = async (op: Operator) => {
+    const nextStatus = (op.status_aktif ?? 1) === 1 ? 0 : 1;
+    try {
+      const res = await fetch(`/api/operators/${op.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...op,
+          status_aktif: nextStatus
+        })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Gagal mengubah status operator');
+      }
+
+      setFeedbackNotice(`Operator ${op.nama_operator} berhasil di${nextStatus === 1 ? 'aktifkan kembali' : 'nonaktifkan'}!`);
+      setTimeout(() => setFeedbackNotice(null), 3500);
+      onRefresh();
+    } catch (err: unknown) {
+      alert((err as Error).message);
+    }
+  };
+
   const executeDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -87,12 +116,12 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
       const res = await fetch(`/api/operators/${deleteTarget.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Gagal menghapus data operator');
+        throw new Error(data.error || 'Gagal menonaktifkan operator');
       }
 
       const deletedName = deleteTarget.nama_operator;
       setDeleteTarget(null);
-      setFeedbackNotice(`Operator ${deletedName} berhasil dihapus dari sistem!`);
+      setFeedbackNotice(`Operator ${deletedName} berhasil dinonaktifkan (soft delete). Data riwayat laporan tetap tersimpan.`);
       setTimeout(() => setFeedbackNotice(null), 3500);
       onRefresh();
     } catch (err: unknown) {
@@ -102,11 +131,22 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
     }
   };
 
-  const filtered = operators.filter(o =>
-    o.nama_operator.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.nik.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.nama_pengawas.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = operators.filter(o => {
+    const q = searchTerm.toLowerCase();
+    const matchSearch =
+      o.nama_operator.toLowerCase().includes(q) ||
+      o.nik.toLowerCase().includes(q) ||
+      o.nama_pengawas.toLowerCase().includes(q);
+
+    if (!matchSearch) return false;
+
+    if (selectedStatus !== 'Semua') {
+      const isAktif = (o.status_aktif ?? 1) === 1 ? '1' : '0';
+      if (isAktif !== selectedStatus) return false;
+    }
+
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -115,10 +155,10 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
       {feedbackNotice && (
         <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs flex items-center justify-between shadow-2xs animate-in fade-in">
           <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="font-semibold">{feedbackNotice}</span>
           </div>
-          <button onClick={() => setFeedbackNotice(null)} className="text-emerald-700 hover:text-emerald-900 text-xs cursor-pointer">
+          <button onClick={() => setFeedbackNotice(null)} className="text-emerald-700 hover:text-emerald-900 text-xs cursor-pointer font-bold">
             Tutup
           </button>
         </div>
@@ -126,15 +166,27 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
       
       {/* Action Toolbar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Cari nama operator, NIK, atau pengawas..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white"
-          />
+        <div className="flex flex-1 flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Cari nama operator, NIK, atau pengawas..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white"
+            />
+          </div>
+
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value as 'Semua' | '1' | '0')}
+            className="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-white text-slate-700 font-medium cursor-pointer"
+          >
+            <option value="Semua">Semua Status</option>
+            <option value="1">Hanya Aktif</option>
+            <option value="0">Hanya Nonaktif</option>
+          </select>
         </div>
 
         <button
@@ -146,7 +198,7 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
         </button>
       </div>
 
-      {/* Table (Hanya: Pengawas Penanggung Jawab, Nama Operator, NIK, dan Aksi) */}
+      {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
@@ -155,56 +207,84 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
                 <th className="py-3 px-4">Nama Operator</th>
                 <th className="py-3 px-4">Nomor Induk Karyawan (NIK)</th>
                 <th className="py-3 px-4">Pengawas Penanggung Jawab</th>
+                <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="text-center py-10 text-slate-400">
+                  <td colSpan={5} className="text-center py-10 text-slate-400">
                     Tidak ada data operator yang sesuai.
                   </td>
                 </tr>
               ) : (
-                filtered.map((op) => (
-                  <tr key={op.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-semibold text-slate-900">
-                      {op.nama_operator}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-600">
-                      <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                        {op.nik}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-700">
-                      {op.nama_pengawas}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEditModal(op)}
-                          title="Edit operator"
-                          className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(op)}
-                          title="Hapus operator"
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                filtered.map((op) => {
+                  const isAktif = (op.status_aktif ?? 1) === 1;
+                  return (
+                    <tr key={op.id} className={`hover:bg-slate-50/80 transition-colors ${!isAktif ? 'bg-slate-50/50 opacity-65' : ''}`}>
+                      <td className="py-3 px-4 font-semibold text-slate-900">
+                        {op.nama_operator}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-600">
+                        <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                          {op.nik}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-700">
+                        {op.nama_pengawas}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {isAktif ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Aktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            Nonaktif
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => openEditModal(op)}
+                            title="Edit operator"
+                            className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {isAktif ? (
+                            <button
+                              onClick={() => setDeleteTarget(op)}
+                              title="Nonaktifkan Operator (Soft Delete)"
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleStatus(op)}
+                              title="Pulihkan / Aktifkan Kembali Operator"
+                              className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer font-bold text-xs"
+                            >
+                              Pulihkan
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-slate-500 text-[11px]">
-          Total: <span className="font-bold text-slate-800">{filtered.length}</span> operator terdaftar
+        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-slate-500 text-[11px] flex justify-between items-center">
+          <span>Total: <strong className="text-slate-800">{filtered.length}</strong> operator ditampilkan</span>
+          <span className="text-[10px] text-slate-400">Soft Delete Aktif (Riwayat Laporan Terjaga)</span>
         </div>
       </div>
 

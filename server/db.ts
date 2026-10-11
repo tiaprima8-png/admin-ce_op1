@@ -23,6 +23,7 @@ export interface UnitRow {
   hm_unit_terakhir_diinputkan: number;
   hm_min_standar?: number | null;
   hm_max_standar?: number | null;
+  status_aktif: number;
   updated_at: string;
 }
 
@@ -39,6 +40,7 @@ export interface AktivitasUnitRow {
   nama_aktivitas: string;
   satuan: string;
   kode_sap: string;
+  status_aktif: number;
 }
 
 export interface OperatorRow {
@@ -46,6 +48,7 @@ export interface OperatorRow {
   nama_operator: string;
   nik: string;
   nama_pengawas: string;
+  status_aktif: number;
 }
 
 export interface LokasiRow {
@@ -53,6 +56,7 @@ export interface LokasiRow {
   wilayah: string;
   luas_bruto: number;
   luas_netto: number;
+  status_aktif: number;
   created_at: string;
 }
 
@@ -60,6 +64,7 @@ export interface RencanaKerjaRow {
   id: string;
   nama_pengawas: string;
   tanggal: string;
+  tanggal_kerja?: string;
   status_unit: 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
   kode_unit: string;
   operator: string;
@@ -68,8 +73,6 @@ export interface RencanaKerjaRow {
   nomor_spk?: string | null;
   status_spk: 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
   keterangan_rencana?: string | null;
-  is_realized?: boolean;
-  realisasi_count?: number;
   created_at: string;
   updated_at?: string;
   // Enriched fields from JOIN
@@ -101,6 +104,7 @@ export interface HasilInputAktivitasRow {
   rencana_id?: string | null;
   nama_pengawas: string;
   tanggal: string;
+  tanggal_kerja?: string;
   kode_unit: string;
   nama_aktivitas: string;
   kode_sap: string;
@@ -266,6 +270,7 @@ function initTablesAndSeed(db: Database) {
       hm_unit_terakhir_diinputkan REAL DEFAULT 0,
       hm_min_standar REAL DEFAULT NULL,
       hm_max_standar REAL DEFAULT NULL,
+      status_aktif INTEGER DEFAULT 1,
       updated_at TEXT NOT NULL
     );
 
@@ -279,20 +284,21 @@ function initTablesAndSeed(db: Database) {
     CREATE TABLE IF NOT EXISTS aktivitas_unit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_transaction_id TEXT UNIQUE,
-      rencana_id TEXT DEFAULT NULL,
       jenis_unit TEXT NOT NULL,
       nama_aktivitas TEXT NOT NULL,
       satuan TEXT NOT NULL,
       kode_sap TEXT NOT NULL,
       is_hm_awal_corrected INTEGER DEFAULT 0,
-      alasan_koreksi_hm TEXT DEFAULT NULL
+      alasan_koreksi_hm TEXT DEFAULT NULL,
+      status_aktif INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS operators (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nama_operator TEXT NOT NULL,
       nik TEXT NOT NULL UNIQUE,
-      nama_pengawas TEXT NOT NULL
+      nama_pengawas TEXT NOT NULL,
+      status_aktif INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS lokasi (
@@ -300,6 +306,7 @@ function initTablesAndSeed(db: Database) {
       wilayah TEXT NOT NULL,
       luas_bruto REAL NOT NULL DEFAULT 0.00,
       luas_netto REAL NOT NULL DEFAULT 0.00,
+      status_aktif INTEGER DEFAULT 1,
       created_at TEXT NOT NULL
     );
 
@@ -368,13 +375,13 @@ function initTablesAndSeed(db: Database) {
 
     CREATE TABLE IF NOT EXISTS aktivitas_kendala (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      id_aktivitas INTEGER,
+      id_aktivitas INTEGER NOT NULL,
       id_kendala TEXT,
-      nama_kendala TEXT,
+      nama_kendala TEXT NOT NULL,
       waktu_mulai TEXT,
       waktu_selesai TEXT,
-      durasi_menit INTEGER,
-      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+      durasi_menit REAL,
+      created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ak_aktivitas ON aktivitas_kendala(id_aktivitas);
   `);
@@ -436,12 +443,17 @@ function initTablesAndSeed(db: Database) {
     }
     if (cols && !cols.includes('client_transaction_id')) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN client_transaction_id TEXT DEFAULT NULL;");
+      try {
+        db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_client_tx ON hasil_input_aktivitas(client_transaction_id);");
+      } catch (idxErr) {
+        console.warn('Index on client_transaction_id already exists or ignored:', idxErr);
+      }
       console.log('Added client_transaction_id column to hasil_input_aktivitas');
     }
-    try {
-      db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_client_tx ON hasil_input_aktivitas(client_transaction_id);");
-    } catch (idxErr) {
-      console.warn('Index on client_transaction_id already exists or ignored:', idxErr);
+    if (cols && !cols.includes('tanggal_kerja')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN tanggal_kerja TEXT DEFAULT NULL;");
+      db.run("UPDATE hasil_input_aktivitas SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
+      console.log('Added tanggal_kerja column to hasil_input_aktivitas');
     }
 
     // Migration for aktivitas_unit table
@@ -459,18 +471,8 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN client_transaction_id TEXT DEFAULT NULL;");
       console.log('Added client_transaction_id column to aktivitas_unit');
     }
-    if (actCols && !actCols.includes('rencana_id')) {
-      db.run("ALTER TABLE aktivitas_unit ADD COLUMN rencana_id TEXT DEFAULT NULL;");
-      console.log('Added rencana_id column to aktivitas_unit');
-    }
-    try {
-      db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_au_client_tx ON aktivitas_unit(client_transaction_id);");
-      console.log('Enforced unique index idx_au_client_tx on aktivitas_unit(client_transaction_id)');
-    } catch (idxErr) {
-      console.warn('Index on aktivitas_unit.client_transaction_id:', idxErr);
-    }
 
-    // Migration for rencana_kerja table (updated_at column)
+    // Migration for rencana_kerja table (updated_at & tanggal_kerja columns)
     const rkInfo = db.exec("PRAGMA table_info(rencana_kerja)");
     const rkCols = rkInfo[0]?.values.map(v => v[1]);
     if (rkCols && !rkCols.includes('updated_at')) {
@@ -478,57 +480,70 @@ function initTablesAndSeed(db: Database) {
       db.run("UPDATE rencana_kerja SET updated_at = created_at WHERE updated_at IS NULL;");
       console.log('Added updated_at column to rencana_kerja');
     }
+    if (rkCols && !rkCols.includes('tanggal_kerja')) {
+      db.run("ALTER TABLE rencana_kerja ADD COLUMN tanggal_kerja TEXT DEFAULT NULL;");
+      db.run("UPDATE rencana_kerja SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
+      console.log('Added tanggal_kerja column to rencana_kerja');
+    }
 
     // Ensure aktivitas_kendala table exists
     db.run(`
       CREATE TABLE IF NOT EXISTS aktivitas_kendala (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        id_aktivitas INTEGER,
+        id_aktivitas INTEGER NOT NULL,
         id_kendala TEXT,
-        nama_kendala TEXT,
+        nama_kendala TEXT NOT NULL,
         waktu_mulai TEXT,
         waktu_selesai TEXT,
-        durasi_menit INTEGER,
-        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        durasi_menit REAL,
+        created_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_ak_aktivitas ON aktivitas_kendala(id_aktivitas);
     `);
 
-    // Migration for aktivitas_kendala table columns if missing
-    try {
-      const akInfo = db.exec("PRAGMA table_info(aktivitas_kendala)");
-      const akCols = akInfo[0]?.values.map(v => v[1]);
-      if (akCols) {
-        if (!akCols.includes('id_kendala')) {
-          db.run("ALTER TABLE aktivitas_kendala ADD COLUMN id_kendala TEXT;");
-        }
-        if (!akCols.includes('nama_kendala')) {
-          db.run("ALTER TABLE aktivitas_kendala ADD COLUMN nama_kendala TEXT;");
-        }
-        if (!akCols.includes('waktu_mulai')) {
-          db.run("ALTER TABLE aktivitas_kendala ADD COLUMN waktu_mulai TEXT;");
-        }
-        if (!akCols.includes('waktu_selesai')) {
-          db.run("ALTER TABLE aktivitas_kendala ADD COLUMN waktu_selesai TEXT;");
-        }
-        if (!akCols.includes('durasi_menit')) {
-          db.run("ALTER TABLE aktivitas_kendala ADD COLUMN durasi_menit INTEGER;");
-        }
-      }
-    } catch (akMigErr) {
-      console.warn('Migration note for aktivitas_kendala columns:', akMigErr);
-    }
-
-    // Migration for units table (hm_min_standar & hm_max_standar override)
+    // Migration for status_aktif in master tables (Soft Delete requirement)
     const unitsInfo = db.exec("PRAGMA table_info(units)");
     const unitsCols = unitsInfo[0]?.values.map(v => v[1]);
-    if (unitsCols && !unitsCols.includes('hm_min_standar')) {
-      db.run("ALTER TABLE units ADD COLUMN hm_min_standar REAL DEFAULT NULL;");
-      console.log('Added hm_min_standar column to units');
+    if (unitsCols && !unitsCols.includes('status_aktif')) {
+      db.run("ALTER TABLE units ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db.run("UPDATE units SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log('Added status_aktif column to units');
     }
-    if (unitsCols && !unitsCols.includes('hm_max_standar')) {
-      db.run("ALTER TABLE units ADD COLUMN hm_max_standar REAL DEFAULT NULL;");
-      console.log('Added hm_max_standar column to units');
+
+    if (actCols && !actCols.includes('status_aktif')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db.run("UPDATE aktivitas_unit SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log('Added status_aktif column to aktivitas_unit');
+    }
+
+    const opsInfo = db.exec("PRAGMA table_info(operators)");
+    const opsCols = opsInfo[0]?.values.map(v => v[1]);
+    if (opsCols && !opsCols.includes('status_aktif')) {
+      db.run("ALTER TABLE operators ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db.run("UPDATE operators SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log('Added status_aktif column to operators');
+    }
+
+    const lokInfo = db.exec("PRAGMA table_info(lokasi)");
+    const lokCols = lokInfo[0]?.values.map(v => v[1]);
+    if (lokCols && !lokCols.includes('status_aktif')) {
+      db.run("ALTER TABLE lokasi ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db.run("UPDATE lokasi SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log('Added status_aktif column to lokasi');
+    }
+
+    const kendalaInfo = db.exec("PRAGMA table_info(master_kendala)");
+    const kendalaCols = kendalaInfo[0]?.values.map(v => v[1]);
+    if (kendalaCols && !kendalaCols.includes('status_aktif')) {
+      db.run("ALTER TABLE master_kendala ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db.run("UPDATE master_kendala SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log('Added status_aktif column to master_kendala');
+    }
+
+    try {
+      db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_client_tx ON hasil_input_aktivitas(client_transaction_id);");
+    } catch {
+      // Ignore if index creation fails or column missing
     }
 
     // Migration and default seeding for app_settings

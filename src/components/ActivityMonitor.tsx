@@ -11,16 +11,30 @@ import {
   ChevronLeft,
   ChevronRight,
   CameraOff,
+  Camera,
   Eye,
   CheckCircle,
   Fuel,
   Clock,
   Sparkles,
-  Pencil
+  Pencil,
+  Calendar
 } from 'lucide-react';
-import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, MasterKendala } from '../types';
+import { HasilInputAktivitas, Unit, AktivitasUnit, Operator } from '../types';
 import { exportToExcel } from '../utils/export';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
+
+const getWibToday = (): string => {
+  const now = new Date();
+  const wibMs = now.getTime() + (7 * 60 * 60 * 1000) + (now.getTimezoneOffset() * 60 * 1000);
+  return new Date(wibMs).toISOString().slice(0, 10);
+};
+
+const getWibDaysAgo = (daysAgo: number): string => {
+  const now = new Date();
+  const wibMs = now.getTime() + (7 * 60 * 60 * 1000) + (now.getTimezoneOffset() * 60 * 1000) - (daysAgo * 24 * 60 * 60 * 1000);
+  return new Date(wibMs).toISOString().slice(0, 10);
+};
 
 function formatKendalaDuration(menit: number): string {
   if (!menit || menit <= 0) return '0 m';
@@ -51,7 +65,6 @@ interface ActivityMonitorProps {
   aktivitasList: AktivitasUnit[];
   operators: Operator[];
   supervisors: string[];
-  kendalaList?: MasterKendala[];
   newActivityIds: Set<number | string>;
   onOpenManualModal: () => void;
   onEditActivity: (activity: HasilInputAktivitas) => void;
@@ -66,7 +79,6 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   aktivitasList,
   operators,
   supervisors,
-  kendalaList = [],
   newActivityIds,
   onOpenManualModal,
   onEditActivity,
@@ -80,20 +92,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [selectedUnit, setSelectedUnit] = useState('Semua');
   const [selectedShift, setSelectedShift] = useState('Semua');
   const [selectedStatus, setSelectedStatus] = useState('Semua');
-  const [selectedKendala, setSelectedKendala] = useState('Semua');
-  const [selectedDate, setSelectedDate] = useState('');
 
-  // Extract all distinct kendala names from master catalog & existing activities
-  const availableKendalaList = React.useMemo(() => {
-    const listFromMaster = (kendalaList || []).map(k => k.nama_kendala);
-    const listFromActivities = activities.flatMap(a => 
-      parseKendalaList(a.kendala_list).map(k => k.nama_kendala)
-    );
-    const combined = Array.from(new Set([...listFromMaster, ...listFromActivities]))
-      .map(k => k ? k.trim() : '')
-      .filter((k): k is string => Boolean(k));
-    return combined.sort((a, b) => a.localeCompare('id'));
-  }, [kendalaList, activities]);
+  // Date Range State (Default: 7 Hari Terakhir WIB)
+  const [startDate, setStartDate] = useState<string>(() => getWibDaysAgo(6));
+  const [endDate, setEndDate] = useState<string>(() => getWibToday());
+  const [activePreset, setActivePreset] = useState<'hariIni' | '7hari' | '30hari' | 'bulanIni' | 'semua' | 'custom'>('7hari');
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<HasilInputAktivitas | null>(null);
@@ -102,7 +105,31 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 15;
+  const [pageSize, setPageSize] = useState<number>(25);
+
+  const applyPreset = (preset: 'hariIni' | '7hari' | '30hari' | 'bulanIni' | 'semua') => {
+    const today = getWibToday();
+    setActivePreset(preset);
+    setCurrentPage(1);
+
+    if (preset === 'hariIni') {
+      setStartDate(today);
+      setEndDate(today);
+    } else if (preset === '7hari') {
+      setStartDate(getWibDaysAgo(6));
+      setEndDate(today);
+    } else if (preset === '30hari') {
+      setStartDate(getWibDaysAgo(29));
+      setEndDate(today);
+    } else if (preset === 'bulanIni') {
+      const firstOfMonth = today.slice(0, 8) + '01';
+      setStartDate(firstOfMonth);
+      setEndDate(today);
+    } else if (preset === 'semua') {
+      setStartDate('');
+      setEndDate('');
+    }
+  };
 
   // Filter logic
   const filteredActivities = activities.filter((item) => {
@@ -137,18 +164,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       return false;
     }
 
-    // Filter berdasarkan Jenis Kendala
-    if (selectedKendala !== 'Semua') {
-      const itemKendalaList = parseKendalaList(item.kendala_list);
-      const hasMatchingKendala = itemKendalaList.some(k => 
-        (k.nama_kendala || '').toLowerCase().trim() === selectedKendala.toLowerCase().trim()
-      );
-      if (!hasMatchingKendala) {
-        return false;
-      }
+    // WIB Business Date Filtering (tanggal_kerja or fallback tanggal)
+    const itemDate = item.tanggal_kerja || item.tanggal;
+    if (startDate && itemDate < startDate) {
+      return false;
     }
-
-    if (selectedDate && item.tanggal !== selectedDate) {
+    if (endDate && itemDate > endDate) {
       return false;
     }
 
@@ -167,8 +188,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     setSelectedUnit('Semua');
     setSelectedShift('Semua');
     setSelectedStatus('Semua');
-    setSelectedKendala('Semua');
-    setSelectedDate('');
+    setStartDate(getWibDaysAgo(6));
+    setEndDate(getWibToday());
+    setActivePreset('7hari');
     setCurrentPage(1);
   };
 
@@ -222,10 +244,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
       {/* FILTER & ACTION TOOLBAR */}
       <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           
           {/* Universal Search Bar */}
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative flex-1 min-w-[220px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -237,6 +259,55 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               }}
               className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white placeholder-slate-400"
             />
+          </div>
+
+          {/* Date Range Presets Toolbar */}
+          <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl text-xs font-semibold overflow-x-auto border border-slate-200/80">
+            <button
+              type="button"
+              onClick={() => applyPreset('hariIni')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
+                activePreset === 'hariIni' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              Hari Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('7hari')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
+                activePreset === '7hari' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              7 Hari Terakhir
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('30hari')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
+                activePreset === '30hari' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              30 Hari Terakhir
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('bulanIni')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
+                activePreset === 'bulanIni' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              Bulan Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('semua')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
+                activePreset === 'semua' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              Semua Data
+            </button>
           </div>
 
           {/* Action Buttons: Export Excel & Tambah Data Manual */}
@@ -261,11 +332,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
         </div>
 
-        {/* Secondary Filter Dropdowns */}
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+        {/* Secondary Filter Dropdowns & Date Range Inputs */}
+        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
           <div className="flex items-center gap-1 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
-            <Filter className="w-3.5 h-3.5" />
-            <span>Filter:</span>
+            <Filter className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Filter Detail:</span>
           </div>
 
           {/* Pengawas */}
@@ -327,50 +398,60 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             <option value="BREAKDOWN">Status: BREAKDOWN</option>
           </select>
 
-          {/* Filter Jenis Kendala */}
-          <select
-            value={selectedKendala}
-            onChange={(e) => {
-              setSelectedKendala(e.target.value);
-              setCurrentPage(1);
-            }}
-            className={`px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer font-medium transition-colors ${
-              selectedKendala !== 'Semua'
-                ? 'border-amber-400 bg-amber-50 text-amber-900 font-bold ring-1 ring-amber-300'
-                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 focus:ring-1 focus:ring-emerald-500'
-            }`}
-          >
-            <option value="Semua">Kendala: Semua</option>
-            {availableKendalaList.map((k) => (
-              <option key={k} value={k}>
-                Kendala: {k}
-              </option>
-            ))}
-          </select>
+          {/* Date Range Inputs (Tanggal Kerja WIB) */}
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
+            <Calendar className="w-3.5 h-3.5 text-slate-500 ml-1 shrink-0" />
+            <span className="text-[11px] font-semibold text-slate-600">Rentang WIB:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setActivePreset('custom');
+                setCurrentPage(1);
+              }}
+              title="Tanggal Awal Operasional (WIB)"
+              className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-emerald-500 font-mono"
+            />
+            <span className="text-slate-400 font-semibold text-xs">s/d</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setActivePreset('custom');
+                setCurrentPage(1);
+              }}
+              title="Tanggal Akhir Operasional (WIB)"
+              className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-emerald-500 font-mono"
+            />
+          </div>
 
-          {/* Tanggal */}
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => {
-              setSelectedDate(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-2 py-1 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500"
-          />
-
-          {(searchTerm || selectedPengawas !== 'Semua' || selectedUnit !== 'Semua' || selectedShift !== 'Semua' || selectedStatus !== 'Semua' || selectedKendala !== 'Semua' || selectedDate) && (
+          {(searchTerm || selectedPengawas !== 'Semua' || selectedUnit !== 'Semua' || selectedShift !== 'Semua' || selectedStatus !== 'Semua' || activePreset !== '7hari') && (
             <button
               onClick={resetFilters}
-              className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 hover:underline px-2 py-1 rounded cursor-pointer"
+              className="inline-flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer font-semibold"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3 h-3 text-slate-500" />
               Reset Filter
             </button>
           )}
 
-          <div className="ml-auto text-xs text-slate-500 font-medium">
-            Menampilkan <span className="font-bold text-slate-800">{filteredActivities.length}</span> dari {activities.length} total laporan
+          <div className="ml-auto text-xs text-slate-500 font-medium flex items-center gap-2">
+            <span className="hidden sm:inline">Data per Hal:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-800 font-bold text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value={15}>15</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
           </div>
         </div>
       </div>
@@ -456,28 +537,23 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     {/* Kolom 1 [FOTO & SPK]: Thumbnail compact 36x36px + Nomor SPK */}
                     <td className="py-2.5 px-2 text-center align-top">
                       <div className="flex flex-col items-center gap-1">
-                        {row.foto_bukti ? (
+                        {Boolean(row.has_foto_bukti || row.has_foto || row.foto_bukti) ? (
                           <button
                             type="button"
                             onClick={() => onViewPhoto(row)}
-                            title="Klik untuk memperbesar foto bukti"
-                            className="group relative inline-flex h-9 w-9 shrink-0 rounded-lg border border-slate-200 hover:border-emerald-500 bg-slate-50 overflow-hidden shadow-2xs transition-all cursor-pointer"
+                            title="Klik untuk membuka & memuat foto bukti lapangan"
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all shadow-2xs hover:shadow-xs cursor-pointer"
                           >
-                            <img
-                              src={row.foto_bukti}
-                              alt={`Bukti ${row.kode_unit}`}
-                              className="h-full w-full object-cover group-hover:scale-110 transition-transform"
-                            />
-                            <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                              <Eye className="w-3.5 h-3.5 text-white drop-shadow-xs" />
-                            </div>
+                            <Camera className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Lihat Foto</span>
                           </button>
                         ) : (
                           <div 
                             title="Tidak ada foto bukti"
-                            className="h-9 w-9 shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400"
+                            className="h-7 px-2 shrink-0 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 text-[10px] gap-1"
                           >
-                            <CameraOff className="w-3.5 h-3.5" />
+                            <CameraOff className="w-3 h-3 text-slate-400" />
+                            <span>Tanpa Foto</span>
                           </div>
                         )}
 
@@ -513,7 +589,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 font-mono flex-wrap">
-                          <span>{row.tanggal}</span>
+                          <span className="font-semibold text-slate-700">{row.tanggal_kerja || row.tanggal}</span>
+                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">WIB</span>
                           <span className="text-slate-300">•</span>
                           {isMalam ? (
                             <span 
@@ -764,29 +841,54 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         </table>
 
         {/* Table Pagination Footer */}
-        <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-          <div className="text-slate-500">
-            Halaman <span className="font-bold text-slate-800">{currentPage}</span> dari{' '}
-            <span className="font-bold text-slate-800">{totalPages}</span> ({filteredActivities.length} data ditampilkan)
+        <div className="px-4 py-3 border-t border-slate-200 bg-slate-50/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="text-slate-600 font-medium">
+            {filteredActivities.length > 0 ? (
+              <span>
+                Menampilkan <strong className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, filteredActivities.length)}</strong> - <strong className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, filteredActivities.length)}</strong> dari <strong className="text-slate-900 font-bold">{filteredActivities.length}</strong> laporan ({activities.length} total tersimpan)
+              </span>
+            ) : (
+              <span>0 laporan ditemukan</span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage <= 1}
+              title="Halaman Pertama"
+              className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer font-bold text-xs"
+            >
+              First
+            </button>
+            <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage <= 1}
-              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              title="Halaman Sebelumnya"
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              <ChevronLeft className="w-3.5 h-3.5" />
+              <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="px-2 font-medium text-slate-700 text-xs">
-              {currentPage} / {totalPages}
+
+            <span className="px-3 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 text-xs shadow-2xs">
+              Hal {currentPage} / {totalPages}
             </span>
+
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
-              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              title="Halaman Berikutnya"
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              <ChevronRight className="w-3.5 h-3.5" />
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage >= totalPages}
+              title="Halaman Terakhir"
+              className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer font-bold text-xs"
+            >
+              Last
             </button>
           </div>
         </div>

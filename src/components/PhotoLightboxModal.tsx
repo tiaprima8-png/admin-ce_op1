@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Download, 
@@ -11,7 +11,9 @@ import {
   HardHat, 
   FileCheck,
   Maximize2,
-  ExternalLink
+  ExternalLink,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { HasilInputAktivitas } from '../types';
 
@@ -21,6 +23,10 @@ interface PhotoLightboxModalProps {
 }
 
 export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({ activity, onClose }) => {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(activity?.foto_bukti || null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -29,13 +35,49 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({ activity
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  if (!activity || !activity.foto_bukti) return null;
+  useEffect(() => {
+    if (!activity) return;
+
+    if (activity.foto_bukti && activity.foto_bukti.trim() !== '') {
+      setPhotoUrl(activity.foto_bukti);
+      setIsLoading(false);
+      setErrorMessage(null);
+      return;
+    }
+
+    // Lazy load photo from dedicated lightweight endpoint
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    fetch(`/api/rekapitulasi/${activity.id}/foto`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Gagal memuat foto bukti dari server.');
+        return res.json();
+      })
+      .then((json) => {
+        const fetchedUrl = json.data?.foto_bukti || json.foto_bukti;
+        if (fetchedUrl) {
+          setPhotoUrl(fetchedUrl);
+        } else {
+          setErrorMessage('Foto bukti lapangan tidak ditemukan.');
+        }
+      })
+      .catch((err: unknown) => {
+        console.error('Error loading photo detail:', err);
+        setErrorMessage((err as Error).message || 'Gagal memuat foto.');
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [activity]);
+
+  if (!activity) return null;
 
   const handleDownload = () => {
-    if (!activity.foto_bukti) return;
+    if (!photoUrl) return;
     const link = document.createElement('a');
-    link.href = activity.foto_bukti;
-    const ext = activity.foto_bukti.startsWith('data:image/svg') ? 'svg' : 'jpg';
+    link.href = photoUrl;
+    const ext = photoUrl.startsWith('data:image/svg') ? 'svg' : 'jpg';
     link.download = `bukti_lapangan_${activity.kode_unit}_${activity.tanggal}_${activity.id}.${ext}`;
     document.body.appendChild(link);
     link.click();
@@ -71,14 +113,16 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({ activity
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownload}
-              title="Unduh foto bukti lapangan ke perangkat"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/40 rounded-lg transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Unduh Foto</span>
-            </button>
+            {photoUrl && (
+              <button
+                onClick={handleDownload}
+                title="Unduh foto bukti lapangan ke perangkat"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/40 rounded-lg transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Unduh Foto</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               title="Tutup dialog (Esc)"
@@ -90,14 +134,28 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({ activity
         </div>
 
         {/* Image Preview Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-center bg-slate-950/50">
-          <div className="relative max-w-full flex items-center justify-center rounded-xl overflow-hidden shadow-2xl border border-slate-800 bg-slate-900">
-            <img
-              src={activity.foto_bukti}
-              alt={`Bukti lapangan ${activity.kode_unit} - ${activity.nama_aktivitas}`}
-              className="max-h-[58vh] sm:max-h-[64vh] w-auto object-contain rounded-xl select-none"
-            />
-          </div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-center bg-slate-950/50 min-h-[300px]">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center gap-3 text-emerald-400 py-12">
+              <Loader2 className="w-8 h-8 animate-spin" />
+              <span className="text-xs font-semibold tracking-wide text-slate-300">
+                Memuat foto bukti dari server (Lazy Loading)...
+              </span>
+            </div>
+          ) : errorMessage ? (
+            <div className="flex flex-col items-center justify-center gap-2 text-rose-400 py-12 text-xs">
+              <AlertCircle className="w-8 h-8 text-rose-500" />
+              <span className="font-semibold">{errorMessage}</span>
+            </div>
+          ) : photoUrl ? (
+            <div className="relative max-w-full flex items-center justify-center rounded-xl overflow-hidden shadow-2xl border border-slate-800 bg-slate-900">
+              <img
+                src={photoUrl}
+                alt={`Bukti lapangan ${activity.kode_unit} - ${activity.nama_aktivitas}`}
+                className="max-h-[58vh] sm:max-h-[64vh] w-auto object-contain rounded-xl select-none"
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* Metadata Information Banner */}

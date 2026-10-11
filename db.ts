@@ -12,9 +12,7 @@ import db, {
   type UserRow,
   type LokasiRow,
   type RencanaKerjaRow,
-  type MasterKendalaRow,
-  type AktivitasKendalaRow,
-  type AppSettingRow
+  type MasterKendalaRow
 } from './server/db.js';
 
 export default db;
@@ -33,7 +31,5 @@ export {
   type UserRow,
   type LokasiRow,
   type RencanaKerjaRow,
-  type MasterKendalaRow,
-  type AktivitasKendalaRow,
-  type AppSettingRow
+  type MasterKendalaRow
 };

@@ -110,6 +110,35 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
     }
   };
 
+
+
+  const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
+
+  const handleToggleStatus = async (unit: Unit) => {
+    const nextStatus = (unit.status_aktif ?? 1) === 1 ? 0 : 1;
+    try {
+      const res = await fetch(`/api/units/${unit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...unit,
+          status_aktif: nextStatus
+        })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Gagal mengubah status unit');
+      }
+
+      setFeedbackNotice(`Unit ${unit.kode_unit} berhasil di${nextStatus === 1 ? 'aktifkan kembali' : 'nonaktifkan'}!`);
+      setTimeout(() => setFeedbackNotice(null), 3500);
+      onRefresh();
+    } catch (err: unknown) {
+      alert((err as Error).message);
+    }
+  };
+
   const executeDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -118,12 +147,12 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
       const res = await fetch(`/api/units/${deleteTarget.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Gagal menghapus unit');
+        throw new Error(data.error || 'Gagal menonaktifkan unit');
       }
 
       const deletedCode = deleteTarget.kode_unit;
       setDeleteTarget(null);
-      setFeedbackNotice(`Unit ${deletedCode} berhasil dihapus dari sistem!`);
+      setFeedbackNotice(`Unit ${deletedCode} berhasil dinonaktifkan (soft delete). Data riwayat tetap tersimpan.`);
       setTimeout(() => setFeedbackNotice(null), 3500);
       onRefresh();
     } catch (err: unknown) {
@@ -133,12 +162,23 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
     }
   };
 
-  const filteredUnits = units.filter(u => 
-    u.kode_unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.model_unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.jenis_unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.nama_pengawas.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUnits = units.filter(u => {
+    const q = searchTerm.toLowerCase();
+    const matchSearch = 
+      u.kode_unit.toLowerCase().includes(q) ||
+      u.model_unit.toLowerCase().includes(q) ||
+      u.jenis_unit.toLowerCase().includes(q) ||
+      u.nama_pengawas.toLowerCase().includes(q);
+
+    if (!matchSearch) return false;
+
+    if (selectedStatus !== 'Semua') {
+      const isAktif = (u.status_aktif ?? 1) === 1 ? '1' : '0';
+      if (isAktif !== selectedStatus) return false;
+    }
+
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -147,10 +187,10 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
       {feedbackNotice && (
         <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs flex items-center justify-between shadow-2xs animate-in fade-in">
           <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="font-semibold">{feedbackNotice}</span>
           </div>
-          <button onClick={() => setFeedbackNotice(null)} className="text-emerald-700 hover:text-emerald-900 text-xs cursor-pointer">
+          <button onClick={() => setFeedbackNotice(null)} className="text-emerald-700 hover:text-emerald-900 text-xs cursor-pointer font-bold">
             Tutup
           </button>
         </div>
@@ -158,15 +198,27 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
       
       {/* Action Toolbar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Cari kode unit, model, atau pengawas..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white"
-          />
+        <div className="flex flex-1 flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Cari kode unit, model, atau pengawas..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white"
+            />
+          </div>
+
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value as 'Semua' | '1' | '0')}
+            className="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-white text-slate-700 font-medium cursor-pointer"
+          >
+            <option value="Semua">Semua Status</option>
+            <option value="1">Hanya Aktif</option>
+            <option value="0">Hanya Nonaktif</option>
+          </select>
         </div>
 
         <button
@@ -190,7 +242,7 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
                 <th className="py-3 px-4">Pengawas Penanggung Jawab</th>
                 <th className="py-3 px-4 text-right">HM Unit Terakhir</th>
                 <th className="py-3 px-4 text-center">Standar HM Shift</th>
-                <th className="py-3 px-4 text-center">Terakhir Update</th>
+                <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-center">Aksi</th>
               </tr>
             </thead>
@@ -202,76 +254,100 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredUnits.map((unit) => (
-                  <tr key={unit.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4">
-                      <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-md text-[11px] font-mono border border-slate-200">
-                        {unit.kode_unit}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold text-[10px]">
-                        {unit.jenis_unit}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-medium text-slate-800">
-                      {unit.model_unit}
-                    </td>
-                    <td className="py-3 px-4 text-slate-700">
-                      {unit.nama_pengawas}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
-                      {unit.hm_unit_terakhir_diinputkan.toFixed(1)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {(unit.hm_min_standar != null || unit.hm_max_standar != null) ? (
-                        <span 
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-mono font-bold text-[10px]"
-                          title={`Standar Khusus Unit: ${(unit.hm_min_standar ?? globalHmStandar.min).toFixed(1)} - ${(unit.hm_max_standar ?? globalHmStandar.max).toFixed(1)} HM per shift`}
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0"></span>
-                          <span>{(unit.hm_min_standar ?? globalHmStandar.min).toFixed(1)} - {(unit.hm_max_standar ?? globalHmStandar.max).toFixed(1)} HM</span>
-                          <span className="text-[9px] font-semibold text-purple-600 bg-purple-100 px-1 py-0.2 rounded ml-0.5">Khusus</span>
+                filteredUnits.map((unit) => {
+                  const isAktif = (unit.status_aktif ?? 1) === 1;
+                  return (
+                    <tr key={unit.id} className={`hover:bg-slate-50/80 transition-colors ${!isAktif ? 'bg-slate-50/50 opacity-65' : ''}`}>
+                      <td className="py-3 px-4">
+                        <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-md text-[11px] font-mono border border-slate-200">
+                          {unit.kode_unit}
                         </span>
-                      ) : (
-                        <span 
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 text-slate-600 border border-slate-200 font-mono text-[10px]"
-                          title={`Mengikuti Standar Global: ${globalHmStandar.min.toFixed(1)} - ${globalHmStandar.max.toFixed(1)} HM per shift`}
-                        >
-                          <span>{globalHmStandar.min.toFixed(1)} - {globalHmStandar.max.toFixed(1)} HM</span>
-                          <span className="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.2 rounded border border-slate-200 ml-0.5">Global</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold text-[10px]">
+                          {unit.jenis_unit}
                         </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-center text-slate-500 text-[11px]">
-                      {unit.updated_at ? unit.updated_at.slice(0, 16) : '-'}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEditModal(unit)}
-                          title="Edit data unit"
-                          className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(unit)}
-                          title="Hapus unit"
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-800">
+                        {unit.model_unit}
+                      </td>
+                      <td className="py-3 px-4 text-slate-700">
+                        {unit.nama_pengawas}
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
+                        {unit.hm_unit_terakhir_diinputkan.toFixed(1)}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {(unit.hm_min_standar != null || unit.hm_max_standar != null) ? (
+                          <span 
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-mono font-bold text-[10px]"
+                            title={`Standar Khusus Unit: ${(unit.hm_min_standar ?? globalHmStandar.min).toFixed(1)} - ${(unit.hm_max_standar ?? globalHmStandar.max).toFixed(1)} HM per shift`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0"></span>
+                            <span>{(unit.hm_min_standar ?? globalHmStandar.min).toFixed(1)} - {(unit.hm_max_standar ?? globalHmStandar.max).toFixed(1)} HM</span>
+                            <span className="text-[9px] font-semibold text-purple-600 bg-purple-100 px-1 py-0.2 rounded ml-0.5">Khusus</span>
+                          </span>
+                        ) : (
+                          <span 
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 text-slate-600 border border-slate-200 font-mono text-[10px]"
+                            title={`Mengikuti Standar Global: ${globalHmStandar.min.toFixed(1)} - ${globalHmStandar.max.toFixed(1)} HM per shift`}
+                          >
+                            <span>{globalHmStandar.min.toFixed(1)} - {globalHmStandar.max.toFixed(1)} HM</span>
+                            <span className="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.2 rounded border border-slate-200 ml-0.5">Global</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {isAktif ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Aktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            Nonaktif
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => openEditModal(unit)}
+                            title="Edit data unit"
+                            className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {isAktif ? (
+                            <button
+                              onClick={() => setDeleteTarget(unit)}
+                              title="Nonaktifkan Unit (Soft Delete)"
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleStatus(unit)}
+                              title="Pulihkan / Aktifkan Kembali Unit"
+                              className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer font-bold text-xs"
+                            >
+                              Pulihkan
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-slate-500 text-[11px]">
-          Total: <span className="font-bold text-slate-800">{filteredUnits.length}</span> armada alat berat aktif
+        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-slate-500 text-[11px] flex justify-between items-center">
+          <span>Total: <strong className="text-slate-800">{filteredUnits.length}</strong> armada ditampilkan</span>
+          <span className="text-[10px] text-slate-400">Soft Delete Aktif (Riwayat Laporan Terjaga)</span>
         </div>
       </div>
 

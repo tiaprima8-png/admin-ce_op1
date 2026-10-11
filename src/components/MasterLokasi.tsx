@@ -76,12 +76,17 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
     if (filterWilayah !== 'Semua' && item.wilayah !== filterWilayah) {
       return false;
     }
+    if (filterStatus !== 'Semua') {
+      const isAktif = (item.status_aktif ?? 1) === 1 ? '1' : '0';
+      if (isAktif !== filterStatus) return false;
+    }
     return true;
   });
 
   const resetFilters = () => {
     setSearchTerm('');
     setFilterWilayah('Semua');
+    setFilterStatus('Semua');
   };
 
   // Open Create/Edit modal
@@ -128,19 +133,35 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
     }
   };
 
-  // Delete submit
+  const [filterStatus, setFilterStatus] = useState<'Semua' | '1' | '0'>('Semua');
+
+  // Delete submit (Soft delete)
   const handleDeleteSubmit = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
       await onDeleteLokasi(deleteTarget.kode_lokasi);
-      setFeedbackNotice(`Lokasi ${deleteTarget.kode_lokasi} berhasil dihapus.`);
+      setFeedbackNotice(`Lokasi ${deleteTarget.kode_lokasi} berhasil dinonaktifkan (soft delete). Data riwayat tetap aman.`);
       setDeleteTarget(null);
       setTimeout(() => setFeedbackNotice(null), 3500);
     } catch (err: unknown) {
-      alert((err as Error).message || 'Gagal menghapus lokasi.');
+      alert((err as Error).message || 'Gagal menonaktifkan lokasi.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Restore Lokasi
+  const handleRestoreLokasi = async (item: Lokasi) => {
+    try {
+      await onSaveLokasi({
+        ...item,
+        status_aktif: 1
+      });
+      setFeedbackNotice(`Lokasi ${item.kode_lokasi} berhasil diaktifkan kembali!`);
+      setTimeout(() => setFeedbackNotice(null), 3500);
+    } catch (err: unknown) {
+      alert((err as Error).message || 'Gagal mengaktifkan lokasi.');
     }
   };
 
@@ -438,7 +459,17 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
             ))}
           </select>
 
-          {(searchTerm || filterWilayah !== 'Semua') && (
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as 'Semua' | '1' | '0')}
+            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
+          >
+            <option value="Semua">Status: Semua</option>
+            <option value="1">Hanya Aktif</option>
+            <option value="0">Hanya Nonaktif</option>
+          </select>
+
+          {(searchTerm || filterWilayah !== 'Semua' || filterStatus !== 'Semua') && (
             <button
               onClick={resetFilters}
               className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 hover:underline px-2 py-1 rounded cursor-pointer"
@@ -466,63 +497,91 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
                 <th className="py-3 px-4">Wilayah Operasional</th>
                 <th className="py-3 px-4 text-right">Luas Bruto (Ha)</th>
                 <th className="py-3 px-4 text-right">Luas Netto (Ha)</th>
+                <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-center sticky right-0 bg-slate-50/95 shadow-xs">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-slate-400">
+                  <td colSpan={7} className="text-center py-12 text-slate-400">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="font-medium text-slate-600">Tidak ada data master lokasi yang ditemukan.</p>
                     <p className="text-[11px] text-slate-400 mt-1">Gunakan tombol "Import Excel (.xlsx)" atau "+ Tambah Lokasi" di atas.</p>
                   </td>
                 </tr>
               ) : (
-                filteredList.map((row, idx) => (
-                  <tr key={row.kode_lokasi} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-3.5 text-slate-400 font-medium">{idx + 1}</td>
-                    
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded text-xs border border-slate-200">
-                        {row.kode_lokasi}
-                      </span>
-                    </td>
+                filteredList.map((row, idx) => {
+                  const isAktif = (row.status_aktif ?? 1) === 1;
+                  return (
+                    <tr key={row.kode_lokasi} className={`hover:bg-slate-50/80 transition-colors ${!isAktif ? 'bg-slate-50/50 opacity-65' : ''}`}>
+                      <td className="py-3 px-3.5 text-slate-400 font-medium">{idx + 1}</td>
+                      
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded text-xs border border-slate-200">
+                          {row.kode_lokasi}
+                        </span>
+                      </td>
 
-                    <td className="py-3 px-4 font-semibold text-slate-800 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px]">
-                        {row.wilayah}
-                      </span>
-                    </td>
+                      <td className="py-3 px-4 font-semibold text-slate-800 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px]">
+                          {row.wilayah}
+                        </span>
+                      </td>
 
-                    <td className="py-3 px-4 text-right font-mono text-slate-700 whitespace-nowrap">
-                      {row.luas_bruto.toFixed(2)} Ha
-                    </td>
+                      <td className="py-3 px-4 text-right font-mono text-slate-700 whitespace-nowrap">
+                        {row.luas_bruto.toFixed(2)} Ha
+                      </td>
 
-                    <td className="py-3 px-4 text-right font-mono font-bold text-emerald-800 whitespace-nowrap">
-                      {row.luas_netto.toFixed(2)} Ha
-                    </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-emerald-800 whitespace-nowrap">
+                        {row.luas_netto.toFixed(2)} Ha
+                      </td>
 
-                    <td className="py-3 px-4 text-center whitespace-nowrap sticky right-0 bg-white/95 group-hover:bg-slate-50/95">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleOpenModal(row)}
-                          title="Edit lokasi"
-                          className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(row)}
-                          title="Hapus lokasi"
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        {isAktif ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Aktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            Nonaktif
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-center whitespace-nowrap sticky right-0 bg-white/95 group-hover:bg-slate-50/95">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenModal(row)}
+                            title="Edit lokasi"
+                            className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {isAktif ? (
+                            <button
+                              onClick={() => setDeleteTarget(row)}
+                              title="Nonaktifkan Lokasi (Soft Delete)"
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleRestoreLokasi(row)}
+                              title="Pulihkan / Aktifkan Kembali Lokasi"
+                              className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer font-bold text-xs"
+                            >
+                              Pulihkan
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -15,6 +15,7 @@ export interface Unit {
   hm_unit_terakhir_diinputkan: number;
   hm_min_standar?: number | null;
   hm_max_standar?: number | null;
+  status_aktif?: number;
   updated_at: string;
 }
 
@@ -36,6 +37,7 @@ export interface AktivitasUnit {
   nama_aktivitas: string;
   satuan: string;
   kode_sap: string;
+  status_aktif?: number;
 }
 
 export interface Operator {
@@ -43,17 +45,19 @@ export interface Operator {
   nama_operator: string;
   nik: string;
   nama_pengawas: string;
+  status_aktif?: number;
 }
 
 export type UnitStatus = 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
 
-export type StatusSpk = 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI' | 'TEREALISASI';
+export type StatusSpk = 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
 
 export interface Lokasi {
   kode_lokasi: string;
   wilayah: string;
   luas_bruto: number;
   luas_netto: number;
+  status_aktif?: number;
   created_at?: string;
 }
 
@@ -61,6 +65,7 @@ export interface RencanaKerja {
   id: string;
   nama_pengawas: string;
   tanggal: string;
+  tanggal_kerja?: string;
   status_unit: UnitStatus;
   kode_unit: string;
   model_unit?: string;
@@ -71,8 +76,6 @@ export interface RencanaKerja {
   nomor_spk?: string | null;
   status_spk: StatusSpk;
   keterangan_rencana?: string | null;
-  is_realized?: boolean;
-  realisasi_count?: number;
   created_at: string;
   updated_at?: string;
 }
@@ -110,6 +113,7 @@ export interface HasilInputAktivitas {
   rencana_id?: string | null;
   nama_pengawas: string;
   tanggal: string;
+  tanggal_kerja?: string;
   kode_unit: string;
   nama_aktivitas: string;
   kode_sap: string;
@@ -127,6 +131,10 @@ export interface HasilInputAktivitas {
   hasil_kerja: number;
   keterangan: string;
   foto_bukti?: string | null;
+  has_foto_bukti?: boolean;
+  has_foto_solar?: boolean;
+  has_foto_hm?: boolean;
+  has_foto?: boolean;
   status_unit: UnitStatus;
   is_isi_solar: boolean | number;
   jumlah_liter_solar: number;

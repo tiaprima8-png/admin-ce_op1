@@ -146,7 +146,7 @@ export const MasterKendala: React.FC<MasterKendalaProps> = ({ kendalaList, onRef
 
       const deletedName = deleteTarget.nama_kendala;
       setDeleteTarget(null);
-      setFeedbackNotice(`Kendala "${deletedName}" berhasil dihapus dari master data!`);
+      setFeedbackNotice(`Kendala "${deletedName}" berhasil dinonaktifkan (soft delete). Data riwayat laporan tetap tersimpan.`);
       setTimeout(() => setFeedbackNotice(null), 3500);
       onRefresh();
     } catch (err: unknown) {
