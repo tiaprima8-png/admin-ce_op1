@@ -99,17 +99,28 @@ async function startServer() {
   const server = http.createServer(app);
 
   // Initialize WebSocket Server
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  const wss = new WebSocketServer({ noServer: true });
 
   const clients = new Set<WebSocket>();
 
-  wss.on('connection', (ws: WebSocket) => {
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = request.url?.split('?')[0] || '';
+    if (pathname.startsWith('/@vite')) {
+      return; // Biarkan Vite menangani HMR dev internal jika ada
+    }
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  });
+
+  wss.on('connection', (ws: WebSocket, request: http.IncomingMessage) => {
     clients.add(ws);
-    console.log(`📡 WebSocket Client connected. Total clients: ${clients.size}`);
+    console.log(`📡 WebSocket Client connected (${request.url}). Total clients: ${clients.size}`);
 
     // Send welcome packet with current server time
     ws.send(JSON.stringify({
       event: 'CONNECTED',
+      type: 'CONNECTED',
       message: 'Tersambung ke WebSocket RKCE (Rencana Kerja Unit Civil Engineering) Server',
       timestamp: new Date().toISOString(),
       activeClients: clients.size
@@ -118,8 +129,8 @@ async function startServer() {
     ws.on('message', (message: string) => {
       try {
         const parsed = JSON.parse(message.toString());
-        if (parsed.type === 'PING') {
-          ws.send(JSON.stringify({ type: 'PONG', timestamp: new Date().toISOString() }));
+        if (parsed.type === 'PING' || parsed.event === 'PING') {
+          ws.send(JSON.stringify({ type: 'PONG', event: 'PONG', timestamp: new Date().toISOString() }));
         }
       } catch (e) {
         // Ignore non-json ping
@@ -133,26 +144,34 @@ async function startServer() {
   });
 
   // Broadcast function
-  function broadcast(data: Record<string, unknown>) {
+  function broadcast(data: Record<string, unknown>): number {
     const payload = JSON.stringify(data);
+    let count = 0;
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
+        try {
+          client.send(payload);
+          count++;
+        } catch (err) {
+          console.warn('Error sending WS message to client:', err);
+        }
       }
     }
+    return count;
   }
 
   // Socket.io compatible broadcast helper
   const io = {
     emit: (event: string, payload: Record<string, unknown>) => {
-      broadcast({
+      const count = broadcast({
         event,
         type: event,
         ...payload,
         data: payload,
-        aktivitas: payload,
+        payload,
         timestamp: new Date().toISOString()
       });
+      console.log(`📡 [WS-EMIT] Event "${event}" broadcasted ke ${count} WebSocket client aktif.`);
     }
   };
 
@@ -959,28 +978,44 @@ async function startServer() {
       const id = req.params.id;
       const existing = queryOne<RencanaKerjaRow>('SELECT * FROM rencana_kerja WHERE id = ?', [id]);
       if (!existing) {
-        return res.status(404).json({ error: 'Rencana kerja tidak ditemukan.' });
+        return res.status(404).json({ success: false, error: 'Rencana kerja tidak ditemukan.' });
       }
 
-      let cleanSpk = typeof req.body?.nomor_spk === 'string' ? req.body.nomor_spk.trim() : '';
-      if (!cleanSpk) {
-        // Otomatis generate nomor SPK resmi: SPK/CE/YYYY/MM/NNN
+      // 1. Generate nomor SPK resmi: SPK/CE/YYYY/MM/NNN (misal: 'SPK/CE/2026/10/375')
+      let generatedNomorSpk = typeof req.body?.nomor_spk === 'string' ? req.body.nomor_spk.trim() : '';
+      if (!generatedNomorSpk) {
         const d = existing.tanggal || new Date().toISOString().slice(0, 10);
         const [yyyy, mm] = d.split('-');
         const prefix = `SPK/CE/${yyyy}/${mm}/`;
-        const countRow = queryOne<{ count: number }>(
-          "SELECT COUNT(*) as count FROM rencana_kerja WHERE nomor_spk LIKE ?",
+        
+        const existingSpks = queryAll<{ nomor_spk: string }>(
+          "SELECT nomor_spk FROM rencana_kerja WHERE nomor_spk LIKE ?",
           [`${prefix}%`]
         );
-        const nextSeq = String((countRow?.count || 0) + 1).padStart(3, '0');
-        cleanSpk = `${prefix}${nextSeq}`;
+        let maxSeq = 0;
+        for (const row of existingSpks) {
+          if (row.nomor_spk) {
+            const parts = row.nomor_spk.split('/');
+            const lastPart = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(lastPart) && lastPart > maxSeq) {
+              maxSeq = lastPart;
+            }
+          }
+        }
+        const nextSeq = String(maxSeq + 1).padStart(3, '0');
+        generatedNomorSpk = `${prefix}${nextSeq}`;
       }
 
       const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+      // 2. Update data di database SQLite:
+      //    status_spk = 'SPK_TERBIT'
+      //    nomor_spk = generatedNomorSpk
       execute(
         `UPDATE rencana_kerja SET nomor_spk = ?, status_spk = 'SPK_TERBIT', updated_at = ? WHERE id = ?`,
-        [cleanSpk, now, id]
+        [generatedNomorSpk, now, id]
       );
+      saveDb();
 
       const updatedRow = queryOne<RencanaKerjaRow>(`
         SELECT r.*, u.model_unit, l.wilayah
@@ -991,76 +1026,288 @@ async function startServer() {
       `, [id]);
 
       if (!updatedRow) {
-        return res.status(404).json({ error: 'Rencana kerja tidak ditemukan setelah pembaruan.' });
+        return res.status(404).json({ success: false, error: 'Rencana kerja tidak ditemukan setelah pembaruan.' });
       }
 
-      // Format payload SPK sesuai spesifikasi integrasi Android RKCE Mobile
-      const spkPayload = {
+      // 3. Payload SPK resmi sesuai spesifikasi Android RKCE Mobile
+      const payloadSpk = {
         id_rencana_kerja: updatedRow.id,
-        id: updatedRow.id,
-        nomor_spk: cleanSpk,
-        tanggal: updatedRow.tanggal,
+        unit_kode: updatedRow.kode_unit,        // misal 'DT-102'
+        nomor_spk: generatedNomorSpk,           // 'SPK/CE/2026/10/375'
+        status_spk: 'SPK_TERBIT',
+        pengawas: updatedRow.nama_pengawas,
+        operator: updatedRow.operator,
+        lokasi: updatedRow.wilayah || updatedRow.kode_lokasi,
         shift: updatedRow.shift_kerja,
-        unit_id: updatedRow.kode_unit,
+        tanggal: updatedRow.tanggal,
+        // Helper aliases untuk fleksibilitas klien
+        id: updatedRow.id,
+        unit: updatedRow.kode_unit,
         kode_unit: updatedRow.kode_unit,
         nama_unit: updatedRow.model_unit || updatedRow.kode_unit,
-        operator: updatedRow.operator,
-        pengawas: updatedRow.nama_pengawas,
+        model_unit: updatedRow.model_unit || updatedRow.kode_unit,
         nama_pengawas: updatedRow.nama_pengawas,
-        lokasi: updatedRow.wilayah || updatedRow.kode_lokasi,
         kode_lokasi: updatedRow.kode_lokasi,
-        aktivitas: updatedRow.keterangan_rencana || 'Operasional Lapangan',
-        status_spk: 'SPK_TERBIT',
+        shift_kerja: updatedRow.shift_kerja,
+        aktivitas: updatedRow.nama_aktivitas || updatedRow.aktivitas || updatedRow.keterangan_rencana || 'Operasional Lapangan',
         published_at: now
       };
 
-      // 1. Broadcast event 'SPK_PUBLISHED' ke perangkat mobile Android
-      broadcast({
-        event: 'SPK_PUBLISHED',
-        ...spkPayload,
-        payload: spkPayload,
-        data: updatedRow,
-        message: `Nomor SPK ${cleanSpk} telah diterbitkan untuk ${updatedRow.nama_pengawas} (Unit ${updatedRow.kode_unit})`,
-        timestamp: new Date().toISOString()
-      });
+      // 4. WAJIB broadcast event WebSocket ke seluruh client mobile:
+      io.emit("SPK_PUBLISHED", payloadSpk);
+      io.emit("RENCANA_KERJA_UPDATED", payloadSpk);
+      io.emit("SPK_TERBIT", payloadSpk);
+      io.emit("UPDATE_RENCANA", payloadSpk);
 
-      // 2. Broadcast kompatibilitas 'SPK_TERBIT' dan 'UPDATE_RENCANA'
-      broadcast({
-        event: 'SPK_TERBIT',
-        ...spkPayload,
-        message: `Nomor SPK ${cleanSpk} telah diterbitkan untuk ${updatedRow.nama_pengawas} (Unit ${updatedRow.kode_unit})`,
-        data: updatedRow,
-        payload: spkPayload,
-        timestamp: new Date().toISOString()
-      });
+      console.log(`📜 [SPK_PUBLISHED] Nomor SPK ${generatedNomorSpk} diterbitkan untuk Rencana #${id} & dibroadcast via WebSocket`);
 
-      broadcast({
-        event: 'UPDATE_RENCANA',
-        data: updatedRow,
-        payload: spkPayload,
-        timestamp: new Date().toISOString()
-      });
-
-      console.log(`📜 [SPK_PUBLISHED] Nomor SPK ${cleanSpk} diterbitkan untuk Rencana #${id} & dibroadcast via WebSocket`);
-
+      // 5. Kirim respon JSON 200 OK dengan payloadSpk tersebut ke Web Admin
       return res.status(200).json({
+        success: true,
         status: 'success',
-        message: `Nomor SPK ${cleanSpk} berhasil diterbitkan & disinkronkan ke aplikasi Android.`,
+        message: `Nomor SPK ${generatedNomorSpk} berhasil diterbitkan & disinkronkan ke aplikasi Android.`,
+        ...payloadSpk,
         data: {
           ...updatedRow,
-          nomor_spk: cleanSpk,
+          id: updatedRow.id,
+          id_rencana_kerja: updatedRow.id,
+          unit_kode: updatedRow.kode_unit,
+          nomor_spk: generatedNomorSpk,
           status_spk: 'SPK_TERBIT'
         },
-        payload: spkPayload
+        payload: payloadSpk,
+        payloadSpk
       });
     } catch (err: unknown) {
       console.error('Error updating SPK:', err);
-      return res.status(500).json({ error: (err as Error).message });
+      return res.status(500).json({ success: false, error: (err as Error).message });
     }
   };
 
   app.post('/api/rencana-kerja/:id/terbitkan-spk', handleTerbitkanSpkRoute);
   app.put('/api/rencana-kerja/:id/terbitkan-spk', handleTerbitkanSpkRoute);
+
+  // ======================================================================
+  // 2. ENDPOINT SYNC CHECK PENGGANTI MOCKUP:
+  //    GET & POST /api/mobile/rencana-kerja/active?pengawas={nama_pengawas}
+  //    Mengembalikan seluruh rencana kerja aktif pengawas beserta status SPK
+  //    dan nomor SPK terbarunya dari database server SQLite
+  // ======================================================================
+  const handleMobileRencanaKerjaActive = (req: Request, res: Response) => {
+    try {
+      const rawPengawas = (
+        (req.query.pengawas as string | undefined) ||
+        (req.query.supervisor as string | undefined) ||
+        (req.query.user_id as string | undefined) ||
+        (req.query.nik as string | undefined) ||
+        (req.body?.pengawas as string | undefined) ||
+        (req.body?.supervisor as string | undefined)
+      )?.trim();
+
+      const rawTanggal = (
+        (req.query.tanggal as string | undefined) ||
+        (req.query.date as string | undefined) ||
+        (req.body?.tanggal as string | undefined)
+      )?.trim();
+
+      let resolvedSupervisorName = '';
+      let resolvedUsername = '';
+
+      if (rawPengawas && rawPengawas !== 'Semua') {
+        const user = queryOne<UserRow>(
+          `SELECT * FROM users WHERE LOWER(nama_lengkap) = LOWER(?) OR LOWER(username) = LOWER(?) OR CAST(id AS TEXT) = ? LIMIT 1`,
+          [rawPengawas, rawPengawas, rawPengawas]
+        );
+        if (user) {
+          resolvedSupervisorName = user.nama_lengkap;
+          resolvedUsername = user.username;
+        } else {
+          const op = queryOne<OperatorRow>(
+            `SELECT * FROM operators WHERE nik = ? OR LOWER(nama_operator) = LOWER(?) LIMIT 1`,
+            [rawPengawas, rawPengawas]
+          );
+          if (op && op.nama_pengawas) {
+            resolvedSupervisorName = op.nama_pengawas;
+          } else {
+            resolvedSupervisorName = rawPengawas;
+          }
+        }
+      }
+
+      let sql = `
+        SELECT 
+          r.id,
+          r.id as id_rencana_kerja,
+          r.id as rencana_id,
+          r.nomor_spk,
+          r.status_spk,
+          r.status_unit,
+          r.tanggal,
+          COALESCE(r.tanggal_kerja, r.tanggal) as tanggal_kerja,
+          r.nama_pengawas,
+          r.nama_pengawas as pengawas,
+          r.kode_unit,
+          r.kode_unit as unit_kode,
+          r.kode_unit as unit,
+          COALESCE(u.model_unit, r.kode_unit) as model_unit,
+          COALESCE(u.model_unit, r.kode_unit) as nama_unit,
+          COALESCE(u.jenis_unit, '-') as jenis_unit,
+          COALESCE(u.hm_unit_terakhir_diinputkan, 0) as hm_terakhir,
+          COALESCE(u.hm_unit_terakhir_diinputkan, 0) as hm_unit_terakhir,
+          COALESCE(u.hm_min_standar, 6.0) as hm_min_standar,
+          COALESCE(u.hm_max_standar, 10.0) as hm_max_standar,
+          r.operator,
+          COALESCE(op.nik, '-') as nik_operator,
+          r.kode_lokasi,
+          COALESCE(l.wilayah, r.kode_lokasi) as lokasi,
+          COALESCE(l.wilayah, r.kode_lokasi) as nama_lokasi,
+          COALESCE(l.wilayah, r.kode_lokasi) as wilayah,
+          COALESCE(r.nama_aktivitas, r.aktivitas, ma.nama_aktivitas, r.keterangan_rencana, 'Operasional Lapangan') as aktivitas,
+          COALESCE(r.nama_aktivitas, r.aktivitas, ma.nama_aktivitas, r.keterangan_rencana, 'Operasional Lapangan') as nama_aktivitas,
+          COALESCE(r.kode_sap, ma.kode_sap, 'ACT-SAP-101') as kode_sap,
+          COALESCE(r.satuan, ma.satuan, 'm3') as satuan,
+          r.shift_kerja,
+          r.shift_kerja as shift,
+          COALESCE(r.keterangan_rencana, '') as keterangan_rencana,
+          r.created_at,
+          r.updated_at
+        FROM rencana_kerja r
+        LEFT JOIN units u ON r.kode_unit = u.kode_unit
+        LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+        LEFT JOIN operators op ON (r.operator = op.nama_operator OR op.nik = r.operator)
+        LEFT JOIN aktivitas_unit ma ON (
+          (r.id_aktivitas IS NOT NULL AND ma.id = r.id_aktivitas) OR
+          (r.kode_sap IS NOT NULL AND ma.kode_sap = r.kode_sap) OR
+          (r.nama_aktivitas IS NOT NULL AND LOWER(ma.nama_aktivitas) = LOWER(r.nama_aktivitas))
+        )
+        WHERE (r.status_spk IN ('SPK_TERBIT', 'MENUNGGU', 'MENUNGGU_SPK') OR r.status_spk IS NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM hasil_input_aktivitas h 
+            WHERE h.rencana_id = r.id 
+               OR (
+                 (h.rencana_id IS NULL OR h.rencana_id = '') 
+                 AND h.kode_unit = r.kode_unit 
+                 AND (h.tanggal = r.tanggal OR h.tanggal_kerja = r.tanggal) 
+                 AND LOWER(h.shift_kerja) = LOWER(r.shift_kerja)
+               )
+          )
+      `;
+      const params: (string | number)[] = [];
+
+      if (resolvedSupervisorName) {
+        sql += ` AND (LOWER(r.nama_pengawas) = LOWER(?) OR r.nama_pengawas = ? OR LOWER(r.nama_pengawas) = LOWER(?))`;
+        params.push(resolvedSupervisorName, resolvedSupervisorName, resolvedUsername || resolvedSupervisorName);
+      }
+
+      if (rawTanggal) {
+        const isoTanggal = formatToISODate(rawTanggal);
+        sql += ` AND (r.tanggal = ? OR r.tanggal_kerja = ? OR r.status_spk = 'SPK_TERBIT')`;
+        params.push(isoTanggal, isoTanggal);
+      }
+
+      sql += ` ORDER BY r.tanggal DESC, r.created_at DESC`;
+
+      interface RawRencanaItem {
+        id: string;
+        id_rencana_kerja: string;
+        rencana_id: string;
+        nomor_spk: string | null;
+        status_spk: string;
+        status_unit: string;
+        tanggal: string;
+        tanggal_kerja: string;
+        nama_pengawas: string;
+        pengawas: string;
+        kode_unit: string;
+        unit_kode: string;
+        unit: string;
+        model_unit: string;
+        nama_unit: string;
+        jenis_unit: string;
+        hm_terakhir: number;
+        hm_unit_terakhir: number;
+        hm_min_standar: number;
+        hm_max_standar: number;
+        operator: string;
+        nik_operator: string;
+        kode_lokasi: string;
+        lokasi: string;
+        nama_lokasi: string;
+        wilayah: string;
+        aktivitas: string;
+        nama_aktivitas: string;
+        kode_sap: string;
+        satuan: string;
+        shift_kerja: string;
+        shift: string;
+        keterangan_rencana: string;
+        created_at: string;
+        updated_at: string;
+      }
+
+      const rows = queryAll<RawRencanaItem>(sql, params);
+
+      const items = rows.map((r) => ({
+        id_rencana_kerja: r.id,
+        id: r.id,
+        rencana_id: r.id,
+        unit_kode: r.kode_unit,
+        unit: r.kode_unit,
+        kode_unit: r.kode_unit,
+        nama_unit: r.model_unit || r.kode_unit,
+        model_unit: r.model_unit || r.kode_unit,
+        jenis_unit: r.jenis_unit || '-',
+        nomor_spk: r.nomor_spk || null,
+        status_spk: r.status_spk || 'MENUNGGU_SPK',
+        pengawas: r.nama_pengawas,
+        nama_pengawas: r.nama_pengawas,
+        operator: r.operator,
+        nama_operator: r.operator,
+        nik_operator: r.nik_operator || '-',
+        lokasi: r.lokasi,
+        kode_lokasi: r.kode_lokasi,
+        nama_lokasi: r.nama_lokasi,
+        wilayah: r.wilayah,
+        shift: r.shift,
+        shift_kerja: r.shift_kerja,
+        tanggal: r.tanggal,
+        tanggal_kerja: r.tanggal_kerja || r.tanggal,
+        aktivitas: r.aktivitas,
+        nama_aktivitas: r.nama_aktivitas,
+        kode_sap: r.kode_sap,
+        satuan: r.satuan,
+        hm_terakhir: Number(r.hm_terakhir || 0),
+        hm_unit_terakhir: Number(r.hm_unit_terakhir || 0),
+        hm_min_standar: r.hm_min_standar,
+        hm_max_standar: r.hm_max_standar,
+        status_unit: r.status_unit || 'OPERASI',
+        keterangan_rencana: r.keterangan_rencana || '',
+        created_at: r.created_at,
+        updated_at: r.updated_at || r.created_at
+      }));
+
+      return res.status(200).json({
+        success: true,
+        status: 'success',
+        pengawas: resolvedSupervisorName || rawPengawas || 'Semua',
+        total: items.length,
+        count: items.length,
+        synced_at: new Date().toISOString(),
+        data: items,
+        rencana_aktif: items
+      });
+    } catch (err: unknown) {
+      console.error('Error fetching mobile active rencana kerja:', err);
+      return res.status(500).json({
+        success: false,
+        error: (err as Error).message
+      });
+    }
+  };
+
+  app.get('/api/mobile/rencana-kerja/active', handleMobileRencanaKerjaActive);
+  app.post('/api/mobile/rencana-kerja/active', handleMobileRencanaKerjaActive);
+  app.get('/api/mobile/rencana-kerja/active-spk', handleMobileRencanaKerjaActive);
 
   app.put('/api/rencana-kerja/:id', (req: Request, res: Response) => {
     try {

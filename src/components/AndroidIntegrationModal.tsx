@@ -21,6 +21,8 @@ export const AndroidIntegrationModal: React.FC<AndroidIntegrationModalProps> = (
   const [isLoadingSync, setIsLoadingSync] = useState(false);
   const [bootstrapResult, setBootstrapResult] = useState<string | null>(null);
   const [isLoadingBootstrap, setIsLoadingBootstrap] = useState(false);
+  const [activeSpkResult, setActiveSpkResult] = useState<string | null>(null);
+  const [isLoadingActiveSpk, setIsLoadingActiveSpk] = useState(false);
 
   if (!isOpen) return null;
 
@@ -58,6 +60,20 @@ export const AndroidIntegrationModal: React.FC<AndroidIntegrationModalProps> = (
     }
   };
 
+  const handleTestActiveSpkSync = async () => {
+    setIsLoadingActiveSpk(true);
+    setActiveSpkResult(null);
+    try {
+      const res = await fetch(`/api/mobile/rencana-kerja/active?pengawas=${encodeURIComponent(testPengawas)}`);
+      const data = await res.json();
+      setActiveSpkResult(JSON.stringify(data, null, 2));
+    } catch (e: unknown) {
+      setActiveSpkResult(JSON.stringify({ error: (e as Error).message }, null, 2));
+    } finally {
+      setIsLoadingActiveSpk(false);
+    }
+  };
+
   const retrofitCode = `// RKCE Mobile - Android Retrofit Interface v3.0 (Bootstrap & Offline Sync Support)
 interface RkceApiService {
     // 0. Bootstrap Data Lengkap saat Pengawas Login (Rencana Aktif, Riwayat, Master Data & Analitik)
@@ -66,6 +82,12 @@ interface RkceApiService {
         @Query("pengawas") pengawas: String,
         @Query("tanggal") tanggal: String
     ): Response<BootstrapDataResponse>
+
+    // 0B. Sync Rencana Kerja Aktif & Cek Status SPK Real-Time (Tombol Sinkron Android)
+    @GET("api/mobile/rencana-kerja/active")
+    suspend fun getActiveRencanaKerja(
+        @Query("pengawas") pengawas: String
+    ): Response<ActiveRencanaResponse>
 
     // 1. Sync Master Data (Unit, Aktivitas, Operator, Lokasi, Kendala)
     @GET("api/master-data")
@@ -220,6 +242,69 @@ interface RkceApiService {
                 </div>
                 <pre className="p-3 bg-slate-900 text-indigo-300 rounded-lg text-[11px] font-mono overflow-x-auto max-h-56">
                   {bootstrapResult}
+                </pre>
+              </div>
+            )}
+          </div>
+
+          {/* Section 0B: GET /api/mobile/rencana-kerja/active (Sync Check Pengganti Mockup) */}
+          <div className="p-4 bg-sky-50/70 border border-sky-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-sky-600 text-white font-mono text-[11px] rounded font-bold">GET</span>
+                <span className="font-mono text-xs text-sky-950 font-bold">/api/mobile/rencana-kerja/active?pengawas=:nama</span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-sky-200 text-sky-900 rounded font-bold">SYNC CHECK</span>
+              </h4>
+              <button
+                onClick={() => copyToClipboard('GET /api/mobile/rencana-kerja/active?pengawas=Budi Santoso', 'active_spk_endpoint')}
+                className="text-xs text-sky-600 hover:text-sky-800 flex items-center gap-1 cursor-pointer font-medium"
+              >
+                {copiedKey === 'active_spk_endpoint' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                <span>Salin URL</span>
+              </button>
+            </div>
+            <p className="text-xs text-slate-600">
+              <strong>Endpoint Sinkronisasi Rencana Kerja Aktif:</strong> Dipanggil saat tombol <em>"Sinkron"</em> ditekan di aplikasi Android atau ketika koneksi WebSocket sempat terputus. Mengembalikan status SPK terbaru dan nomor SPK resmi dari database server SQLite untuk memastikan form pengawas selalu update detik itu juga.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-slate-500 font-medium">Pengawas:</span>
+                <select
+                  value={testPengawas}
+                  onChange={e => setTestPengawas(e.target.value)}
+                  className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium"
+                >
+                  <option value="Budi Santoso">Budi Santoso</option>
+                  <option value="Agus Wijaya">Agus Wijaya</option>
+                  <option value="Rudi Hermawan">Rudi Hermawan</option>
+                  <option value="Semua">Semua Pengawas</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleTestActiveSpkSync}
+                disabled={isLoadingActiveSpk}
+                className="px-3.5 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-lg shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {isLoadingActiveSpk ? 'Menyinkronkan...' : '🔄 Uji Sinkron Rencana Aktif'}
+              </button>
+            </div>
+
+            {activeSpkResult && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Hasil Response JSON Sinkron Rencana:</span>
+                  <button
+                    onClick={() => copyToClipboard(activeSpkResult, 'copy_activespk_res')}
+                    className="hover:text-sky-600 flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedKey === 'copy_activespk_res' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>Salin JSON</span>
+                  </button>
+                </div>
+                <pre className="p-3 bg-slate-900 text-sky-300 rounded-lg text-[11px] font-mono overflow-x-auto max-h-56">
+                  {activeSpkResult}
                 </pre>
               </div>
             )}
