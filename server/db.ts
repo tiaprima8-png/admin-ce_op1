@@ -174,7 +174,9 @@ export function saveDb(): void {
   try {
     const data = dbInstance.export();
     const buffer = Buffer.from(data);
-    fs.writeFileSync(DB_FILE_PATH, buffer);
+    const tmpPath = `${DB_FILE_PATH}.tmp`;
+    fs.writeFileSync(tmpPath, buffer);
+    fs.renameSync(tmpPath, DB_FILE_PATH);
   } catch (err) {
     console.error('Failed to save SQLite file:', err);
   }
