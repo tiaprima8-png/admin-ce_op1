@@ -387,6 +387,15 @@ function initTablesAndSeed(db: Database) {
 
     CREATE INDEX IF NOT EXISTS idx_unit_tgl ON hasil_input_aktivitas(kode_unit, tanggal DESC);
     CREATE INDEX IF NOT EXISTS idx_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
+    CREATE INDEX IF NOT EXISTS idx_hia_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
+    CREATE INDEX IF NOT EXISTS idx_hia_rencana_id ON hasil_input_aktivitas(rencana_id);
+    CREATE INDEX IF NOT EXISTS idx_hia_unit_tgl_shift ON hasil_input_aktivitas(kode_unit, tanggal, shift_kerja);
+    CREATE INDEX IF NOT EXISTS idx_rk_status_pengawas ON rencana_kerja(nama_pengawas, status_spk);
+    CREATE INDEX IF NOT EXISTS idx_units_aktif ON units(status_aktif, kode_unit);
+    CREATE INDEX IF NOT EXISTS idx_lokasi_aktif ON lokasi(status_aktif, kode_lokasi);
+    CREATE INDEX IF NOT EXISTS idx_operators_aktif ON operators(status_aktif, nama_operator);
+    CREATE INDEX IF NOT EXISTS idx_aktivitas_aktif ON aktivitas_unit(status_aktif, nama_aktivitas);
+    CREATE INDEX IF NOT EXISTS idx_kendala_aktif ON master_kendala(status_aktif, id);
 
     CREATE TABLE IF NOT EXISTS aktivitas_kendala (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -16,8 +16,11 @@ export const AndroidIntegrationModal: React.FC<AndroidIntegrationModalProps> = (
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [testPengawas, setTestPengawas] = useState('Budi Santoso');
+  const [testTanggal, setTestTanggal] = useState('2026-10-11');
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [isLoadingSync, setIsLoadingSync] = useState(false);
+  const [bootstrapResult, setBootstrapResult] = useState<string | null>(null);
+  const [isLoadingBootstrap, setIsLoadingBootstrap] = useState(false);
 
   if (!isOpen) return null;
 
@@ -41,8 +44,29 @@ export const AndroidIntegrationModal: React.FC<AndroidIntegrationModalProps> = (
     }
   };
 
-  const retrofitCode = `// RKCE Mobile - Android Retrofit Interface v2.5 (Kendala & Stik BBM Support)
+  const handleTestBootstrapSync = async () => {
+    setIsLoadingBootstrap(true);
+    setBootstrapResult(null);
+    try {
+      const res = await fetch(`/api/mobile/bootstrap-data?pengawas=${encodeURIComponent(testPengawas)}&tanggal=${encodeURIComponent(testTanggal)}`);
+      const data = await res.json();
+      setBootstrapResult(JSON.stringify(data, null, 2));
+    } catch (e: unknown) {
+      setBootstrapResult(JSON.stringify({ error: (e as Error).message }, null, 2));
+    } finally {
+      setIsLoadingBootstrap(false);
+    }
+  };
+
+  const retrofitCode = `// RKCE Mobile - Android Retrofit Interface v3.0 (Bootstrap & Offline Sync Support)
 interface RkceApiService {
+    // 0. Bootstrap Data Lengkap saat Pengawas Login (Rencana Aktif, Riwayat, Master Data & Analitik)
+    @GET("api/mobile/bootstrap-data")
+    suspend fun getBootstrapData(
+        @Query("pengawas") pengawas: String,
+        @Query("tanggal") tanggal: String
+    ): Response<BootstrapDataResponse>
+
     // 1. Sync Master Data (Unit, Aktivitas, Operator, Lokasi, Kendala)
     @GET("api/master-data")
     suspend fun getMasterData(
@@ -126,6 +150,79 @@ interface RkceApiService {
             >
               {isSimulating ? 'Mengirim Data...' : 'Kirim Sekarang 🚀'}
             </button>
+          </div>
+
+          {/* Section 0: GET /api/mobile/bootstrap-data (Full Initial Sync) */}
+          <div className="p-4 bg-indigo-50/60 border border-indigo-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-indigo-600 text-white font-mono text-[11px] rounded font-bold">GET</span>
+                <span className="font-mono text-xs text-indigo-950 font-bold">/api/mobile/bootstrap-data</span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">HOT / RECOMMENDED</span>
+              </h4>
+              <button
+                onClick={() => copyToClipboard('GET /api/mobile/bootstrap-data?pengawas=Budi Santoso&tanggal=2026-10-11', 'bootstrap_endpoint')}
+                className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer font-medium"
+              >
+                {copiedKey === 'bootstrap_endpoint' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                <span>Salin URL</span>
+              </button>
+            </div>
+            <p className="text-xs text-slate-600">
+              <strong>Endpoint Inisialisasi Penuh (Single Request):</strong> Dipanggil saat pengawas login ke aplikasi Android. Mengembalikan seketika: (1) <strong>Rencana Kerja Aktif</strong> yang belum terealisasi, (2) <strong>Riwayat Realisasi</strong> 30 hari terakhir, (3) <strong>Master Data Lengkap</strong> (unit, lokasi, aktivitas, operator, kendala), dan (4) <strong>Ringkasan Metrik Analitik</strong> (total HM, solar, laporan, jam kerja, unit selesai).
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-slate-500 font-medium">Pengawas:</span>
+                <select
+                  value={testPengawas}
+                  onChange={e => setTestPengawas(e.target.value)}
+                  className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium"
+                >
+                  <option value="Budi Santoso">Budi Santoso</option>
+                  <option value="Agus Wijaya">Agus Wijaya</option>
+                  <option value="Rudi Hermawan">Rudi Hermawan</option>
+                  <option value="Semua">Semua Pengawas</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-slate-500 font-medium">Tanggal:</span>
+                <input
+                  type="date"
+                  value={testTanggal}
+                  onChange={e => setTestTanggal(e.target.value)}
+                  className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium"
+                />
+              </div>
+
+              <button
+                onClick={handleTestBootstrapSync}
+                disabled={isLoadingBootstrap}
+                className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {isLoadingBootstrap ? 'Mengambil Data...' : '⚡ Uji Bootstrap Data'}
+              </button>
+            </div>
+
+            {bootstrapResult && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Hasil Response JSON Bootstrap:</span>
+                  <button
+                    onClick={() => copyToClipboard(bootstrapResult, 'copy_bootstrap_res')}
+                    className="hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedKey === 'copy_bootstrap_res' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>Salin JSON</span>
+                  </button>
+                </div>
+                <pre className="p-3 bg-slate-900 text-indigo-300 rounded-lg text-[11px] font-mono overflow-x-auto max-h-56">
+                  {bootstrapResult}
+                </pre>
+              </div>
+            )}
           </div>
 
           {/* Section 1: GET /api/master-data */}

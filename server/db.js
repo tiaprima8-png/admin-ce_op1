@@ -237,6 +237,15 @@ function initTablesAndSeed(db2) {
 
     CREATE INDEX IF NOT EXISTS idx_unit_tgl ON hasil_input_aktivitas(kode_unit, tanggal DESC);
     CREATE INDEX IF NOT EXISTS idx_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
+    CREATE INDEX IF NOT EXISTS idx_hia_pengawas_tgl ON hasil_input_aktivitas(nama_pengawas, tanggal DESC);
+    CREATE INDEX IF NOT EXISTS idx_hia_rencana_id ON hasil_input_aktivitas(rencana_id);
+    CREATE INDEX IF NOT EXISTS idx_hia_unit_tgl_shift ON hasil_input_aktivitas(kode_unit, tanggal, shift_kerja);
+    CREATE INDEX IF NOT EXISTS idx_rk_status_pengawas ON rencana_kerja(nama_pengawas, status_spk);
+    CREATE INDEX IF NOT EXISTS idx_units_aktif ON units(status_aktif, kode_unit);
+    CREATE INDEX IF NOT EXISTS idx_lokasi_aktif ON lokasi(status_aktif, kode_lokasi);
+    CREATE INDEX IF NOT EXISTS idx_operators_aktif ON operators(status_aktif, nama_operator);
+    CREATE INDEX IF NOT EXISTS idx_aktivitas_aktif ON aktivitas_unit(status_aktif, nama_aktivitas);
+    CREATE INDEX IF NOT EXISTS idx_kendala_aktif ON master_kendala(status_aktif, id);
 
     CREATE TABLE IF NOT EXISTS aktivitas_kendala (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -358,6 +367,33 @@ function initTablesAndSeed(db2) {
       db2.run("ALTER TABLE rencana_kerja ADD COLUMN tanggal_kerja TEXT DEFAULT NULL;");
       db2.run("UPDATE rencana_kerja SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
       console.log("Added tanggal_kerja column to rencana_kerja");
+    }
+    if (rkCols && !rkCols.includes("nama_aktivitas")) {
+      db2.run("ALTER TABLE rencana_kerja ADD COLUMN nama_aktivitas TEXT DEFAULT NULL;");
+      db2.run("UPDATE rencana_kerja SET nama_aktivitas = keterangan_rencana WHERE nama_aktivitas IS NULL AND keterangan_rencana IS NOT NULL;");
+      console.log("Added nama_aktivitas column to rencana_kerja");
+    }
+    if (rkCols && !rkCols.includes("aktivitas")) {
+      db2.run("ALTER TABLE rencana_kerja ADD COLUMN aktivitas TEXT DEFAULT NULL;");
+      db2.run("UPDATE rencana_kerja SET aktivitas = COALESCE(nama_aktivitas, keterangan_rencana) WHERE aktivitas IS NULL;");
+      console.log("Added aktivitas column to rencana_kerja");
+    }
+    if (rkCols && !rkCols.includes("kode_sap")) {
+      db2.run("ALTER TABLE rencana_kerja ADD COLUMN kode_sap TEXT DEFAULT NULL;");
+      console.log("Added kode_sap column to rencana_kerja");
+    }
+    if (rkCols && !rkCols.includes("satuan")) {
+      db2.run("ALTER TABLE rencana_kerja ADD COLUMN satuan TEXT DEFAULT NULL;");
+      console.log("Added satuan column to rencana_kerja");
+    }
+    if (rkCols && !rkCols.includes("id_aktivitas")) {
+      db2.run("ALTER TABLE rencana_kerja ADD COLUMN id_aktivitas INTEGER DEFAULT NULL;");
+      console.log("Added id_aktivitas column to rencana_kerja");
+    }
+    try {
+      db2.run("CREATE VIEW IF NOT EXISTS master_aktivitas AS SELECT * FROM aktivitas_unit;");
+    } catch (viewErr) {
+      console.warn("View master_aktivitas create notice:", viewErr);
     }
     db2.run(`
       CREATE TABLE IF NOT EXISTS aktivitas_kendala (

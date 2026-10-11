@@ -168,6 +168,446 @@ async function startServer() {
     });
   });
 
+  // ======================================================================
+  // ENDPOINT: GET & POST /api/mobile/bootstrap-data (Full Initial Sync)
+  // Sinkronisasi data awal lengkap saat pengawas login di aplikasi Android
+  // ======================================================================
+  const handleMobileBootstrap = (req: Request, res: Response) => {
+    try {
+      const startTime = Date.now();
+      const rawPengawas = (
+        (req.query.pengawas as string | undefined) ||
+        (req.query.supervisor as string | undefined) ||
+        (req.query.user_id as string | undefined) ||
+        (req.query.nik as string | undefined) ||
+        (req.body?.pengawas as string | undefined) ||
+        (req.body?.supervisor as string | undefined) ||
+        (req.body?.user_id as string | undefined)
+      )?.trim();
+
+      const rawTanggal = (
+        (req.query.tanggal as string | undefined) ||
+        (req.query.date as string | undefined) ||
+        (req.body?.tanggal as string | undefined) ||
+        (req.body?.date as string | undefined)
+      )?.trim();
+
+      // 1. Resolusi Identitas Pengawas (Mendukung Nama Lengkap, Username / NIK, atau User ID)
+      let resolvedSupervisorName = '';
+      let resolvedUsername = '';
+
+      if (rawPengawas && rawPengawas !== 'Semua') {
+        const user = queryOne<UserRow>(
+          `SELECT * FROM users WHERE LOWER(nama_lengkap) = LOWER(?) OR LOWER(username) = LOWER(?) OR CAST(id AS TEXT) = ? LIMIT 1`,
+          [rawPengawas, rawPengawas, rawPengawas]
+        );
+        if (user) {
+          resolvedSupervisorName = user.nama_lengkap;
+          resolvedUsername = user.username;
+        } else {
+          // Cari berdasarkan NIK operator jika diteruskan NIK
+          const op = queryOne<OperatorRow>(
+            `SELECT * FROM operators WHERE nik = ? OR LOWER(nama_operator) = LOWER(?) LIMIT 1`,
+            [rawPengawas, rawPengawas]
+          );
+          if (op && op.nama_pengawas) {
+            resolvedSupervisorName = op.nama_pengawas;
+          } else {
+            resolvedSupervisorName = rawPengawas;
+          }
+        }
+      }
+
+      // 2. Normalisasi Tanggal Operasional Hari Ini (YYYY-MM-DD) & Rentang 30 Hari
+      const operationalDate = formatToISODate(rawTanggal || new Date().toISOString().split('T')[0]);
+      const opDateObj = new Date(operationalDate);
+      const date30DaysAgoObj = new Date(opDateObj.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const date30DaysAgoStr = isNaN(date30DaysAgoObj.getTime())
+        ? '2000-01-01'
+        : date30DaysAgoObj.toISOString().split('T')[0];
+
+      // ------------------------------------------------------------------
+      // 3. LOGIKA 1: RENCANA KERJA AKTIF (Pending Realisasi Lapangan)
+      //    Status SPK_TERBIT atau MENUNGGU, dan belum memiliki realisasi di aktivitas_unit (hasil_input_aktivitas)
+      // ------------------------------------------------------------------
+      let rkSql = `
+        SELECT 
+          r.id,
+          r.id as id_rencana_kerja,
+          r.id as rencana_id,
+          r.nomor_spk,
+          r.tanggal,
+          COALESCE(r.tanggal_kerja, r.tanggal) as tanggal_kerja,
+          r.nama_pengawas,
+          r.kode_unit,
+          COALESCE(u.model_unit, r.kode_unit) as model_unit,
+          COALESCE(u.jenis_unit, '-') as jenis_unit,
+          COALESCE(u.hm_unit_terakhir_diinputkan, 0) as hm_terakhir,
+          COALESCE(u.hm_unit_terakhir_diinputkan, 0) as hm_unit_terakhir,
+          COALESCE(u.hm_min_standar, 6.0) as hm_min_standar,
+          COALESCE(u.hm_max_standar, 10.0) as hm_max_standar,
+          r.operator,
+          COALESCE(op.nik, '-') as nik_operator,
+          r.kode_lokasi,
+          COALESCE(l.wilayah, r.kode_lokasi) as lokasi,
+          COALESCE(l.wilayah, r.kode_lokasi) as nama_lokasi,
+          COALESCE(l.wilayah, r.kode_lokasi) as wilayah,
+          COALESCE(r.nama_aktivitas, r.aktivitas, ma.nama_aktivitas, r.keterangan_rencana, 'Operasional Lapangan') as aktivitas,
+          COALESCE(r.nama_aktivitas, r.aktivitas, ma.nama_aktivitas, r.keterangan_rencana, 'Operasional Lapangan') as nama_aktivitas,
+          COALESCE(r.kode_sap, ma.kode_sap, 'ACT-SAP-101') as kode_sap,
+          COALESCE(r.satuan, ma.satuan, 'm3') as satuan,
+          r.shift_kerja,
+          r.shift_kerja as shift,
+          COALESCE(r.status_spk, 'MENUNGGU') as status_spk,
+          COALESCE(r.status_unit, 'OPERASI') as status_unit,
+          COALESCE(r.keterangan_rencana, '') as keterangan_rencana,
+          r.created_at
+        FROM rencana_kerja r
+        LEFT JOIN units u ON r.kode_unit = u.kode_unit
+        LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+        LEFT JOIN operators op ON (r.operator = op.nama_operator OR op.nik = r.operator)
+        LEFT JOIN aktivitas_unit ma ON (
+          (r.id_aktivitas IS NOT NULL AND ma.id = r.id_aktivitas) OR
+          (r.kode_sap IS NOT NULL AND ma.kode_sap = r.kode_sap) OR
+          (r.nama_aktivitas IS NOT NULL AND LOWER(ma.nama_aktivitas) = LOWER(r.nama_aktivitas))
+        )
+        WHERE (r.status_spk IN ('SPK_TERBIT', 'MENUNGGU', 'MENUNGGU_SPK') OR r.status_spk IS NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM hasil_input_aktivitas h 
+            WHERE h.rencana_id = r.id 
+               OR (
+                 (h.rencana_id IS NULL OR h.rencana_id = '') 
+                 AND h.kode_unit = r.kode_unit 
+                 AND (h.tanggal = r.tanggal OR h.tanggal_kerja = r.tanggal) 
+                 AND LOWER(h.shift_kerja) = LOWER(r.shift_kerja)
+               )
+          )
+      `;
+      const rkParams: (string | number)[] = [];
+
+      if (resolvedSupervisorName) {
+        rkSql += ` AND (LOWER(r.nama_pengawas) = LOWER(?) OR r.nama_pengawas = ? OR LOWER(r.nama_pengawas) = LOWER(?))`;
+        rkParams.push(resolvedSupervisorName, resolvedSupervisorName, resolvedUsername || resolvedSupervisorName);
+      }
+
+      rkSql += ` ORDER BY r.tanggal DESC, r.created_at DESC`;
+
+      interface RawRencanaAktif {
+        id: string;
+        id_rencana_kerja: string;
+        rencana_id: string;
+        nomor_spk: string | null;
+        tanggal: string;
+        tanggal_kerja: string;
+        nama_pengawas: string;
+        kode_unit: string;
+        model_unit: string;
+        jenis_unit: string;
+        hm_terakhir: number;
+        hm_unit_terakhir: number;
+        hm_min_standar: number;
+        hm_max_standar: number;
+        operator: string;
+        nik_operator: string;
+        kode_lokasi: string;
+        lokasi: string;
+        nama_lokasi: string;
+        wilayah: string;
+        aktivitas: string;
+        nama_aktivitas: string;
+        kode_sap: string;
+        satuan: string;
+        shift_kerja: string;
+        shift: string;
+        status_spk: string;
+        status_unit: string;
+        keterangan_rencana: string;
+        created_at: string;
+      }
+
+      const rawRencanaList = queryAll<RawRencanaAktif>(rkSql, rkParams);
+      const rencana_aktif = rawRencanaList.map((r) => ({
+        id: r.id,
+        id_rencana_kerja: r.id,
+        rencana_id: r.id,
+        nomor_spk: r.nomor_spk || null,
+        unit: r.kode_unit,
+        kode_unit: r.kode_unit,
+        nama_unit: r.model_unit || r.kode_unit,
+        model_unit: r.model_unit || r.kode_unit,
+        jenis_unit: r.jenis_unit || '-',
+        operator: r.operator,
+        nama_operator: r.operator,
+        nik_operator: r.nik_operator || '-',
+        lokasi: r.lokasi,
+        kode_lokasi: r.kode_lokasi,
+        nama_lokasi: r.nama_lokasi,
+        wilayah: r.wilayah,
+        aktivitas: r.aktivitas,
+        nama_aktivitas: r.nama_aktivitas,
+        kode_sap: r.kode_sap,
+        satuan: r.satuan,
+        shift: r.shift,
+        shift_kerja: r.shift_kerja,
+        hm_terakhir: Number(r.hm_terakhir || 0),
+        hm_unit_terakhir: Number(r.hm_unit_terakhir || 0),
+        hm_awal_rekomendasi: Number(r.hm_terakhir || 0),
+        hm_min_standar: r.hm_min_standar,
+        hm_max_standar: r.hm_max_standar,
+        status_spk: r.status_spk,
+        status_unit: r.status_unit || 'OPERASI',
+        tanggal: r.tanggal,
+        tanggal_kerja: r.tanggal_kerja || r.tanggal,
+        keterangan_rencana: r.keterangan_rencana || '',
+        created_at: r.created_at
+      }));
+
+      // ------------------------------------------------------------------
+      // 4. LOGIKA 2: RIWAYAT REALISASI PENGAWAS (30 Hari Terakhir)
+      //    Data hasil_input_aktivitas (realisasi aktivitas unit) milik pengawas
+      // ------------------------------------------------------------------
+      let riwayatSql = `
+        SELECT 
+          h.id,
+          h.uuid,
+          h.client_transaction_id,
+          h.rencana_id,
+          h.nama_pengawas,
+          h.tanggal,
+          COALESCE(h.tanggal_kerja, h.tanggal) as tanggal_kerja,
+          h.kode_unit,
+          COALESCE(u.model_unit, h.kode_unit) as model_unit,
+          COALESCE(u.jenis_unit, '-') as jenis_unit,
+          h.nama_aktivitas,
+          h.kode_sap,
+          h.satuan,
+          h.operator,
+          h.nik_operator,
+          h.kode_lokasi,
+          COALESCE(h.lokasi, l.wilayah, h.kode_lokasi) as lokasi,
+          h.nomor_spk,
+          h.shift_kerja,
+          h.jam_kerja,
+          h.hm_awal,
+          h.hm_akhir,
+          h.hm_harian_berjalan,
+          h.hasil_kerja,
+          h.keterangan,
+          h.status_unit,
+          h.is_isi_solar,
+          h.jumlah_liter_solar,
+          h.stik_awal,
+          h.stik_akhir,
+          h.kendala_list,
+          h.is_hm_awal_corrected,
+          h.alasan_koreksi_hm,
+          h.created_at,
+          CASE WHEN h.foto_bukti IS NOT NULL AND LENGTH(h.foto_bukti) > 0 THEN 1 ELSE 0 END as has_foto
+        FROM hasil_input_aktivitas h
+        LEFT JOIN units u ON h.kode_unit = u.kode_unit
+        LEFT JOIN lokasi l ON h.kode_lokasi = l.kode_lokasi
+        WHERE 1=1
+      `;
+      const riwayatParams: (string | number)[] = [];
+
+      if (resolvedSupervisorName) {
+        riwayatSql += ` AND (LOWER(h.nama_pengawas) = LOWER(?) OR h.nama_pengawas = ? OR LOWER(h.nama_pengawas) = LOWER(?))`;
+        riwayatParams.push(resolvedSupervisorName, resolvedSupervisorName, resolvedUsername || resolvedSupervisorName);
+      }
+
+      riwayatSql += ` AND (h.tanggal >= ? OR h.tanggal_kerja >= ?)`;
+      riwayatParams.push(date30DaysAgoStr, date30DaysAgoStr);
+
+      riwayatSql += ` ORDER BY h.tanggal DESC, h.created_at DESC`;
+
+      interface RawRiwayatRow extends HasilInputAktivitasRow {
+        model_unit: string;
+        jenis_unit: string;
+        has_foto: number;
+      }
+
+      const rawRiwayatList = queryAll<RawRiwayatRow>(riwayatSql, riwayatParams);
+      const riwayat_aktivitas = rawRiwayatList.map((h) => {
+        let parsedKendala: unknown = h.kendala_list;
+        if (typeof h.kendala_list === 'string' && h.kendala_list.trim() !== '') {
+          try {
+            parsedKendala = JSON.parse(h.kendala_list);
+          } catch {
+            parsedKendala = h.kendala_list;
+          }
+        }
+
+        return {
+          id: h.id,
+          uuid: h.uuid || null,
+          client_transaction_id: h.client_transaction_id || null,
+          rencana_id: h.rencana_id || null,
+          nomor_spk: h.nomor_spk || null,
+          tanggal: h.tanggal,
+          tanggal_kerja: h.tanggal_kerja || h.tanggal,
+          shift: h.shift_kerja,
+          shift_kerja: h.shift_kerja,
+          unit: h.kode_unit,
+          kode_unit: h.kode_unit,
+          model_unit: h.model_unit,
+          operator: h.operator,
+          nik_operator: h.nik_operator,
+          durasi_jam_kerja: Number(h.jam_kerja || 0),
+          jam_kerja: Number(h.jam_kerja || 0),
+          hm_awal: Number(h.hm_awal || 0),
+          hm_akhir: Number(h.hm_akhir || 0),
+          durasi_hm: Number(h.hm_harian_berjalan || 0),
+          hm_harian_berjalan: Number(h.hm_harian_berjalan || 0),
+          solar: Number(h.jumlah_liter_solar || 0),
+          jumlah_liter_solar: Number(h.jumlah_liter_solar || 0),
+          is_isi_solar: Number(h.is_isi_solar || 0),
+          stik_awal: h.stik_awal != null ? Number(h.stik_awal) : null,
+          stik_akhir: h.stik_akhir != null ? Number(h.stik_akhir) : null,
+          status: h.status_unit || 'OPERASI',
+          status_unit: h.status_unit || 'OPERASI',
+          kendala: parsedKendala,
+          kendala_list: parsedKendala,
+          aktivitas: h.nama_aktivitas,
+          nama_aktivitas: h.nama_aktivitas,
+          kode_sap: h.kode_sap,
+          satuan: h.satuan,
+          lokasi: h.lokasi,
+          kode_lokasi: h.kode_lokasi,
+          hasil_kerja: Number(h.hasil_kerja || 0),
+          keterangan: h.keterangan || '',
+          foto_bukti_url: `/api/rekapitulasi/${h.id}/foto`,
+          has_foto_bukti: Boolean(h.has_foto),
+          is_hm_awal_corrected: Boolean(h.is_hm_awal_corrected),
+          alasan_koreksi_hm: h.alasan_koreksi_hm || null,
+          created_at: h.created_at
+        };
+      });
+
+      // ------------------------------------------------------------------
+      // 5. LOGIKA 3: MASTER DATA PENDUKUNG (Unit, Lokasi, Aktivitas, Operator, Kendala)
+      // ------------------------------------------------------------------
+      const masterUnits = queryAll<UnitRow>(
+        `SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan as hm_terakhir, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC`
+      );
+      const masterLokasi = queryAll<LokasiRow>(
+        `SELECT kode_lokasi, wilayah, luas_bruto, luas_netto, status_aktif, created_at FROM lokasi WHERE status_aktif = 1 ORDER BY kode_lokasi ASC`
+      );
+      const masterAktivitas = queryAll<AktivitasUnitRow>(
+        `SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC`
+      );
+      const masterOperator = queryAll<OperatorRow>(
+        `SELECT id, nama_operator, nik, nama_pengawas, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC`
+      );
+      const masterKendala = queryAll<MasterKendalaRow>(
+        `SELECT id, nama_kendala, status_aktif, created_at FROM master_kendala WHERE status_aktif = 1 ORDER BY id ASC`
+      );
+
+      const minSetting = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_min_standar'");
+      const maxSetting = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_max_standar'");
+      const hmStandar = {
+        min: minSetting ? parseFloat(minSetting.value) || 6.0 : 6.0,
+        max: maxSetting ? parseFloat(maxSetting.value) || 10.0 : 10.0
+      };
+
+      // ------------------------------------------------------------------
+      // 6. LOGIKA 4: RINGKASAN METRIK ANALITIK
+      //    Total Jam Operasi, Total HM berjalan, Total Solar, dan Jumlah Unit Terselesaikan
+      // ------------------------------------------------------------------
+      interface StatRow {
+        total_laporan: number;
+        total_hm: number;
+        total_solar: number;
+        total_jam_operasi: number;
+        unit_terselesaikan: number;
+      }
+
+      // Agregasi untuk tanggal operasional yang diminta
+      let todayStatSql = `
+        SELECT 
+          COUNT(*) as total_laporan,
+          COALESCE(ROUND(SUM(hm_harian_berjalan), 1), 0.0) as total_hm,
+          COALESCE(ROUND(SUM(jumlah_liter_solar), 1), 0.0) as total_solar,
+          COALESCE(ROUND(SUM(jam_kerja), 1), 0.0) as total_jam_operasi,
+          COUNT(DISTINCT kode_unit) as unit_terselesaikan
+        FROM hasil_input_aktivitas
+        WHERE (tanggal = ? OR tanggal_kerja = ?)
+      `;
+      const todayStatParams: (string | number)[] = [operationalDate, operationalDate];
+
+      if (resolvedSupervisorName) {
+        todayStatSql += ` AND (LOWER(nama_pengawas) = LOWER(?) OR nama_pengawas = ? OR LOWER(nama_pengawas) = LOWER(?))`;
+        todayStatParams.push(resolvedSupervisorName, resolvedSupervisorName, resolvedUsername || resolvedSupervisorName);
+      }
+      const todayStats = queryOne<StatRow>(todayStatSql, todayStatParams);
+
+      // Agregasi kumulatif 30 hari terakhir
+      let monthStatSql = `
+        SELECT 
+          COUNT(*) as total_laporan,
+          COALESCE(ROUND(SUM(hm_harian_berjalan), 1), 0.0) as total_hm,
+          COALESCE(ROUND(SUM(jumlah_liter_solar), 1), 0.0) as total_solar,
+          COALESCE(ROUND(SUM(jam_kerja), 1), 0.0) as total_jam_operasi,
+          COUNT(DISTINCT kode_unit) as unit_terselesaikan
+        FROM hasil_input_aktivitas
+        WHERE (tanggal >= ? OR tanggal_kerja >= ?)
+      `;
+      const monthStatParams: (string | number)[] = [date30DaysAgoStr, date30DaysAgoStr];
+
+      if (resolvedSupervisorName) {
+        monthStatSql += ` AND (LOWER(nama_pengawas) = LOWER(?) OR nama_pengawas = ? OR LOWER(nama_pengawas) = LOWER(?))`;
+        monthStatParams.push(resolvedSupervisorName, resolvedSupervisorName, resolvedUsername || resolvedSupervisorName);
+      }
+      const monthStats = queryOne<StatRow>(monthStatSql, monthStatParams);
+
+      // Sesuai spesifikasi prompt format JSON ringkasan_analitik:
+      const ringkasan_analitik = {
+        total_hm: Number(todayStats?.total_hm || 0),
+        total_solar: Number(todayStats?.total_solar || 0),
+        total_laporan: Number(todayStats?.total_laporan || 0),
+        total_jam_operasi: Number(todayStats?.total_jam_operasi || 0),
+        jumlah_unit_terselesaikan: Number(todayStats?.unit_terselesaikan || 0),
+        kumulatif_30_hari: {
+          total_hm: Number(monthStats?.total_hm || 0),
+          total_solar: Number(monthStats?.total_solar || 0),
+          total_laporan: Number(monthStats?.total_laporan || 0),
+          total_jam_operasi: Number(monthStats?.total_jam_operasi || 0),
+          jumlah_unit_terselesaikan: Number(monthStats?.unit_terselesaikan || 0)
+        }
+      };
+
+      const durationMs = Date.now() - startTime;
+
+      // 7. Payload Response
+      res.json({
+        success: true,
+        pengawas: resolvedSupervisorName || rawPengawas || 'Semua',
+        tanggal: operationalDate,
+        synced_at: new Date().toISOString(),
+        execution_time_ms: durationMs,
+        rencana_aktif,
+        riwayat_aktivitas,
+        master_data: {
+          unit: masterUnits,
+          lokasi: masterLokasi,
+          aktivitas: masterAktivitas,
+          operator: masterOperator,
+          kendala: masterKendala,
+          hm_standar: hmStandar
+        },
+        ringkasan_analitik
+      });
+    } catch (err: unknown) {
+      console.error('Error in /api/mobile/bootstrap-data:', err);
+      res.status(500).json({
+        success: false,
+        error: (err as Error).message
+      });
+    }
+  };
+
+  app.get(['/api/mobile/bootstrap-data', '/api/mobile/bootstrap'], handleMobileBootstrap);
+  app.post(['/api/mobile/bootstrap-data', '/api/mobile/bootstrap'], handleMobileBootstrap);
+
   // 1. GET /api/master-data?pengawas=:nama
   // Bundle master data (units, aktivitas, operators, lokasi) filtered by supervisor for Android offline sync
   app.get('/api/master-data', (req: Request, res: Response) => {
