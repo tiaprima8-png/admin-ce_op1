@@ -276,6 +276,10 @@ async function startServer() {
           ...r,
           nomor_spk: r.nomor_spk !== undefined && r.nomor_spk !== null && r.nomor_spk !== '' ? String(r.nomor_spk) : null,
           status_spk: (r.status_spk as string) || (r.nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK'),
+          nama_aktivitas: r.nama_aktivitas || r.aktivitas || r.keterangan_rencana || '-',
+          aktivitas: r.aktivitas || r.nama_aktivitas || r.keterangan_rencana || '-',
+          kode_sap: r.kode_sap || 'ACT-SAP-101',
+          satuan: r.satuan || 'm3',
           updated_at: r.updated_at || r.created_at
         }));
 
@@ -303,7 +307,12 @@ async function startServer() {
         shift_kerja: rawShift,
         nomor_spk,
         status_spk: rawStatusSpk,
-        keterangan_rencana
+        keterangan_rencana,
+        nama_aktivitas: rawNamaAktivitas,
+        aktivitas: rawAktivitas,
+        id_aktivitas: rawIdAktivitas,
+        kode_sap: rawKodeSap,
+        satuan: rawSatuan
       } = req.body;
 
       if (!nama_pengawas || !kode_unit || !operator || !kode_lokasi) {
@@ -320,12 +329,41 @@ async function startServer() {
       const shift_kerja = (rawShift || 'SIANG').toUpperCase();
       const status_spk = rawStatusSpk || (nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK');
 
+      let resolvedNamaAktivitas = (rawNamaAktivitas || rawAktivitas || keterangan_rencana || '').trim();
+      let resolvedKodeSap = (rawKodeSap || '').trim();
+      let resolvedSatuan = (rawSatuan || 'm3').trim();
+
+      // Look up master activity by ID or Kode SAP or matching name
+      let actMatch: AktivitasUnitRow | null = null;
+      if (rawIdAktivitas) {
+        actMatch = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE id = ?', [rawIdAktivitas]);
+      }
+      if (!actMatch && resolvedKodeSap) {
+        actMatch = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE kode_sap = ?', [resolvedKodeSap]);
+      }
+      if (!actMatch && resolvedNamaAktivitas) {
+        actMatch = queryOne<AktivitasUnitRow>(
+          'SELECT * FROM aktivitas_unit WHERE LOWER(nama_aktivitas) = LOWER(?) OR LOWER(?) LIKE "%" || LOWER(nama_aktivitas) || "%" LIMIT 1',
+          [resolvedNamaAktivitas, resolvedNamaAktivitas]
+        );
+      }
+
+      if (actMatch) {
+        if (!rawNamaAktivitas && !rawAktivitas) resolvedNamaAktivitas = actMatch.nama_aktivitas;
+        if (!resolvedKodeSap) resolvedKodeSap = actMatch.kode_sap;
+        if (!rawSatuan) resolvedSatuan = actMatch.satuan;
+      }
+      if (!resolvedKodeSap) {
+        resolvedKodeSap = 'ACT-SAP-101';
+      }
+
       const insertSql = `
         INSERT INTO rencana_kerja (
           id, nama_pengawas, tanggal, status_unit, kode_unit,
           operator, kode_lokasi, shift_kerja, nomor_spk, status_spk,
-          keterangan_rencana, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          keterangan_rencana, nama_aktivitas, aktivitas, kode_sap, satuan,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       execute(insertSql, [
@@ -340,6 +378,10 @@ async function startServer() {
         nomor_spk || null,
         status_spk,
         keterangan_rencana || '',
+        resolvedNamaAktivitas || keterangan_rencana || '',
+        resolvedNamaAktivitas || keterangan_rencana || '',
+        resolvedKodeSap,
+        resolvedSatuan,
         createdAt,
         createdAt
       ]);
@@ -373,11 +415,12 @@ async function startServer() {
         nomor_spk: nomor_spk || null,
         status_spk: newRow?.status_spk || status_spk || 'MENUNGGU',
         status_realisasi: 'BELUM_INPUT',
-        nama_aktivitas: keterangan_rencana || 'Rencana Kerja Operasional',
+        nama_aktivitas: resolvedNamaAktivitas || keterangan_rencana || '-',
+        aktivitas: resolvedNamaAktivitas || keterangan_rencana || '-',
         keterangan_rencana: keterangan_rencana || '',
         keterangan: keterangan_rencana || '',
-        kode_sap: 'ACT-SAP-101',
-        satuan: 'm3',
+        kode_sap: resolvedKodeSap,
+        satuan: resolvedSatuan || 'm3',
         hm_awal: null,
         hm_akhir: null,
         hm_harian_berjalan: null,
@@ -396,9 +439,13 @@ async function startServer() {
       };
 
       // 1. Broadcast event WebSocket NEW_RENCANA_KERJA ke seluruh client admin agar Beranda ter-update instan
-      io.emit("NEW_RENCANA_KERJA", dataRencanaBaru);
+      io.emit("NEW_RENCANA_KERJA", {
+        ...dataRencanaBaru,
+        nama_aktivitas: dataRencanaBaru.nama_aktivitas || dataRencanaBaru.aktivitas,
+        kode_sap: dataRencanaBaru.kode_sap,
+      });
 
-      console.log(`✨ [TRANS-OK] Rencana kerja #${id} tersimpan (Tanggal: ${tgl}) & dibroadcast via io.emit('NEW_RENCANA_KERJA')`);
+      console.log(`✨ [TRANS-OK] Rencana kerja #${id} tersimpan (Aktivitas: ${dataRencanaBaru.nama_aktivitas}, SAP: ${dataRencanaBaru.kode_sap}) & dibroadcast via io.emit('NEW_RENCANA_KERJA')`);
 
       res.status(201).json({
         status: 'success',
@@ -1399,9 +1446,37 @@ async function startServer() {
             COALESCE(h.tanggal_kerja, h.tanggal, r.tanggal) as tanggal_kerja,
             COALESCE(h.status_unit, r.status_unit, 'OPERASI') as status_unit,
             COALESCE(h.kode_unit, r.kode_unit) as kode_unit,
-            COALESCE(h.nama_aktivitas, r.keterangan_rencana, 'Rencana Kerja Operasional') as nama_aktivitas,
-            COALESCE(h.kode_sap, 'ACT-SAP-101') as kode_sap,
-            COALESCE(h.satuan, 'm3') as satuan,
+            h.nama_aktivitas as aktivitas_aktual,
+            COALESCE(
+              h.nama_aktivitas,
+              r.nama_aktivitas,
+              r.aktivitas,
+              ma_r.nama_aktivitas,
+              r.keterangan_rencana,
+              '-'
+            ) as nama_aktivitas,
+            COALESCE(
+              r.aktivitas,
+              r.nama_aktivitas,
+              h.nama_aktivitas,
+              ma_r.nama_aktivitas,
+              r.keterangan_rencana,
+              '-'
+            ) as aktivitas,
+            COALESCE(
+              h.kode_sap,
+              r.kode_sap,
+              ma_r.kode_sap,
+              ma_act.kode_sap,
+              'ACT-SAP-101'
+            ) as kode_sap,
+            COALESCE(
+              h.satuan,
+              r.satuan,
+              ma_r.satuan,
+              ma_act.satuan,
+              'm3'
+            ) as satuan,
             COALESCE(h.operator, r.operator) as operator,
             COALESCE(h.nik_operator, '-') as nik_operator,
             COALESCE(h.kode_lokasi, r.kode_lokasi) as kode_lokasi,
@@ -1434,6 +1509,15 @@ async function startServer() {
           )
           LEFT JOIN units u ON r.kode_unit = u.kode_unit
           LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+          LEFT JOIN master_aktivitas ma_r ON (
+            (r.id_aktivitas IS NOT NULL AND ma_r.id = r.id_aktivitas) OR
+            (r.kode_sap IS NOT NULL AND ma_r.kode_sap = r.kode_sap) OR
+            (r.nama_aktivitas IS NOT NULL AND (LOWER(ma_r.nama_aktivitas) = LOWER(r.nama_aktivitas) OR LOWER(r.nama_aktivitas) LIKE '%' || LOWER(ma_r.nama_aktivitas) || '%')) OR
+            (r.keterangan_rencana IS NOT NULL AND (LOWER(ma_r.nama_aktivitas) = LOWER(r.keterangan_rencana) OR LOWER(r.keterangan_rencana) LIKE '%' || LOWER(ma_r.nama_aktivitas) || '%'))
+          )
+          LEFT JOIN master_aktivitas ma_act ON (
+            h.kode_sap IS NOT NULL AND ma_act.kode_sap = h.kode_sap
+          )
 
           UNION ALL
 
@@ -1446,9 +1530,11 @@ async function startServer() {
             COALESCE(h.tanggal_kerja, h.tanggal) as tanggal_kerja,
             h.status_unit,
             h.kode_unit,
-            h.nama_aktivitas,
-            h.kode_sap,
-            h.satuan,
+            h.nama_aktivitas as aktivitas_aktual,
+            h.nama_aktivitas as nama_aktivitas,
+            h.nama_aktivitas as aktivitas,
+            COALESCE(h.kode_sap, ma_h.kode_sap, 'ACT-SAP-101') as kode_sap,
+            COALESCE(h.satuan, ma_h.satuan, 'm3') as satuan,
             h.operator,
             h.nik_operator,
             h.kode_lokasi,
@@ -1477,6 +1563,10 @@ async function startServer() {
           FROM hasil_input_aktivitas h
           LEFT JOIN units u ON h.kode_unit = u.kode_unit
           LEFT JOIN lokasi l ON h.kode_lokasi = l.kode_lokasi
+          LEFT JOIN master_aktivitas ma_h ON (
+            (h.kode_sap IS NOT NULL AND ma_h.kode_sap = h.kode_sap) OR
+            (h.nama_aktivitas IS NOT NULL AND (LOWER(ma_h.nama_aktivitas) = LOWER(h.nama_aktivitas) OR LOWER(h.nama_aktivitas) LIKE '%' || LOWER(ma_h.nama_aktivitas) || '%'))
+          )
           WHERE h.id NOT IN (
             SELECT h2.id FROM rencana_kerja r2
             JOIN hasil_input_aktivitas h2 ON (
@@ -1548,11 +1638,22 @@ async function startServer() {
         const hasFoto = Boolean(r.foto_bukti && String(r.foto_bukti).trim() !== '');
         const hasFotoSolar = Boolean(r.is_isi_solar === 1 || hasFoto);
 
+        const aktivitasTampil = 
+          r.aktivitas_aktual || 
+          r.nama_aktivitas || 
+          r.aktivitas || 
+          '-';
+
         return {
           ...r,
           id: r.id,
           tanggal: r.tanggal,
           tanggal_kerja: r.tanggal_kerja || r.tanggal,
+          nama_aktivitas: aktivitasTampil,
+          aktivitas: aktivitasTampil,
+          aktivitas_aktual: r.aktivitas_aktual || null,
+          kode_sap: r.kode_sap || null,
+          satuan: r.satuan || 'm3',
           foto_bukti: null, // Exclude heavy Base64 payload from table list for instant UI loading
           has_foto_bukti: hasFoto,
           has_foto_solar: hasFotoSolar,

@@ -77,6 +77,11 @@ export interface RencanaKerja {
   nomor_spk?: string | null;
   status_spk: StatusSpk;
   keterangan_rencana?: string | null;
+  nama_aktivitas?: string | null;
+  aktivitas?: string | null;
+  kode_sap?: string | null;
+  satuan?: string | null;
+  id_aktivitas?: number | null;
   created_at: string;
   updated_at?: string;
 }
@@ -118,6 +123,8 @@ export interface HasilInputAktivitas {
   tanggal_kerja?: string;
   kode_unit: string;
   nama_aktivitas: string;
+  aktivitas?: string | null;
+  aktivitas_aktual?: string | null;
   kode_sap: string;
   satuan: string;
   operator: string;

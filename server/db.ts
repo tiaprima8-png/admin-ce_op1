@@ -76,6 +76,11 @@ export interface RencanaKerjaRow {
   nomor_spk?: string | null;
   status_spk: 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI' | 'TEREALISASI' | 'MENUNGGU';
   keterangan_rencana?: string | null;
+  nama_aktivitas?: string | null;
+  aktivitas?: string | null;
+  kode_sap?: string | null;
+  satuan?: string | null;
+  id_aktivitas?: number | null;
   created_at: string;
   updated_at?: string;
   // Enriched fields from JOIN
@@ -111,6 +116,8 @@ export interface HasilInputAktivitasRow {
   tanggal_kerja?: string;
   kode_unit: string;
   nama_aktivitas: string;
+  aktivitas?: string | null;
+  aktivitas_aktual?: string | null;
   kode_sap: string;
   satuan: string;
   operator: string;
@@ -510,6 +517,35 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE rencana_kerja ADD COLUMN tanggal_kerja TEXT DEFAULT NULL;");
       db.run("UPDATE rencana_kerja SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
       console.log('Added tanggal_kerja column to rencana_kerja');
+    }
+    if (rkCols && !rkCols.includes('nama_aktivitas')) {
+      db.run("ALTER TABLE rencana_kerja ADD COLUMN nama_aktivitas TEXT DEFAULT NULL;");
+      db.run("UPDATE rencana_kerja SET nama_aktivitas = keterangan_rencana WHERE nama_aktivitas IS NULL AND keterangan_rencana IS NOT NULL;");
+      console.log('Added nama_aktivitas column to rencana_kerja');
+    }
+    if (rkCols && !rkCols.includes('aktivitas')) {
+      db.run("ALTER TABLE rencana_kerja ADD COLUMN aktivitas TEXT DEFAULT NULL;");
+      db.run("UPDATE rencana_kerja SET aktivitas = COALESCE(nama_aktivitas, keterangan_rencana) WHERE aktivitas IS NULL;");
+      console.log('Added aktivitas column to rencana_kerja');
+    }
+    if (rkCols && !rkCols.includes('kode_sap')) {
+      db.run("ALTER TABLE rencana_kerja ADD COLUMN kode_sap TEXT DEFAULT NULL;");
+      console.log('Added kode_sap column to rencana_kerja');
+    }
+    if (rkCols && !rkCols.includes('satuan')) {
+      db.run("ALTER TABLE rencana_kerja ADD COLUMN satuan TEXT DEFAULT NULL;");
+      console.log('Added satuan column to rencana_kerja');
+    }
+    if (rkCols && !rkCols.includes('id_aktivitas')) {
+      db.run("ALTER TABLE rencana_kerja ADD COLUMN id_aktivitas INTEGER DEFAULT NULL;");
+      console.log('Added id_aktivitas column to rencana_kerja');
+    }
+
+    // Ensure view master_aktivitas exists for transparent query joins
+    try {
+      db.run("CREATE VIEW IF NOT EXISTS master_aktivitas AS SELECT * FROM aktivitas_unit;");
+    } catch (viewErr) {
+      console.warn('View master_aktivitas create notice:', viewErr);
     }
 
     // Ensure aktivitas_kendala table exists

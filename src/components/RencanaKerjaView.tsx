@@ -174,7 +174,9 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
         shift_kerja: formShift,
         status_unit: formStatusUnit,
         nomor_spk: formNomorSpk.trim() || undefined,
-        keterangan_rencana: formKeterangan
+        keterangan_rencana: formKeterangan,
+        nama_aktivitas: formKeterangan,
+        aktivitas: formKeterangan
       });
       setIsCreateModalOpen(false);
       setFeedbackNotice('Rencana kerja berhasil ditambahkan ke sistem.');

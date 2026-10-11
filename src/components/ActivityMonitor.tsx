@@ -133,7 +133,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         tanggal: raw.tanggal || getWibToday(),
         tanggal_kerja: raw.tanggal_kerja || raw.tanggal || getWibToday(),
         kode_unit: raw.kode_unit || raw.unit || 'UNIT',
-        nama_aktivitas: raw.nama_aktivitas || raw.aktivitas || 'Operasional Lapangan',
+        nama_aktivitas: raw.aktivitas_aktual || raw.nama_aktivitas || raw.aktivitas || '-',
+        aktivitas: raw.aktivitas_aktual || raw.nama_aktivitas || raw.aktivitas || '-',
+        aktivitas_aktual: raw.aktivitas_aktual || null,
         kode_sap: raw.kode_sap || 'ACT-SAP-101',
         satuan: raw.satuan || 'm3',
         operator: raw.operator || 'Operator Default',
@@ -210,7 +212,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         tanggal: planDate,
         tanggal_kerja: raw.tanggal_kerja || planDate,
         kode_unit: raw.kode_unit || raw.unit || 'UNIT',
-        nama_aktivitas: raw.keterangan_rencana || raw.nama_aktivitas || 'Rencana Kerja Operasional',
+        nama_aktivitas: raw.aktivitas_aktual || raw.nama_aktivitas || raw.aktivitas || raw.keterangan_rencana || '-',
+        aktivitas: raw.aktivitas_aktual || raw.nama_aktivitas || raw.aktivitas || raw.keterangan_rencana || '-',
+        aktivitas_aktual: raw.aktivitas_aktual || null,
         kode_sap: raw.kode_sap || 'ACT-SAP-101',
         satuan: raw.satuan || 'm3',
         operator: raw.operator || 'Operator Default',
@@ -402,6 +406,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     setCurrentPage(1);
   };
 
+  const isFilterActive = 
+    searchTerm.trim() !== '' ||
+    selectedPengawas !== 'Semua' ||
+    selectedUnit !== 'Semua' ||
+    selectedShift !== 'Semua' ||
+    selectedStatus !== 'Semua' ||
+    activePreset !== '7hari';
+
   const handleExportExcel = () => {
     if (filteredActivities.length === 0) {
       setFeedbackNotice('Peringatan: Tidak ada data dalam tabel aktif untuk diekspor.');
@@ -464,246 +476,198 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         }
       />
 
-      {/* FILTER & ACTION TOOLBAR */}
-      <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs space-y-3">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-          
-          {/* Universal Search Bar */}
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+      {/* FILTER & ACTION TOOLBAR (2 BARIS BERSIH & PROFESIONAL) */}
+      <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs space-y-2.5">
+        {/* BARIS 1: PENCARIAN UTAMA, PERIODE CEPAT, & TOMBOL AKSI */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          {/* Kiri: Universal Search Bar */}
+          <div className="relative flex-1 min-w-[260px]">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Cari Pengawas, Unit, Kode SAP, Operator, Lokasi, SPK..."
+              placeholder="Cari Pengawas, Unit, Kode SAP, Lokasi, SPK..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white placeholder-slate-400"
+              className="w-full h-10 text-sm pl-9 pr-3 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white placeholder-slate-400 text-slate-800"
             />
           </div>
 
-          {/* Date Range Presets Toolbar */}
-          <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl text-xs font-semibold overflow-x-auto border border-slate-200/80">
-            <button
-              type="button"
-              onClick={() => applyPreset('hariIni')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
-                activePreset === 'hariIni' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              Hari Ini
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset('kemarin')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
-                activePreset === 'kemarin' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              Kemarin
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset('7hari')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
-                activePreset === '7hari' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              7 Hari Terakhir
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset('30hari')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
-                activePreset === '30hari' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              30 Hari Terakhir
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset('bulanIni')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
-                activePreset === 'bulanIni' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              Bulan Ini
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset('semua')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
-                activePreset === 'semua' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              Semua Data
-            </button>
-          </div>
+          {/* Kanan: Dropdown Periode Cepat, Export Excel, Tambah Data Manual */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* a. 1 Dropdown Periode ringkas: "Periode: [Pilihan Aktif]" */}
+            <div className="relative">
+              <select
+                value={activePreset}
+                onChange={(e) => {
+                  if (e.target.value !== 'custom') {
+                    applyPreset(e.target.value as any);
+                  }
+                }}
+                className="h-10 pl-3 pr-8 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden shadow-2xs cursor-pointer appearance-none"
+              >
+                <option value="hariIni">Periode: Hari Ini</option>
+                <option value="kemarin">Periode: Kemarin</option>
+                <option value="7hari">Periode: 7 Hari Terakhir</option>
+                <option value="30hari">Periode: 30 Hari Terakhir</option>
+                <option value="bulanIni">Periode: Bulan Ini</option>
+                <option value="semua">Periode: Semua Data</option>
+                {activePreset === 'custom' && (
+                  <option value="custom">Periode: Kustom</option>
+                )}
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">
+                ▼
+              </div>
+            </div>
 
-          {/* Action Buttons: Export Excel & Tambah Data Manual */}
-          <div className="flex flex-wrap items-center gap-2">
+            {/* b. Tombol Export Excel (.xlsx) - style sekunder outline hijau / solid */}
             <button
+              type="button"
               onClick={handleExportExcel}
-              title="Unduh seluruh data tabel aktif ke file spreadsheet Excel (.xlsx)"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 rounded-lg shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
+              title="Unduh data tabel aktif ke file spreadsheet Excel (.xlsx)"
+              className="h-10 inline-flex items-center gap-1.5 px-3.5 text-sm font-semibold text-emerald-700 bg-white hover:bg-emerald-50 border border-emerald-300 hover:border-emerald-400 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-100" />
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
               <span>Export Excel (.xlsx)</span>
             </button>
 
+            {/* c. Tombol + Tambah Data Manual - style primer hijau solid */}
             <button
+              type="button"
               onClick={onOpenManualModal}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
+              className="h-10 inline-flex items-center gap-1.5 px-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95"
             >
-              <Plus className="w-3.5 h-3.5 text-emerald-700" />
+              <Plus className="w-4 h-4" />
               <span>+ Tambah Data Manual</span>
             </button>
           </div>
-
         </div>
 
-        {/* Secondary Filter Dropdowns & Date Range Inputs */}
-        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex items-center gap-1 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
-            <Filter className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Filter Detail:</span>
-          </div>
+        {/* BARIS 2: FILTER PARAMETER OPERASIONAL & KONTROL HALAMAN */}
+        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
+          {/* Kiri (Grup Filter) */}
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            {/* Label/ikon corong: "Filter:" */}
+            <div className="flex items-center gap-1.5 text-slate-600 font-semibold text-sm mr-0.5">
+              <Filter className="w-4 h-4 text-emerald-600" />
+              <span>Filter:</span>
+            </div>
 
-          {/* Pengawas */}
-          <select
-            value={selectedPengawas}
-            onChange={(e) => {
-              setSelectedPengawas(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-          >
-            <option value="Semua">Pengawas: Semua</option>
-            {supervisors.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-
-          {/* Unit */}
-          <select
-            value={selectedUnit}
-            onChange={(e) => {
-              setSelectedUnit(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-          >
-            <option value="Semua">Unit: Semua</option>
-            {units.map((u) => (
-              <option key={u.id} value={u.kode_unit}>{u.kode_unit} ({u.jenis_unit})</option>
-            ))}
-          </select>
-
-          {/* Shift */}
-          <select
-            value={selectedShift}
-            onChange={(e) => {
-              setSelectedShift(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-          >
-            <option value="Semua">Shift: Semua</option>
-            <option value="Siang">Shift Siang</option>
-            <option value="Malam">Shift Malam</option>
-          </select>
-
-          {/* Status Unit Filter */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => {
-              setSelectedStatus(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
-          >
-            <option value="Semua">Status: Semua</option>
-            <option value="OPERASI">Status: OPERASI</option>
-            <option value="STANDBY">Status: STANDBY</option>
-            <option value="BREAKDOWN">Status: BREAKDOWN</option>
-          </select>
-
-          {/* Date Range Inputs (Tanggal Kerja WIB) with Shortcuts */}
-          <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
-            <Calendar className="w-3.5 h-3.5 text-slate-500 ml-1 shrink-0" />
-            <span className="text-[11px] font-semibold text-slate-600">Rentang WIB:</span>
-            <input
-              type="date"
-              value={startDate}
+            {/* Dropdown Pengawas (default: "Semua Pengawas") */}
+            <select
+              value={selectedPengawas}
               onChange={(e) => {
-                setStartDate(e.target.value);
-                setActivePreset('custom');
+                setSelectedPengawas(e.target.value);
                 setCurrentPage(1);
               }}
-              title="Tanggal Awal Operasional (WIB)"
-              className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-emerald-500 font-mono"
-            />
-            <span className="text-slate-400 font-semibold text-xs">s/d</span>
-            <input
-              type="date"
-              value={endDate}
+              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+            >
+              <option value="Semua">Semua Pengawas</option>
+              {supervisors.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+
+            {/* Dropdown Unit (default: "Semua Unit") */}
+            <select
+              value={selectedUnit}
               onChange={(e) => {
-                setEndDate(e.target.value);
-                setActivePreset('custom');
+                setSelectedUnit(e.target.value);
                 setCurrentPage(1);
               }}
-              title="Tanggal Akhir Operasional (WIB)"
-              className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-emerald-500 font-mono"
-            />
+              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+            >
+              <option value="Semua">Semua Unit</option>
+              {units.map((u) => (
+                <option key={u.id} value={u.kode_unit}>{u.kode_unit} ({u.jenis_unit})</option>
+              ))}
+            </select>
 
-            {/* Shortcut Filter Tanggal: [Hari Ini], [Kemarin], [Reset Filter] */}
-            <div className="flex items-center gap-1 border-l border-slate-300 pl-1.5 ml-0.5">
-              <button
-                type="button"
-                onClick={() => applyPreset('hariIni')}
-                title="Filter khusus hari ini"
-                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer ${
-                  activePreset === 'hariIni'
-                    ? 'bg-emerald-600 text-white shadow-2xs'
-                    : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-                }`}
-              >
-                Hari Ini
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('kemarin')}
-                title="Filter khusus kemarin"
-                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer ${
-                  activePreset === 'kemarin'
-                    ? 'bg-emerald-600 text-white shadow-2xs'
-                    : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-                }`}
-              >
-                Kemarin
-              </button>
+            {/* Dropdown Shift (default: "Semua Shift") */}
+            <select
+              value={selectedShift}
+              onChange={(e) => {
+                setSelectedShift(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+            >
+              <option value="Semua">Semua Shift</option>
+              <option value="Siang">Shift Siang</option>
+              <option value="Malam">Shift Malam</option>
+            </select>
+
+            {/* Dropdown Status (default: "Semua Status") */}
+            <select
+              value={selectedStatus}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer font-medium"
+            >
+              <option value="Semua">Semua Status</option>
+              <option value="OPERASI">Status: OPERASI</option>
+              <option value="STANDBY">Status: STANDBY</option>
+              <option value="BREAKDOWN">Status: BREAKDOWN</option>
+            </select>
+
+            {/* Date Picker Rentang Tanggal ringkas (WIB) */}
+            <div className="flex items-center gap-1.5 h-9 bg-white px-2.5 rounded-md border border-slate-300">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="text-xs text-slate-500 font-medium">WIB:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setActivePreset('custom');
+                  setCurrentPage(1);
+                }}
+                title="Tanggal Awal Operasional (WIB)"
+                className="text-xs font-mono text-slate-800 bg-transparent border-0 p-0 focus:outline-hidden"
+              />
+              <span className="text-slate-400 text-xs">s/d</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setActivePreset('custom');
+                  setCurrentPage(1);
+                }}
+                title="Tanggal Akhir Operasional (WIB)"
+                className="text-xs font-mono text-slate-800 bg-transparent border-0 p-0 focus:outline-hidden"
+              />
+            </div>
+
+            {/* Tombol kecil: "Reset Filter" (hanya muncul/aktif jika filter sedang diterapkan) */}
+            {isFilterActive && (
               <button
                 type="button"
                 onClick={resetFilters}
                 title="Reset seluruh filter pencarian dan tanggal"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer"
+                className="h-9 inline-flex items-center gap-1.5 px-2.5 rounded-md text-xs font-semibold bg-white text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-colors shadow-2xs cursor-pointer animate-in fade-in"
               >
-                <RotateCcw className="w-2.5 h-2.5 text-slate-500" />
-                Reset Filter
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Filter</span>
               </button>
-            </div>
+            )}
           </div>
 
-          <div className="ml-auto text-xs text-slate-500 font-medium flex items-center gap-2">
-            <span className="hidden sm:inline">Data per Hal:</span>
+          {/* Kanan: Dropdown kontrol paginasi sejajar rapi di ujung kanan */}
+          <div className="flex items-center gap-2 text-sm text-slate-600 font-medium ml-auto shrink-0">
+            <span>Data per Hal:</span>
             <select
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-800 font-bold text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-800 font-semibold text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer shadow-2xs"
             >
               <option value={15}>15</option>
               <option value={25}>25</option>
@@ -915,18 +879,19 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       <div className="min-w-0 space-y-1">
                         {/* Baris 1: Aktivitas & SAP */}
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span 
-                            className="font-bold text-slate-800 text-xs truncate max-w-[210px]"
-                            title={row.nama_aktivitas}
-                          >
-                            {row.nama_aktivitas}
-                          </span>
-                          <span className="font-mono text-[9px] font-bold px-1 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-                            {row.kode_sap}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                            ({row.satuan})
-                          </span>
+                          <div className="font-medium text-slate-800 text-xs">
+                            {row.aktivitas_aktual || row.nama_aktivitas || row.aktivitas || "Aktivitas Belum Dipilih"}
+                          </div>
+                          {row.kode_sap && (
+                            <span className="badge-sap text-xs bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 mt-0.5 inline-block shrink-0">
+                              {row.kode_sap}
+                            </span>
+                          )}
+                          {row.satuan && (
+                            <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                              ({row.satuan})
+                            </span>
+                          )}
                         </div>
 
                         {/* Status Menunggu Realisasi jika belum diinput dari HP Android */}
