@@ -17,6 +17,7 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
   globalHmStandar = { min: 6.0, max: 10.0 }
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
 
@@ -109,10 +110,6 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
       setIsSubmitting(false);
     }
   };
-
-
-
-  const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
 
   const handleToggleStatus = async (unit: Unit) => {
     const nextStatus = (unit.status_aktif ?? 1) === 1 ? 0 : 1;

@@ -10,6 +10,7 @@ interface MasterAktivitasProps {
 
 export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAktivitas, setEditingAktivitas] = useState<AktivitasUnit | null>(null);
 
@@ -81,10 +82,6 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
       setIsSubmitting(false);
     }
   };
-
-
-
-  const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
 
   const handleToggleStatus = async (item: AktivitasUnit) => {
     const nextStatus = (item.status_aktif ?? 1) === 1 ? 0 : 1;

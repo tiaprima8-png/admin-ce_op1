@@ -11,6 +11,7 @@ interface MasterOperatorsProps {
 
 export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, supervisors, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null);
 
@@ -78,10 +79,6 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
       setIsSubmitting(false);
     }
   };
-
-
-
-  const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
 
   const handleToggleStatus = async (op: Operator) => {
     const nextStatus = (op.status_aktif ?? 1) === 1 ? 0 : 1;

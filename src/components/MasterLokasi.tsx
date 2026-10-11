@@ -37,6 +37,7 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterWilayah, setFilterWilayah] = useState('Semua');
+  const [filterStatus, setFilterStatus] = useState<'Semua' | '1' | '0'>('Semua');
 
   // Single CRUD modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -132,8 +133,6 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
       setIsSaving(false);
     }
   };
-
-  const [filterStatus, setFilterStatus] = useState<'Semua' | '1' | '0'>('Semua');
 
   // Delete submit (Soft delete)
   const handleDeleteSubmit = async () => {
