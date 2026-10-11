@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, 
   Plus, 
@@ -23,6 +23,9 @@ import {
 import { HasilInputAktivitas, Unit, AktivitasUnit, Operator } from '../types';
 import { exportToExcel } from '../utils/export';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
+import { KpiCards } from './KpiCards';
+import { socket } from '../utils/socket';
+import { soundService } from '../utils/sound';
 
 const getWibToday = (): string => {
   const now = new Date();
@@ -86,6 +89,197 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   onRefresh,
   onViewPhoto
 }) => {
+  // 1. Data list state initialized with props, immediately prependable by WebSocket
+  const [dataList, setDataList] = useState<HasilInputAktivitas[]>(activities);
+
+  // Local glowing row highlight tracker (2-3 detik)
+  const [highlightIds, setHighlightIds] = useState<Set<number | string>>(new Set());
+
+  // Synchronize with prop changes when parent updates (deduplicated by id)
+  useEffect(() => {
+    const seen = new Set<string | number>();
+    const unique = activities.filter(item => {
+      if (!item.id || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+    setDataList(unique);
+  }, [activities]);
+
+  // WebSocket Listener: NEW_REALISASI_SUBMITTED & NEW_RENCANA_KERJA
+  useEffect(() => {
+    const handleNewRealisasi = (payload: any) => {
+      console.log('⚡ [BERANDA/Rekapitulasi] Menerima event WebSocket NEW_REALISASI_SUBMITTED:', payload);
+      const raw = payload?.aktivitas || payload?.data || payload;
+      if (!raw) return;
+
+      const id = raw.id || Date.now();
+      const numHmAwal = parseFloat(raw.hm_awal) || 0;
+      const numHmAkhir = parseFloat(raw.hm_akhir) || 0;
+      const calculatedHm = raw.hm_harian_berjalan !== undefined 
+        ? parseFloat(raw.hm_harian_berjalan) 
+        : (raw.durasi_hm !== undefined ? parseFloat(raw.durasi_hm) : Math.round((numHmAkhir - numHmAwal) * 10) / 10);
+      const numSolar = raw.jumlah_liter_solar !== undefined 
+        ? parseFloat(raw.jumlah_liter_solar) 
+        : (raw.solar !== undefined ? parseFloat(raw.solar) : 0);
+
+      const targetPlanId = raw.rencana_id || raw.id_rencana_kerja || null;
+
+      const newData: HasilInputAktivitas = {
+        id,
+        rencana_id: targetPlanId,
+        id_rencana_kerja: targetPlanId,
+        nama_pengawas: raw.nama_pengawas || raw.pengawas || 'Pengawas Lapangan',
+        tanggal: raw.tanggal || getWibToday(),
+        tanggal_kerja: raw.tanggal_kerja || raw.tanggal || getWibToday(),
+        kode_unit: raw.kode_unit || raw.unit || 'UNIT',
+        nama_aktivitas: raw.nama_aktivitas || raw.aktivitas || 'Operasional Lapangan',
+        kode_sap: raw.kode_sap || 'ACT-SAP-101',
+        satuan: raw.satuan || 'm3',
+        operator: raw.operator || 'Operator Default',
+        nik_operator: raw.nik_operator || 'NIK-00000',
+        kode_lokasi: raw.kode_lokasi || raw.lokasi || '001A',
+        lokasi: raw.lokasi || raw.kode_lokasi || 'Pit Operasional',
+        nomor_spk: raw.nomor_spk || null,
+        status_spk: raw.status_spk || 'TEREALISASI',
+        status_realisasi: 'TEREALISASI',
+        shift_kerja: (raw.shift_kerja || raw.shift || 'Siang').toLowerCase() === 'malam' ? 'Malam' : 'Siang',
+        jam_kerja: parseFloat(raw.jam_kerja) || 0,
+        hm_awal: numHmAwal,
+        hm_akhir: numHmAkhir,
+        hm_harian_berjalan: calculatedHm,
+        hasil_kerja: parseFloat(raw.hasil_kerja) || 0,
+        keterangan: raw.keterangan || '',
+        foto_bukti: raw.foto_bukti || null,
+        has_foto_bukti: Boolean(raw.foto_bukti || raw.has_foto_bukti),
+        has_foto: Boolean(raw.foto_bukti || raw.has_foto_bukti),
+        status_unit: (raw.status_unit || 'OPERASI').toUpperCase(),
+        is_isi_solar: raw.is_isi_solar ?? (numSolar > 0 ? 1 : 0),
+        jumlah_liter_solar: numSolar,
+        stik_awal: raw.stik_awal ?? null,
+        stik_akhir: raw.stik_akhir ?? null,
+        kendala_list: raw.kendala || raw.kendala_list || null,
+        is_hm_awal_corrected: raw.is_hm_awal_corrected ?? 0,
+        alasan_koreksi_hm: raw.alasan_koreksi_hm ?? null,
+        created_at: raw.created_at || new Date().toISOString(),
+        model_unit: raw.model_unit,
+        wilayah: raw.wilayah
+      };
+
+      // 1. Sisipkan data baru ke posisi paling atas daftar tabel secara instan (gantikan baris rencana kerja terkait jika sebelumnya berstatus menunggu)
+      setDataList((prevList) => {
+        const filtered = prevList.filter(item => 
+          item.id !== id && 
+          item.id !== targetPlanId && 
+          !(targetPlanId && item.rencana_id === targetPlanId) &&
+          !(item.status_realisasi === 'BELUM_INPUT' && item.kode_unit === newData.kode_unit && (item.tanggal === newData.tanggal || item.tanggal_kerja === newData.tanggal_kerja))
+        );
+        return [newData, ...filtered];
+      });
+
+      // Langsung arahkan ke halaman 1 agar baris baru segera terlihat
+      setCurrentPage(1);
+
+      // 2. Tambahkan efek animasi highlight warna hijau lembut pada baris baru selama 2-3 detik
+      setHighlightIds((prev) => new Set(prev).add(id));
+      setTimeout(() => {
+        setHighlightIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }, 3000);
+
+      // Play soft chime audio
+      soundService.playSuccess();
+    };
+
+    const handleNewRencana = (payload: any) => {
+      console.log('⚡ [BERANDA] Menerima event WebSocket NEW_RENCANA_KERJA:', payload);
+      const raw = payload?.data || payload;
+      if (!raw) return;
+
+      const id = raw.id || `RK-${Date.now()}`;
+      const planDate = raw.tanggal || getWibToday();
+
+      const newRencanaItem: HasilInputAktivitas = {
+        id,
+        rencana_id: raw.id || raw.id_rencana_kerja || raw.rencana_id || null,
+        id_rencana_kerja: raw.id || raw.id_rencana_kerja || null,
+        nama_pengawas: raw.nama_pengawas || raw.pengawas || 'Pengawas Lapangan',
+        tanggal: planDate,
+        tanggal_kerja: raw.tanggal_kerja || planDate,
+        kode_unit: raw.kode_unit || raw.unit || 'UNIT',
+        nama_aktivitas: raw.keterangan_rencana || raw.nama_aktivitas || 'Rencana Kerja Operasional',
+        kode_sap: raw.kode_sap || 'ACT-SAP-101',
+        satuan: raw.satuan || 'm3',
+        operator: raw.operator || 'Operator Default',
+        nik_operator: raw.nik_operator || '-',
+        kode_lokasi: raw.kode_lokasi || raw.lokasi || '001A',
+        lokasi: raw.lokasi || raw.wilayah || raw.kode_lokasi || 'Pit Operasional',
+        nomor_spk: raw.nomor_spk || null,
+        status_spk: raw.status_spk || (raw.nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU'),
+        status_realisasi: 'BELUM_INPUT',
+        shift_kerja: (raw.shift_kerja || raw.shift || 'Siang').toLowerCase() === 'malam' ? 'Malam' : 'Siang',
+        jam_kerja: null,
+        hm_awal: null,
+        hm_akhir: null,
+        hm_harian_berjalan: null,
+        durasi_hm: null,
+        hasil_kerja: null,
+        keterangan: raw.keterangan_rencana || raw.keterangan || '',
+        foto_bukti: null,
+        has_foto_bukti: false,
+        has_foto: false,
+        has_foto_solar: false,
+        status_unit: (raw.status_unit || 'OPERASI').toUpperCase(),
+        is_isi_solar: 0,
+        jumlah_liter_solar: null,
+        stik_awal: null,
+        stik_akhir: null,
+        kendala_list: null,
+        is_hm_awal_corrected: 0,
+        alasan_koreksi_hm: null,
+        created_at: raw.created_at || new Date().toISOString(),
+        model_unit: raw.model_unit,
+        wilayah: raw.wilayah
+      };
+
+      // 1. Sisipkan rencana kerja baru ke baris paling atas tabel Beranda secara instan
+      setDataList((prevList) => {
+        const filtered = prevList.filter(item => 
+          item.id !== id && 
+          !(newRencanaItem.rencana_id && item.rencana_id === newRencanaItem.rencana_id)
+        );
+        return [newRencanaItem, ...filtered];
+      });
+
+      // Langsung arahkan ke halaman 1 agar baris baru segera terlihat
+      setCurrentPage(1);
+
+      // 2. Beri efek animasi highlight visual warna hijau lembut pada baris baru selama 2-3 detik
+      setHighlightIds((prev) => new Set(prev).add(id));
+      setTimeout(() => {
+        setHighlightIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }, 3000);
+
+      // Play soft chime audio
+      soundService.playSuccess();
+    };
+
+    socket.on("NEW_REALISASI_SUBMITTED", handleNewRealisasi);
+    socket.on("NEW_RENCANA_KERJA", handleNewRencana);
+
+    return () => {
+      socket.off("NEW_REALISASI_SUBMITTED", handleNewRealisasi);
+      socket.off("NEW_RENCANA_KERJA", handleNewRencana);
+    };
+  }, []);
+
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPengawas, setSelectedPengawas] = useState('Semua');
@@ -96,7 +290,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   // Date Range State (Default: 7 Hari Terakhir WIB)
   const [startDate, setStartDate] = useState<string>(() => getWibDaysAgo(6));
   const [endDate, setEndDate] = useState<string>(() => getWibToday());
-  const [activePreset, setActivePreset] = useState<'hariIni' | '7hari' | '30hari' | 'bulanIni' | 'semua' | 'custom'>('7hari');
+  const [activePreset, setActivePreset] = useState<'hariIni' | 'kemarin' | '7hari' | '30hari' | 'bulanIni' | 'semua' | 'custom'>('7hari');
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<HasilInputAktivitas | null>(null);
@@ -107,14 +301,18 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(25);
 
-  const applyPreset = (preset: 'hariIni' | '7hari' | '30hari' | 'bulanIni' | 'semua') => {
+  const applyPreset = (preset: 'hariIni' | 'kemarin' | '7hari' | '30hari' | 'bulanIni' | 'semua') => {
     const today = getWibToday();
+    const yesterday = getWibDaysAgo(1);
     setActivePreset(preset);
     setCurrentPage(1);
 
     if (preset === 'hariIni') {
       setStartDate(today);
       setEndDate(today);
+    } else if (preset === 'kemarin') {
+      setStartDate(yesterday);
+      setEndDate(yesterday);
     } else if (preset === '7hari') {
       setStartDate(getWibDaysAgo(6));
       setEndDate(today);
@@ -131,50 +329,60 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     }
   };
 
-  // Filter logic
-  const filteredActivities = activities.filter((item) => {
-    // Search term matching
-    if (searchTerm.trim() !== '') {
-      const term = searchTerm.toLowerCase();
-      const matchTerm = 
-        (item.nama_pengawas || '').toLowerCase().includes(term) ||
-        (item.kode_unit || '').toLowerCase().includes(term) ||
-        (item.kode_sap || '').toLowerCase().includes(term) ||
-        (item.operator || '').toLowerCase().includes(term) ||
-        (item.nama_aktivitas || '').toLowerCase().includes(term) ||
-        (item.lokasi || '').toLowerCase().includes(term) ||
-        (item.kode_lokasi || '').toLowerCase().includes(term) ||
-        (item.nomor_spk || '').toLowerCase().includes(term);
-      if (!matchTerm) return false;
-    }
+  // Filter logic: Disaring dari dataList reaktif (deduplikasi ID)
+  const filteredActivities = useMemo(() => {
+    const seenIds = new Set<string | number>();
+    return dataList.filter((item) => {
+      if (!item.id || seenIds.has(item.id)) return false;
+      seenIds.add(item.id);
 
-    if (selectedPengawas !== 'Semua' && item.nama_pengawas !== selectedPengawas) {
-      return false;
-    }
+      // Search term matching
+      if (searchTerm.trim() !== '') {
+        const term = searchTerm.toLowerCase();
+        const matchTerm = 
+          (item.nama_pengawas || '').toLowerCase().includes(term) ||
+          (item.kode_unit || '').toLowerCase().includes(term) ||
+          (item.kode_sap || '').toLowerCase().includes(term) ||
+          (item.operator || '').toLowerCase().includes(term) ||
+          (item.nama_aktivitas || '').toLowerCase().includes(term) ||
+          (item.lokasi || '').toLowerCase().includes(term) ||
+          (item.kode_lokasi || '').toLowerCase().includes(term) ||
+          (item.nomor_spk || '').toLowerCase().includes(term);
+        if (!matchTerm) return false;
+      }
 
-    if (selectedUnit !== 'Semua' && item.kode_unit !== selectedUnit) {
-      return false;
-    }
+      if (selectedPengawas !== 'Semua' && item.nama_pengawas !== selectedPengawas) {
+        return false;
+      }
 
-    if (selectedShift !== 'Semua' && item.shift_kerja !== selectedShift) {
-      return false;
-    }
+      if (selectedUnit !== 'Semua' && item.kode_unit !== selectedUnit) {
+        return false;
+      }
 
-    if (selectedStatus !== 'Semua' && item.status_unit !== selectedStatus) {
-      return false;
-    }
+      if (selectedShift !== 'Semua' && item.shift_kerja !== selectedShift) {
+        return false;
+      }
 
-    // WIB Business Date Filtering (tanggal_kerja or fallback tanggal)
-    const itemDate = item.tanggal_kerja || item.tanggal;
-    if (startDate && itemDate < startDate) {
-      return false;
-    }
-    if (endDate && itemDate > endDate) {
-      return false;
-    }
+      if (selectedStatus !== 'Semua' && item.status_unit !== selectedStatus) {
+        return false;
+      }
 
-    return true;
-  });
+      // Pastikan baris baru real-time selalu lolos filter tanggal agar langsung terlihat di baris paling atas
+      const isRealtimeNew = highlightIds.has(item.id) || newActivityIds.has(item.id) || highlightIds.has(Number(item.id)) || newActivityIds.has(Number(item.id));
+      if (!isRealtimeNew) {
+        // WIB Business Date Filtering (tanggal_kerja or fallback tanggal)
+        const itemDate = item.tanggal_kerja || item.tanggal;
+        if (startDate && itemDate < startDate) {
+          return false;
+        }
+        if (endDate && itemDate > endDate) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [dataList, searchTerm, selectedPengawas, selectedUnit, selectedShift, selectedStatus, highlightIds, newActivityIds, startDate, endDate]);
 
   const totalPages = Math.ceil(filteredActivities.length / pageSize) || 1;
   const paginatedActivities = filteredActivities.slice(
@@ -242,6 +450,20 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         </div>
       )}
 
+      {/* Dynamic KPI Metric Cards (Adapts to Active Date/Shift/Status/Unit Filter) */}
+      <KpiCards
+        filteredActivities={filteredActivities}
+        filterLabel={
+          activePreset === 'hariIni'
+            ? 'Data Operasional Hari Ini'
+            : activePreset === 'kemarin'
+            ? 'Data Operasional Kemarin'
+            : startDate && endDate
+            ? `Periode ${startDate} s/d ${endDate}`
+            : 'Akumulasi seluruh filter aktif'
+        }
+      />
+
       {/* FILTER & ACTION TOOLBAR */}
       <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs space-y-3">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
@@ -271,6 +493,15 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               }`}
             >
               Hari Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('kemarin')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs ${
+                activePreset === 'kemarin' ? 'bg-emerald-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              Kemarin
             </button>
             <button
               type="button"
@@ -398,8 +629,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             <option value="BREAKDOWN">Status: BREAKDOWN</option>
           </select>
 
-          {/* Date Range Inputs (Tanggal Kerja WIB) */}
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
+          {/* Date Range Inputs (Tanggal Kerja WIB) with Shortcuts */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
             <Calendar className="w-3.5 h-3.5 text-slate-500 ml-1 shrink-0" />
             <span className="text-[11px] font-semibold text-slate-600">Rentang WIB:</span>
             <input
@@ -425,17 +656,44 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               title="Tanggal Akhir Operasional (WIB)"
               className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-emerald-500 font-mono"
             />
-          </div>
 
-          {(searchTerm || selectedPengawas !== 'Semua' || selectedUnit !== 'Semua' || selectedShift !== 'Semua' || selectedStatus !== 'Semua' || activePreset !== '7hari') && (
-            <button
-              onClick={resetFilters}
-              className="inline-flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer font-semibold"
-            >
-              <RotateCcw className="w-3 h-3 text-slate-500" />
-              Reset Filter
-            </button>
-          )}
+            {/* Shortcut Filter Tanggal: [Hari Ini], [Kemarin], [Reset Filter] */}
+            <div className="flex items-center gap-1 border-l border-slate-300 pl-1.5 ml-0.5">
+              <button
+                type="button"
+                onClick={() => applyPreset('hariIni')}
+                title="Filter khusus hari ini"
+                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer ${
+                  activePreset === 'hariIni'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                }`}
+              >
+                Hari Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('kemarin')}
+                title="Filter khusus kemarin"
+                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer ${
+                  activePreset === 'kemarin'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                }`}
+              >
+                Kemarin
+              </button>
+              <button
+                type="button"
+                onClick={resetFilters}
+                title="Reset seluruh filter pencarian dan tanggal"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-2.5 h-2.5 text-slate-500" />
+                Reset Filter
+              </button>
+            </div>
+          </div>
 
           <div className="ml-auto text-xs text-slate-500 font-medium flex items-center gap-2">
             <span className="hidden sm:inline">Data per Hal:</span>
@@ -521,14 +779,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 </td>
               </tr>
             ) : (
-              paginatedActivities.map((row) => {
-                const isGlowing = newActivityIds.has(typeof row.id === 'number' ? row.id : parseInt(String(row.id), 10));
+              paginatedActivities.map((row, idx) => {
+                const isGlowing = highlightIds.has(row.id) || 
+                  highlightIds.has(Number(row.id)) || 
+                  newActivityIds.has(typeof row.id === 'number' ? row.id : parseInt(String(row.id), 10));
                 const kendalaItems = parseKendalaList(row.kendala_list);
                 const isMalam = (row.shift_kerja || '').toUpperCase() === 'MALAM';
 
                 return (
                   <tr
-                    key={row.id}
+                    key={`${row.id || 'act'}-${idx}`}
                     className={`transition-colors duration-300 hover:bg-slate-50/80 ${
                       isGlowing ? 'bg-emerald-50 ring-1 ring-emerald-300' : ''
                     }`}
@@ -537,7 +797,15 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     {/* Kolom 1 [FOTO & SPK]: Thumbnail compact 36x36px + Nomor SPK */}
                     <td className="py-2.5 px-2 text-center align-top">
                       <div className="flex flex-col items-center gap-1">
-                        {Boolean(row.has_foto_bukti || row.has_foto || row.foto_bukti) ? (
+                        {row.status_realisasi === 'BELUM_INPUT' ? (
+                          <div 
+                            title="Menunggu input laporan realisasi dari Android"
+                            className="h-7 px-2 shrink-0 rounded-md bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 text-[10px] font-semibold gap-1"
+                          >
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            <span>Menunggu</span>
+                          </div>
+                        ) : Boolean(row.has_foto_bukti || row.has_foto || row.foto_bukti) ? (
                           <button
                             type="button"
                             onClick={() => onViewPhoto(row)}
@@ -566,7 +834,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           </span>
                         ) : (
                           <span className="text-[9px] text-slate-400 italic">
-                            Tanpa SPK
+                            {row.status_spk || 'Tanpa SPK'}
                           </span>
                         )}
                       </div>
@@ -661,6 +929,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           </span>
                         </div>
 
+                        {/* Status Menunggu Realisasi jika belum diinput dari HP Android */}
+                        {row.status_realisasi === 'BELUM_INPUT' && (
+                          <div className="pt-0.5">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                              Menunggu Realisasi Lapangan
+                            </span>
+                          </div>
+                        )}
+
                         {/* Baris 2: Stack Kendala jika ada */}
                         {kendalaItems && kendalaItems.length > 0 && (
                           <div className="space-y-1 pt-0.5">
@@ -725,88 +1003,109 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     </td>
 
                     {/* Kolom 7 [OPERASIONAL HM & SOLAR]: 
-                        Baris 1: Total HM Berjalan tebal | Jam (misal: "4.0 HM | 8.0 Jam")
-                        Baris 2: Range HM Awal s/d Akhir (teks abu-abu ringkas, misal: "HM: 1,240.5 → 1,244.5")
-                        Baris 3: Stik BBM / Liter Solar (misal: "Stik: 45→20 | 120 L") */}
+                        Jika status_realisasi === 'BELUM_INPUT', tampilkan tanda strip "-" dan status "Menunggu Realisasi" */}
                     <td className="py-2.5 px-2 text-right align-top">
-                      <div className="text-right">
-                        {/* Baris 1: Total HM Berjalan tebal */}
-                        <div className="text-xs">
-                          <span className="font-bold text-emerald-800 font-mono">
-                            {row.hm_harian_berjalan.toFixed(1)} HM
-                          </span>
-                          <span className="text-slate-300 mx-1">|</span>
-                          <span className="text-slate-600 font-medium font-mono">
-                            {row.jam_kerja} Jam
-                          </span>
+                      {row.status_realisasi === 'BELUM_INPUT' || row.hm_awal === null || row.hm_awal === undefined ? (
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-slate-400 font-mono">
+                            -
+                          </div>
+                          <div className="text-[10px] text-amber-700 font-semibold mt-0.5 inline-flex items-center gap-1 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                            <Clock className="w-2.5 h-2.5 text-amber-600" />
+                            <span>Menunggu Realisasi</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            HM: - → - | Solar: -
+                          </div>
                         </div>
-
-                        {/* Baris 2: Range HM Awal s/d Akhir */}
-                        <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 font-mono mt-0.5 flex-wrap">
-                          <span className="text-slate-400">HM:</span>
-                          <span className="font-semibold text-slate-700">
-                            {row.hm_awal.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                          </span>
-                          {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
-                            <span 
-                              title={row.alasan_koreksi_hm ? `Alasan Koreksi: ${row.alasan_koreksi_hm}` : 'HM Awal telah dikoreksi oleh pengawas'}
-                              className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold font-sans cursor-help shrink-0 shadow-2xs"
-                            >
-                              <Pencil className="w-2.5 h-2.5 text-amber-700" />
-                              <span>Koreksi</span>
+                      ) : (
+                        <div className="text-right">
+                          {/* Baris 1: Total HM Berjalan tebal */}
+                          <div className="text-xs">
+                            <span className="font-bold text-emerald-800 font-mono">
+                              {(row.hm_harian_berjalan || 0).toFixed(1)} HM
                             </span>
-                          )}
-                          <span className="text-slate-400">→</span>
-                          <span className="font-semibold text-slate-700">
-                            {row.hm_akhir.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                          </span>
-                        </div>
-
-                        {/* Baris 2B: Alasan Koreksi HM Pengawas (jika is_hm_awal_corrected = 1) */}
-                        {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
-                          <div 
-                            className="text-[9px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5 max-w-[210px] ml-auto truncate cursor-help text-left flex items-center gap-1 font-sans font-medium"
-                            title={`Alasan Koreksi Pengawas: "${row.alasan_koreksi_hm || 'Perbaikan koreksi HM awal lapangan'}"`}
-                          >
-                            <Pencil className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                            <span className="truncate italic">
-                              Koreksi: {row.alasan_koreksi_hm || 'Audit koreksi pengawas'}
+                            <span className="text-slate-300 mx-1">|</span>
+                            <span className="text-slate-600 font-medium font-mono">
+                              {row.jam_kerja || 0} Jam
                             </span>
                           </div>
-                        )}
 
-                        {/* Baris 3: Stik BBM / Liter Solar */}
-                        <div className="text-[10px] mt-0.5 font-mono">
-                          {row.stik_awal !== undefined && row.stik_awal !== null && row.stik_akhir !== undefined && row.stik_akhir !== null ? (
-                            <span className="text-slate-600 font-medium">
-                              Stik: {row.stik_awal}→{row.stik_akhir}
-                              {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
-                                <span className="text-amber-700 font-bold ml-1">
-                                  | {row.jumlah_liter_solar.toLocaleString('id-ID')} L
-                                </span>
-                              ) : ''}
+                          {/* Baris 2: Range HM Awal s/d Akhir */}
+                          <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 font-mono mt-0.5 flex-wrap">
+                            <span className="text-slate-400">HM:</span>
+                            <span className="font-semibold text-slate-700">
+                              {(row.hm_awal || 0).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                             </span>
-                          ) : row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
-                            <span className="inline-flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
-                              <Fuel className="w-2.5 h-2.5 inline text-amber-600" />
-                              {row.jumlah_liter_solar.toLocaleString('id-ID')} L
+                            {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
+                              <span 
+                                title={row.alasan_koreksi_hm ? `Alasan Koreksi: ${row.alasan_koreksi_hm}` : 'HM Awal telah dikoreksi oleh pengawas'}
+                                className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold font-sans cursor-help shrink-0 shadow-2xs"
+                              >
+                                <Pencil className="w-2.5 h-2.5 text-amber-700" />
+                                <span>Koreksi</span>
+                              </span>
+                            )}
+                            <span className="text-slate-400">→</span>
+                            <span className="font-semibold text-slate-700">
+                              {(row.hm_akhir || 0).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                             </span>
-                          ) : (
-                            <span className="text-slate-300 font-medium">-</span>
+                          </div>
+
+                          {/* Baris 2B: Alasan Koreksi HM Pengawas (jika is_hm_awal_corrected = 1) */}
+                          {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
+                            <div 
+                              className="text-[9px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5 max-w-[210px] ml-auto truncate cursor-help text-left flex items-center gap-1 font-sans font-medium"
+                              title={`Alasan Koreksi Pengawas: "${row.alasan_koreksi_hm || 'Perbaikan koreksi HM awal lapangan'}"`}
+                            >
+                              <Pencil className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                              <span className="truncate italic">
+                                Koreksi: {row.alasan_koreksi_hm || 'Audit koreksi pengawas'}
+                              </span>
+                            </div>
                           )}
+
+                          {/* Baris 3: Stik BBM / Liter Solar */}
+                          <div className="text-[10px] mt-0.5 font-mono">
+                            {row.stik_awal !== undefined && row.stik_awal !== null && row.stik_akhir !== undefined && row.stik_akhir !== null ? (
+                              <span className="text-slate-600 font-medium">
+                                Stik: {row.stik_awal}→{row.stik_akhir}
+                                {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
+                                  <span className="text-amber-700 font-bold ml-1">
+                                    | {row.jumlah_liter_solar.toLocaleString('id-ID')} L
+                                  </span>
+                                ) : ''}
+                              </span>
+                            ) : row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
+                              <span className="inline-flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                                <Fuel className="w-2.5 h-2.5 inline text-amber-600" />
+                                {row.jumlah_liter_solar.toLocaleString('id-ID')} L
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 font-medium">-</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </td>
 
                     {/* Kolom 8 [HASIL KERJA]: Volume hasil kerja tebal + satuan */}
                     <td className="py-2.5 px-2 text-right align-top">
                       <div className="text-right">
-                        <span className="font-bold text-slate-900 font-mono text-xs block">
-                          {row.hasil_kerja.toLocaleString('id-ID')}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-medium block">
-                          {row.satuan}
-                        </span>
+                        {row.status_realisasi === 'BELUM_INPUT' || row.hasil_kerja === null || row.hasil_kerja === undefined ? (
+                          <span className="font-bold text-slate-400 font-mono text-xs block">
+                            -
+                          </span>
+                        ) : (
+                          <>
+                            <span className="font-bold text-slate-900 font-mono text-xs block">
+                              {(row.hasil_kerja || 0).toLocaleString('id-ID')}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium block">
+                              {row.satuan}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </td>
 

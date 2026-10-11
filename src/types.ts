@@ -4,6 +4,7 @@ export interface User {
   username: string;
   password?: string;
   hak_akses: 'Admin' | 'Pengawas';
+  status_aktif?: number;
 }
 
 export interface Unit {
@@ -50,7 +51,7 @@ export interface Operator {
 
 export type UnitStatus = 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
 
-export type StatusSpk = 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
+export type StatusSpk = 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI' | 'TEREALISASI' | 'MENUNGGU' | string;
 
 export interface Lokasi {
   kode_lokasi: string;
@@ -111,6 +112,7 @@ export interface HasilInputAktivitas {
   id: number | string;
   client_transaction_id?: string | null;
   rencana_id?: string | null;
+  id_rencana_kerja?: string | null;
   nama_pengawas: string;
   tanggal: string;
   tanggal_kerja?: string;
@@ -123,12 +125,15 @@ export interface HasilInputAktivitas {
   kode_lokasi?: string;
   lokasi: string;
   nomor_spk?: string | null;
+  status_spk?: StatusSpk | null;
+  status_realisasi?: 'TEREALISASI' | 'BELUM_INPUT' | string;
   shift_kerja: 'Siang' | 'Malam' | 'SIANG' | 'MALAM';
-  jam_kerja: number;
-  hm_awal: number;
-  hm_akhir: number;
-  hm_harian_berjalan: number;
-  hasil_kerja: number;
+  jam_kerja?: number | null;
+  hm_awal?: number | null;
+  hm_akhir?: number | null;
+  hm_harian_berjalan?: number | null;
+  durasi_hm?: number | null;
+  hasil_kerja?: number | null;
   keterangan: string;
   foto_bukti?: string | null;
   has_foto_bukti?: boolean;
@@ -136,14 +141,17 @@ export interface HasilInputAktivitas {
   has_foto_hm?: boolean;
   has_foto?: boolean;
   status_unit: UnitStatus;
-  is_isi_solar: boolean | number;
-  jumlah_liter_solar: number;
+  is_isi_solar?: boolean | number;
+  solar?: number | null;
+  jumlah_liter_solar?: number | null;
   stik_awal?: number | null;
   stik_akhir?: number | null;
   kendala_list?: KendalaItem[] | string | null;
   is_hm_awal_corrected?: boolean | number;
   alasan_koreksi_hm?: string | null;
   created_at: string;
+  model_unit?: string;
+  wilayah?: string;
   _isNew?: boolean; // UI highlight flag
 }
 

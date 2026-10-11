@@ -14,7 +14,8 @@ import {
   AlertCircle, 
   X,
   FileCheck,
-  HelpCircle
+  HelpCircle,
+  Power
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Lokasi } from '../types';
@@ -143,6 +144,7 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
       setFeedbackNotice(`Lokasi ${deleteTarget.kode_lokasi} berhasil dinonaktifkan (soft delete). Data riwayat tetap aman.`);
       setDeleteTarget(null);
       setTimeout(() => setFeedbackNotice(null), 3500);
+      onRefresh();
     } catch (err: unknown) {
       alert((err as Error).message || 'Gagal menonaktifkan lokasi.');
     } finally {
@@ -150,18 +152,31 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
     }
   };
 
+  // Toggle status Lokasi (On/Off power)
+  const handleToggleStatus = async (item: Lokasi) => {
+    const nextStatus = (item.status_aktif ?? 1) === 1 ? 0 : 1;
+    try {
+      const res = await fetch(`/api/master-lokasi/${item.kode_lokasi}/toggle-status`, {
+        method: 'PATCH'
+      });
+      if (!res.ok) {
+        // Fallback to onSaveLokasi
+        await onSaveLokasi({
+          ...item,
+          status_aktif: nextStatus
+        });
+      }
+      setFeedbackNotice(`Lokasi ${item.kode_lokasi} berhasil di${nextStatus === 1 ? 'aktifkan' : 'nonaktifkan'}!`);
+      setTimeout(() => setFeedbackNotice(null), 3500);
+      onRefresh();
+    } catch (err: unknown) {
+      alert((err as Error).message || 'Gagal mengubah status lokasi.');
+    }
+  };
+
   // Restore Lokasi
   const handleRestoreLokasi = async (item: Lokasi) => {
-    try {
-      await onSaveLokasi({
-        ...item,
-        status_aktif: 1
-      });
-      setFeedbackNotice(`Lokasi ${item.kode_lokasi} berhasil diaktifkan kembali!`);
-      setTimeout(() => setFeedbackNotice(null), 3500);
-    } catch (err: unknown) {
-      alert((err as Error).message || 'Gagal mengaktifkan lokasi.');
-    }
+    await handleToggleStatus(item);
   };
 
   // Download Excel Template
@@ -304,8 +319,8 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
 
   // Summary Metrics
   const totalLokasi = lokasiList.length;
-  const totalLuasBruto = Math.round(lokasiList.reduce((acc, l) => acc + (l.luas_bruto || 0), 0) * 10) / 10;
-  const totalLuasNetto = Math.round(lokasiList.reduce((acc, l) => acc + (l.luas_netto || 0), 0) * 10) / 10;
+  const activeLokasiCount = lokasiList.filter(l => (l.status_aktif ?? 1) === 1).length;
+  const inactiveLokasiCount = totalLokasi - activeLokasiCount;
 
   return (
     <div className="space-y-6">
@@ -336,35 +351,35 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
         </div>
       )}
 
-      {/* Mini KPI Bar */}
+      {/* Top Stats Cards: TOTAL, AKTIF, NONAKTIF */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Titik Lokasi</div>
-            <div className="text-xl font-extrabold text-slate-900 mt-0.5">{totalLokasi} Titik</div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Lokasi</p>
+            <p className="text-xl font-bold text-slate-900 mt-0.5">{totalLokasi}</p>
           </div>
-          <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
             <MapPin className="w-5 h-5" />
           </div>
         </div>
 
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Akumulasi Luas Bruto</div>
-            <div className="text-xl font-extrabold text-slate-900 mt-0.5">{totalLuasBruto} Ha</div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Lokasi Aktif</p>
+            <p className="text-xl font-bold text-emerald-600 mt-0.5">{activeLokasiCount}</p>
           </div>
-          <div className="p-2 rounded-lg bg-slate-100 text-slate-700">
-            <span className="font-bold text-xs font-mono">GROSS</span>
+          <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle className="w-5 h-5" />
           </div>
         </div>
 
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Akumulasi Luas Netto</div>
-            <div className="text-xl font-extrabold text-emerald-800 mt-0.5">{totalLuasNetto} Ha</div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Lokasi Nonaktif</p>
+            <p className="text-xl font-bold text-slate-500 mt-0.5">{inactiveLokasiCount}</p>
           </div>
-          <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
-            <span className="font-bold text-xs font-mono">NET</span>
+          <div className="p-2.5 rounded-lg bg-slate-100 text-slate-500 border border-slate-200">
+            <Power className="w-5 h-5" />
           </div>
         </div>
       </div>
@@ -552,30 +567,37 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
 
                       <td className="py-3 px-4 text-center whitespace-nowrap sticky right-0 bg-white/95 group-hover:bg-slate-50/95">
                         <div className="flex items-center justify-center gap-1.5">
+                          {/* Toggle On / Off Status (Ikon Power) */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(row)}
+                            title={isAktif ? 'Nonaktifkan lokasi ini' : 'Aktifkan kembali lokasi ini'}
+                            className={`p-1.5 rounded-md border transition-colors cursor-pointer ${
+                              isAktif
+                                ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200'
+                                : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200'
+                            }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Tombol Edit (Pensil) */}
                           <button
                             onClick={() => handleOpenModal(row)}
                             title="Edit lokasi"
-                            className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          {isAktif ? (
-                            <button
-                              onClick={() => setDeleteTarget(row)}
-                              title="Nonaktifkan Lokasi (Soft Delete)"
-                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleRestoreLokasi(row)}
-                              title="Pulihkan / Aktifkan Kembali Lokasi"
-                              className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer font-bold text-xs"
-                            >
-                              Pulihkan
-                            </button>
-                          )}
+
+                          {/* Tombol Hapus (Tempat Sampah) */}
+                          <button
+                            onClick={() => setDeleteTarget(row)}
+                            title="Hapus / Nonaktifkan Lokasi"
+                            className="p-1.5 rounded-md border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>

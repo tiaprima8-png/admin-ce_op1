@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   FileCheck2, 
   Search, 
@@ -73,34 +73,43 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   const [formNomorSpk, setFormNomorSpk] = useState('');
   const [formKeterangan, setFormKeterangan] = useState('');
 
-  // Filtered rows
-  const filteredList = rencanaList.filter(item => {
-    if (searchTerm.trim() !== '') {
-      const q = searchTerm.toLowerCase();
-      const match = 
-        (item.nama_pengawas || '').toLowerCase().includes(q) ||
-        (item.kode_unit || '').toLowerCase().includes(q) ||
-        (item.operator || '').toLowerCase().includes(q) ||
-        (item.kode_lokasi || '').toLowerCase().includes(q) ||
-        (item.wilayah || '').toLowerCase().includes(q) ||
-        (item.nomor_spk || '').toLowerCase().includes(q);
-      if (!match) return false;
-    }
+  // Filtered rows (deduplicated by ID to prevent duplicate key warning)
+  const filteredList = useMemo(() => {
+    const seenIds = new Set<string>();
+    return rencanaList.filter(item => {
+      if (!item.id || seenIds.has(String(item.id))) return false;
+      seenIds.add(String(item.id));
 
-    if (filterPengawas !== 'Semua' && item.nama_pengawas !== filterPengawas) {
-      return false;
-    }
+      if (searchTerm.trim() !== '') {
+        const q = searchTerm.toLowerCase();
+        const match = 
+          (item.nama_pengawas || '').toLowerCase().includes(q) ||
+          (item.kode_unit || '').toLowerCase().includes(q) ||
+          (item.operator || '').toLowerCase().includes(q) ||
+          (item.kode_lokasi || '').toLowerCase().includes(q) ||
+          (item.wilayah || '').toLowerCase().includes(q) ||
+          (item.nomor_spk || '').toLowerCase().includes(q);
+        if (!match) return false;
+      }
 
-    if (filterStatusSpk !== 'Semua' && item.status_spk !== filterStatusSpk) {
-      return false;
-    }
+      if (filterPengawas !== 'Semua' && item.nama_pengawas !== filterPengawas) {
+        return false;
+      }
 
-    if (filterTanggal && item.tanggal !== filterTanggal) {
-      return false;
-    }
+      if (filterStatusSpk !== 'Semua') {
+        const s = (item.status_spk || 'MENUNGGU').toUpperCase();
+        if (filterStatusSpk === 'MENUNGGU' && s !== 'MENUNGGU' && s !== 'MENUNGGU_SPK') return false;
+        if (filterStatusSpk === 'SPK_TERBIT' && s !== 'SPK_TERBIT' && s !== 'SPK TERBIT') return false;
+        if (filterStatusSpk === 'TEREALISASI' && s !== 'TEREALISASI' && s !== 'REALISASI_SELESAI' && s !== 'SELESAI') return false;
+      }
 
-    return true;
-  });
+      if (filterTanggal && item.tanggal !== filterTanggal) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [rencanaList, searchTerm, filterPengawas, filterStatusSpk, filterTanggal]);
 
   const resetFilters = () => {
     setSearchTerm('');
@@ -112,14 +121,20 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   // Open SPK issuance modal
   const handleOpenSpkModal = (rk: RencanaKerja) => {
     setSpkModalTarget(rk);
-    setSpkInputValue(rk.nomor_spk || `SPK-${new Date().getFullYear()}-X${Math.floor(100 + Math.random() * 900)}`);
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const seq = String(Math.floor(1 + Math.random() * 900)).padStart(3, '0');
+    setSpkInputValue(rk.nomor_spk || `SPK/CE/${yyyy}/${mm}/${seq}`);
   };
 
-  // Generate automated SPK format
+  // Generate automated SPK format (misal: SPK/CE/2026/10/001)
   const handleAutoGenerateSpk = () => {
-    const year = new Date().getFullYear();
-    const randCode = Math.floor(1000 + Math.random() * 9000);
-    setSpkInputValue(`SPK-${year}-CE${randCode}`);
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const seq = String(Math.floor(1 + Math.random() * 900)).padStart(3, '0');
+    setSpkInputValue(`SPK/CE/${yyyy}/${mm}/${seq}`);
   };
 
   // Submit SPK
@@ -193,9 +208,18 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
   // KPI Quick Stats for Rencana Kerja
   const totalRencana = rencanaList.length;
-  const menungguSpkCount = rencanaList.filter(r => r.status_spk === 'MENUNGGU_SPK').length;
-  const spkTerbitCount = rencanaList.filter(r => r.status_spk === 'SPK_TERBIT').length;
-  const selesaiCount = rencanaList.filter(r => r.status_spk === 'REALISASI_SELESAI').length;
+  const menungguSpkCount = rencanaList.filter(r => {
+    const s = (r.status_spk || 'MENUNGGU').toUpperCase();
+    return s === 'MENUNGGU' || s === 'MENUNGGU_SPK';
+  }).length;
+  const spkTerbitCount = rencanaList.filter(r => {
+    const s = (r.status_spk || '').toUpperCase();
+    return s === 'SPK_TERBIT' || s === 'SPK TERBIT';
+  }).length;
+  const selesaiCount = rencanaList.filter(r => {
+    const s = (r.status_spk || '').toUpperCase();
+    return s === 'TEREALISASI' || s === 'REALISASI_SELESAI' || s === 'SELESAI';
+  }).length;
 
   return (
     <div className="space-y-6">
@@ -225,12 +249,12 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
           </div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-xl border border-amber-200 bg-amber-50/40 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 shadow-2xs flex items-center justify-between">
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-amber-800">Menunggu SPK Admin</div>
-            <div className="text-xl font-extrabold text-amber-900 mt-0.5">{menungguSpkCount}</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Menunggu SPK</div>
+            <div className="text-xl font-extrabold text-slate-800 mt-0.5">{menungguSpkCount}</div>
           </div>
-          <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
+          <div className="p-2 rounded-lg bg-slate-200/70 text-slate-600">
             <Clock className="w-5 h-5" />
           </div>
         </div>
@@ -247,7 +271,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
         <div className="bg-white p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40 shadow-2xs flex items-center justify-between">
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Realisasi Selesai (Input OK)</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Terealisisasi (Input OK)</div>
             <div className="text-xl font-extrabold text-emerald-900 mt-0.5">{selesaiCount}</div>
           </div>
           <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
@@ -329,10 +353,10 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
             onChange={(e) => setFilterStatusSpk(e.target.value)}
             className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
           >
-            <option value="Semua">Status SPK: Semua</option>
-            <option value="MENUNGGU_SPK">Menunggu SPK</option>
-            <option value="SPK_TERBIT">SPK Terbit</option>
-            <option value="REALISASI_SELESAI">Realisasi Selesai</option>
+            <option value="Semua">Status: Semua</option>
+            <option value="MENUNGGU">Menunggu (Abu-abu)</option>
+            <option value="SPK_TERBIT">SPK Terbit (Biru)</option>
+            <option value="TEREALISASI">Terealisisasi (Hijau)</option>
           </select>
 
           {/* Filter Tanggal */}
@@ -389,13 +413,14 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredList.map((row) => {
-                  const isMenungguSpk = row.status_spk === 'MENUNGGU_SPK';
-                  const isSpkTerbit = row.status_spk === 'SPK_TERBIT';
-                  const isSelesai = row.status_spk === 'REALISASI_SELESAI';
+                filteredList.map((row, idx) => {
+                  const statusNormalized = (row.status_spk || 'MENUNGGU').toUpperCase();
+                  const isMenungguSpk = statusNormalized === 'MENUNGGU' || statusNormalized === 'MENUNGGU_SPK';
+                  const isSpkTerbit = statusNormalized === 'SPK_TERBIT' || statusNormalized === 'SPK TERBIT';
+                  const isSelesai = statusNormalized === 'TEREALISASI' || statusNormalized === 'REALISASI_SELESAI' || statusNormalized === 'SELESAI';
 
                   return (
-                    <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={`${row.id || 'rk'}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                       {/* Tanggal */}
                       <td className="py-3 px-3.5 font-medium text-slate-800 whitespace-nowrap">
                         {row.tanggal}
@@ -483,21 +508,21 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                       {/* Status SPK Badge */}
                       <td className="py-3 px-3 text-center whitespace-nowrap">
                         {isMenungguSpk && (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            MENUNGGU SPK
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300">
+                            <Clock className="w-3 h-3 text-slate-500" />
+                            MENUNGGU
                           </span>
                         )}
                         {isSpkTerbit && (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-300">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 shadow-2xs">
                             <Send className="w-3 h-3 text-blue-600" />
                             SPK TERBIT
                           </span>
                         )}
                         {isSelesai && (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
                             <CheckCircle className="w-3 h-3 text-emerald-600" />
-                            REALISASI SELESAI
+                            TEREALISASI
                           </span>
                         )}
                       </td>
@@ -595,7 +620,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                   <input
                     type="text"
                     required
-                    placeholder="Contoh: SPK-2026-X101"
+                    placeholder="Contoh: SPK/CE/2026/10/001"
                     value={spkInputValue}
                     onChange={(e) => setSpkInputValue(e.target.value)}
                     className="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -611,7 +636,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Format disarankan: SPK-[TAHUN]-[KODE_UNIK]
+                  Format resmi sistem: SPK/CE/[TAHUN]/[BULAN]/[NOMOR_URUT]
                 </p>
               </div>
 

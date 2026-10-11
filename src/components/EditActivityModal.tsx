@@ -110,12 +110,12 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setNomorSpk(activity.nomor_spk || '');
       setLokasi(activity.lokasi);
       setShiftKerja(activity.shift_kerja && activity.shift_kerja.toUpperCase() === 'MALAM' ? 'Malam' : 'Siang');
-      setJamKerja(activity.jam_kerja);
-      setHmAwal(activity.hm_awal);
-      setHmAkhir(activity.hm_akhir);
+      setJamKerja(activity.jam_kerja ?? 10);
+      setHmAwal(activity.hm_awal ?? 0);
+      setHmAkhir(activity.hm_akhir ?? 0);
       setIsHmAwalCorrected(Boolean(activity.is_hm_awal_corrected));
       setAlasanKoreksiHm(activity.alasan_koreksi_hm || '');
-      setHasilKerja(activity.hasil_kerja);
+      setHasilKerja(activity.hasil_kerja ?? 0);
       setKeterangan(activity.keterangan || '');
       setFotoBukti(activity.foto_bukti || null);
       setFotoFileName(activity.foto_bukti ? 'Foto Bukti Lapangan Saat Ini' : null);

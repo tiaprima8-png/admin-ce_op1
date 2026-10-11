@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, X, Search, AlertCircle, CheckCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Search, AlertCircle, CheckCircle, Power, RotateCcw, Users } from 'lucide-react';
 import { Operator } from '../types';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
@@ -83,21 +83,22 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
   const handleToggleStatus = async (op: Operator) => {
     const nextStatus = (op.status_aktif ?? 1) === 1 ? 0 : 1;
     try {
-      const res = await fetch(`/api/operators/${op.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...op,
-          status_aktif: nextStatus
-        })
+      const res = await fetch(`/api/master-operator/${op.id}/toggle-status`, {
+        method: 'PATCH'
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Gagal mengubah status operator');
+        await fetch(`/api/operators/${op.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...op,
+            status_aktif: nextStatus
+          })
+        });
       }
 
-      setFeedbackNotice(`Operator ${op.nama_operator} berhasil di${nextStatus === 1 ? 'aktifkan kembali' : 'nonaktifkan'}!`);
+      setFeedbackNotice(`Operator "${op.nama_operator}" berhasil di${nextStatus === 1 ? 'aktifkan kembali' : 'nonaktifkan'}!`);
       setTimeout(() => setFeedbackNotice(null), 3500);
       onRefresh();
     } catch (err: unknown) {
@@ -145,6 +146,10 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
     return true;
   });
 
+  const totalOperatorsCount = operators.length;
+  const activeOperatorsCount = operators.filter(o => (o.status_aktif ?? 1) === 1).length;
+  const inactiveOperatorsCount = totalOperatorsCount - activeOperatorsCount;
+
   return (
     <div className="space-y-4">
 
@@ -160,6 +165,39 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
           </button>
         </div>
       )}
+
+      {/* Top Stats Cards: TOTAL, AKTIF, NONAKTIF */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Operator</p>
+            <p className="text-xl font-bold text-slate-900 mt-0.5">{totalOperatorsCount}</p>
+          </div>
+          <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <Users className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Operator Aktif</p>
+            <p className="text-xl font-bold text-emerald-600 mt-0.5">{activeOperatorsCount}</p>
+          </div>
+          <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Operator Nonaktif</p>
+            <p className="text-xl font-bold text-slate-500 mt-0.5">{inactiveOperatorsCount}</p>
+          </div>
+          <div className="p-2.5 rounded-lg bg-slate-100 text-slate-500 border border-slate-200">
+            <Power className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
       
       {/* Action Toolbar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -184,6 +222,19 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
             <option value="1">Hanya Aktif</option>
             <option value="0">Hanya Nonaktif</option>
           </select>
+
+          {(searchTerm || selectedStatus !== 'Semua') && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedStatus('Semua');
+              }}
+              className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 hover:underline px-2 py-1 rounded cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset Filter
+            </button>
+          )}
         </div>
 
         <button
@@ -245,31 +296,40 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
                         )}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1">
+                          {/* Toggle Aktif / Nonaktif (Ikon Power) */}
                           <button
+                            type="button"
+                            onClick={() => handleToggleStatus(op)}
+                            title={isAktif ? 'Nonaktifkan operator ini' : 'Aktifkan kembali operator ini'}
+                            className={`p-1.5 rounded-md border transition-colors cursor-pointer ${
+                              isAktif
+                                ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200'
+                                : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200'
+                            }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Edit (Pensil) */}
+                          <button
+                            type="button"
                             onClick={() => openEditModal(op)}
                             title="Edit operator"
-                            className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          {isAktif ? (
-                            <button
-                              onClick={() => setDeleteTarget(op)}
-                              title="Nonaktifkan Operator (Soft Delete)"
-                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleToggleStatus(op)}
-                              title="Pulihkan / Aktifkan Kembali Operator"
-                              className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer font-bold text-xs"
-                            >
-                              Pulihkan
-                            </button>
-                          )}
+
+                          {/* Hapus (Tempat Sampah) */}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(op)}
+                            title="Hapus operator dari database"
+                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>

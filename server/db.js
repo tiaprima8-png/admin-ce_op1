@@ -146,6 +146,7 @@ function initTablesAndSeed(db2) {
 
     CREATE TABLE IF NOT EXISTS aktivitas_unit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT UNIQUE,
       client_transaction_id TEXT UNIQUE,
       jenis_unit TEXT NOT NULL,
       nama_aktivitas TEXT NOT NULL,
@@ -201,6 +202,7 @@ function initTablesAndSeed(db2) {
 
     CREATE TABLE IF NOT EXISTS hasil_input_aktivitas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT UNIQUE,
       client_transaction_id TEXT UNIQUE,
       rencana_id TEXT,
       nama_pengawas TEXT NOT NULL,
@@ -308,6 +310,15 @@ function initTablesAndSeed(db2) {
       }
       console.log("Added client_transaction_id column to hasil_input_aktivitas");
     }
+    if (cols && !cols.includes("uuid")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN uuid TEXT DEFAULT NULL;");
+      try {
+        db2.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_uuid ON hasil_input_aktivitas(uuid);");
+      } catch (idxErr) {
+        console.warn("Index on hasil_input_aktivitas(uuid) already exists or ignored:", idxErr);
+      }
+      console.log("Added uuid column to hasil_input_aktivitas");
+    }
     if (cols && !cols.includes("tanggal_kerja")) {
       db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN tanggal_kerja TEXT DEFAULT NULL;");
       db2.run("UPDATE hasil_input_aktivitas SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
@@ -326,6 +337,15 @@ function initTablesAndSeed(db2) {
     if (actCols && !actCols.includes("client_transaction_id")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN client_transaction_id TEXT DEFAULT NULL;");
       console.log("Added client_transaction_id column to aktivitas_unit");
+    }
+    if (actCols && !actCols.includes("uuid")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN uuid TEXT DEFAULT NULL;");
+      try {
+        db2.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_au_uuid ON aktivitas_unit(uuid);");
+      } catch (idxErr) {
+        console.warn("Index on aktivitas_unit(uuid) already exists or ignored:", idxErr);
+      }
+      console.log("Added uuid column to aktivitas_unit");
     }
     const rkInfo = db2.exec("PRAGMA table_info(rencana_kerja)");
     const rkCols = rkInfo[0]?.values.map((v) => v[1]);
@@ -384,6 +404,13 @@ function initTablesAndSeed(db2) {
       db2.run("ALTER TABLE master_kendala ADD COLUMN status_aktif INTEGER DEFAULT 1;");
       db2.run("UPDATE master_kendala SET status_aktif = 1 WHERE status_aktif IS NULL;");
       console.log("Added status_aktif column to master_kendala");
+    }
+    const usersInfo = db2.exec("PRAGMA table_info(users)");
+    const usersCols = usersInfo[0]?.values.map((v) => v[1]);
+    if (usersCols && !usersCols.includes("status_aktif")) {
+      db2.run("ALTER TABLE users ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db2.run("UPDATE users SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log("Added status_aktif column to users");
     }
     try {
       db2.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_client_tx ON hasil_input_aktivitas(client_transaction_id);");

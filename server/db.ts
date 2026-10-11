@@ -12,6 +12,7 @@ export interface UserRow {
   username: string;
   password?: string;
   hak_akses: 'Admin' | 'Pengawas';
+  status_aktif?: number;
 }
 
 export interface UnitRow {
@@ -36,6 +37,8 @@ export interface AppSettingRow {
 
 export interface AktivitasUnitRow {
   id: number;
+  uuid?: string | null;
+  client_transaction_id?: string | null;
   jenis_unit: string;
   nama_aktivitas: string;
   satuan: string;
@@ -71,7 +74,7 @@ export interface RencanaKerjaRow {
   kode_lokasi: string;
   shift_kerja: 'SIANG' | 'MALAM' | 'Siang' | 'Malam';
   nomor_spk?: string | null;
-  status_spk: 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI';
+  status_spk: 'MENUNGGU_SPK' | 'SPK_TERBIT' | 'REALISASI_SELESAI' | 'TEREALISASI' | 'MENUNGGU';
   keterangan_rencana?: string | null;
   created_at: string;
   updated_at?: string;
@@ -100,6 +103,7 @@ export interface AktivitasKendalaRow {
 
 export interface HasilInputAktivitasRow {
   id: number | string;
+  uuid?: string | null;
   client_transaction_id?: string | null;
   rencana_id?: string | null;
   nama_pengawas: string;
@@ -285,6 +289,7 @@ function initTablesAndSeed(db: Database) {
 
     CREATE TABLE IF NOT EXISTS aktivitas_unit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT UNIQUE,
       client_transaction_id TEXT UNIQUE,
       jenis_unit TEXT NOT NULL,
       nama_aktivitas TEXT NOT NULL,
@@ -340,6 +345,7 @@ function initTablesAndSeed(db: Database) {
 
     CREATE TABLE IF NOT EXISTS hasil_input_aktivitas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT UNIQUE,
       client_transaction_id TEXT UNIQUE,
       rencana_id TEXT,
       nama_pengawas TEXT NOT NULL,
@@ -452,6 +458,15 @@ function initTablesAndSeed(db: Database) {
       }
       console.log('Added client_transaction_id column to hasil_input_aktivitas');
     }
+    if (cols && !cols.includes('uuid')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN uuid TEXT DEFAULT NULL;");
+      try {
+        db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_hia_uuid ON hasil_input_aktivitas(uuid);");
+      } catch (idxErr) {
+        console.warn('Index on hasil_input_aktivitas(uuid) already exists or ignored:', idxErr);
+      }
+      console.log('Added uuid column to hasil_input_aktivitas');
+    }
     if (cols && !cols.includes('tanggal_kerja')) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN tanggal_kerja TEXT DEFAULT NULL;");
       db.run("UPDATE hasil_input_aktivitas SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
@@ -472,6 +487,15 @@ function initTablesAndSeed(db: Database) {
     if (actCols && !actCols.includes('client_transaction_id')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN client_transaction_id TEXT DEFAULT NULL;");
       console.log('Added client_transaction_id column to aktivitas_unit');
+    }
+    if (actCols && !actCols.includes('uuid')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN uuid TEXT DEFAULT NULL;");
+      try {
+        db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_au_uuid ON aktivitas_unit(uuid);");
+      } catch (idxErr) {
+        console.warn('Index on aktivitas_unit(uuid) already exists or ignored:', idxErr);
+      }
+      console.log('Added uuid column to aktivitas_unit');
     }
 
     // Migration for rencana_kerja table (updated_at & tanggal_kerja columns)
@@ -540,6 +564,14 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE master_kendala ADD COLUMN status_aktif INTEGER DEFAULT 1;");
       db.run("UPDATE master_kendala SET status_aktif = 1 WHERE status_aktif IS NULL;");
       console.log('Added status_aktif column to master_kendala');
+    }
+
+    const usersInfo = db.exec("PRAGMA table_info(users)");
+    const usersCols = usersInfo[0]?.values.map(v => v[1]);
+    if (usersCols && !usersCols.includes('status_aktif')) {
+      db.run("ALTER TABLE users ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+      db.run("UPDATE users SET status_aktif = 1 WHERE status_aktif IS NULL;");
+      console.log('Added status_aktif column to users');
     }
 
     try {
