@@ -604,10 +604,10 @@ export default function App() {
               setActivities(prev => prev.map(a => a.id === updated.id ? updated : a));
               fetchStats();
             }
-          } else if (packet.event === 'DELETE_ACTIVITY') {
+          } else if (packet.event === 'DELETE_ACTIVITY' || packet.event === 'AKTIVITAS_DELETED') {
             const deletedId = packet.id;
             if (deletedId) {
-              setActivities(prev => prev.filter(a => String(a.id) !== String(deletedId)));
+              setActivities(prev => prev.filter(a => String(a.id) !== String(deletedId) && String(a.id_aktivitas) !== String(deletedId)));
               fetchStats();
             }
           } else if (packet.event === 'SPK_PUBLISHED' || packet.event === 'SPK_TERBIT' || packet.event === 'UPDATE_RENCANA') {
@@ -629,8 +629,9 @@ export default function App() {
                 return r;
               }));
             }
-          } else if (packet.event === 'DELETE_RENCANA' && packet.id) {
+          } else if ((packet.event === 'DELETE_RENCANA' || packet.event === 'RENCANA_KERJA_DELETED') && packet.id) {
             setRencanaList(prev => prev.filter(r => r.id !== packet.id));
+            setActivities(prev => prev.filter(a => a.id !== packet.id && a.id_rencana_kerja !== packet.id && a.rencana_id !== packet.id));
           } else if (packet.event === 'HM_STANDAR_UPDATED' || packet.type === 'HM_STANDAR_UPDATED') {
             const incomingStd = packet.hm_standar || {
               min: packet.hm_min_standar !== undefined ? packet.hm_min_standar : 6.0,
@@ -672,12 +673,48 @@ export default function App() {
     };
   }, [fetchStats, fetchUnits, fetchRencanaList]);
 
-  const handleDeleteActivity = async (id: number | string) => {
+  const handleDeleteActivity = async (target: number | string | HasilInputAktivitas) => {
     try {
-      const res = await fetch(`/api/rekapitulasi/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Gagal menghapus laporan');
-      setActivities(prev => prev.filter(a => String(a.id) !== String(id)));
+      let isRencanaPending = false;
+      let endpoint = '';
+      let targetId: string | number = '';
+      let unitName = 'Unit';
+
+      if (typeof target === 'object' && target !== null) {
+        isRencanaPending = target.status_realisasi === 'BELUM_INPUT' || !target.id_aktivitas;
+        targetId = isRencanaPending 
+          ? (target.id_rencana_kerja || target.rencana_id || target.id)
+          : (target.id_aktivitas || target.id);
+        endpoint = isRencanaPending ? `/api/rencana-kerja/${targetId}` : `/api/aktivitas-unit/${targetId}`;
+        unitName = target.unit || target.kode_unit || 'Unit';
+      } else {
+        targetId = target;
+        endpoint = `/api/rekapitulasi/${targetId}`;
+      }
+
+      const res = await fetch(endpoint, { method: 'DELETE' });
+      if (!res.ok) {
+        // Fallback coba ke endpoint rekapitulasi jika sebelumnya aktivitas-unit
+        if (endpoint.startsWith('/api/aktivitas-unit/')) {
+          const fallbackRes = await fetch(`/api/rekapitulasi/${targetId}`, { method: 'DELETE' });
+          if (!fallbackRes.ok) throw new Error('Gagal menghapus data dari server');
+        } else {
+          throw new Error('Gagal menghapus data dari server');
+        }
+      }
+
+      // Hapus secara instan dari state
+      if (typeof target === 'object' && target !== null) {
+        setActivities(prev => prev.filter(a => a.id !== target.id && (isRencanaPending ? (a.id_rencana_kerja !== targetId && a.rencana_id !== targetId) : true)));
+        if (isRencanaPending) {
+          setRencanaList(prev => prev.filter(r => r.id !== targetId));
+        }
+      } else {
+        setActivities(prev => prev.filter(a => String(a.id) !== String(targetId)));
+      }
+
       fetchActivities();
+      fetchRencanaList();
       fetchStats();
     } catch (e) {
       alert((e as Error).message);

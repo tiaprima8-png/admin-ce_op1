@@ -1369,15 +1369,23 @@ async function startServer() {
   app.delete('/api/rencana-kerja/:id', (req: Request, res: Response) => {
     try {
       const id = req.params.id;
+      // 1. Unbind nomor SPK / unbind relasi pada aktivitas terkait jika ada
+      execute('UPDATE hasil_input_aktivitas SET rencana_id = NULL, nomor_spk = NULL WHERE rencana_id = ?', [id]);
+      
+      // 2. Jalankan query penghapusan rencana kerja
       execute('DELETE FROM rencana_kerja WHERE id = ?', [id]);
 
+      // 3. Pancarkan event WebSocket (baik format Socket.io io.emit maupun broadcast standar)
+      io.emit("RENCANA_KERJA_DELETED", { id });
       broadcast({
         event: 'DELETE_RENCANA',
+        type: 'DELETE_RENCANA',
         id,
         timestamp: new Date().toISOString()
       });
 
-      res.json({ status: 'success', message: 'Rencana kerja berhasil dihapus' });
+      // 4. Kembalikan respons sukses
+      res.json({ success: true, status: 'success', message: 'Data rencana berhasil dihapus' });
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -2179,6 +2187,7 @@ async function startServer() {
         SELECT * FROM (
           SELECT
             COALESCE(h.id, r.id) as id,
+            h.id as id_aktivitas,
             r.id as id_rencana_kerja,
             r.id as rencana_id,
             COALESCE(h.nama_pengawas, r.nama_pengawas) as nama_pengawas,
@@ -2186,6 +2195,7 @@ async function startServer() {
             COALESCE(h.tanggal_kerja, h.tanggal, r.tanggal) as tanggal_kerja,
             COALESCE(h.status_unit, r.status_unit, 'OPERASI') as status_unit,
             COALESCE(h.kode_unit, r.kode_unit) as kode_unit,
+            COALESCE(h.kode_unit, r.kode_unit) as unit,
             h.nama_aktivitas as aktivitas_aktual,
             COALESCE(
               h.nama_aktivitas,
@@ -2267,6 +2277,7 @@ async function startServer() {
 
           SELECT
             h.id as id,
+            h.id as id_aktivitas,
             h.rencana_id as id_rencana_kerja,
             h.rencana_id as rencana_id,
             h.nama_pengawas,
@@ -2274,6 +2285,7 @@ async function startServer() {
             COALESCE(h.tanggal_kerja, h.tanggal) as tanggal_kerja,
             h.status_unit,
             h.kode_unit,
+            h.kode_unit as unit,
             h.nama_aktivitas as aktivitas_aktual,
             h.nama_aktivitas as nama_aktivitas,
             h.nama_aktivitas as aktivitas,
@@ -2813,19 +2825,21 @@ async function startServer() {
     }
   });
 
-  // DELETE /api/rekapitulasi/:id
-  app.delete('/api/rekapitulasi/:id', (req: Request, res: Response) => {
+  // DELETE /api/rekapitulasi/:id & /api/aktivitas-unit/:id
+  app.delete(['/api/rekapitulasi/:id', '/api/aktivitas-unit/:id'], (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id, 10);
-      execute('DELETE FROM hasil_input_aktivitas WHERE id = ?', [id]);
+      const id = req.params.id;
+      execute('DELETE FROM hasil_input_aktivitas WHERE id = ? OR uuid = ?', [id, id]);
 
+      io.emit("AKTIVITAS_DELETED", { id });
       broadcast({
         event: 'DELETE_ACTIVITY',
+        type: 'DELETE_ACTIVITY',
         id,
         timestamp: new Date().toISOString()
       });
 
-      res.json({ status: 'success', message: 'Data aktivitas berhasil dihapus' });
+      res.json({ success: true, status: 'success', message: 'Data aktivitas berhasil dihapus' });
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
     }

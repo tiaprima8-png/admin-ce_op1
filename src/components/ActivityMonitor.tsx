@@ -81,7 +81,7 @@ interface ActivityMonitorProps {
   newActivityIds: Set<number | string>;
   onOpenManualModal: () => void;
   onEditActivity: (activity: HasilInputAktivitas) => void;
-  onDeleteActivity: (id: number | string) => Promise<void> | void;
+  onDeleteActivity: (target: HasilInputAktivitas | number | string) => Promise<void> | void;
   onRefresh: () => void;
   onViewPhoto: (activity: HasilInputAktivitas) => void;
 }
@@ -285,12 +285,34 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       soundService.playSuccess();
     };
 
+    const handleRencanaDeleted = (payload: any) => {
+      const planId = payload?.id || payload?.id_rencana_kerja || payload;
+      if (planId) {
+        setDataList(prev => prev.filter(item => item.id !== planId && item.id_rencana_kerja !== planId && item.rencana_id !== planId));
+      }
+    };
+
+    const handleAktivitasDeleted = (payload: any) => {
+      const actId = payload?.id || payload;
+      if (actId) {
+        setDataList(prev => prev.filter(item => String(item.id) !== String(actId) && String(item.id_aktivitas) !== String(actId)));
+      }
+    };
+
     socket.on("NEW_REALISASI_SUBMITTED", handleNewRealisasi);
     socket.on("NEW_RENCANA_KERJA", handleNewRencana);
+    socket.on("RENCANA_KERJA_DELETED", handleRencanaDeleted);
+    socket.on("DELETE_RENCANA", handleRencanaDeleted);
+    socket.on("AKTIVITAS_DELETED", handleAktivitasDeleted);
+    socket.on("DELETE_ACTIVITY", handleAktivitasDeleted);
 
     return () => {
       socket.off("NEW_REALISASI_SUBMITTED", handleNewRealisasi);
       socket.off("NEW_RENCANA_KERJA", handleNewRencana);
+      socket.off("RENCANA_KERJA_DELETED", handleRencanaDeleted);
+      socket.off("DELETE_RENCANA", handleRencanaDeleted);
+      socket.off("AKTIVITAS_DELETED", handleAktivitasDeleted);
+      socket.off("DELETE_ACTIVITY", handleAktivitasDeleted);
     };
   }, []);
 
@@ -440,11 +462,45 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     if (!deleteTarget) return;
     setIsDeleting(true);
 
+    const row = deleteTarget;
+    // Cek apakah ini data realisasi murni atau rencana kerja yang menunggu realisasi
+    const isRencanaPending = row.status_realisasi === 'BELUM_INPUT' || !row.id_aktivitas;
+    const targetPlanId = row.id_rencana_kerja || row.rencana_id || row.id;
+    const targetActId = row.id_aktivitas || row.id;
+    const endpoint = isRencanaPending 
+      ? `/api/rencana-kerja/${targetPlanId}`
+      : `/api/aktivitas-unit/${targetActId}`;
+
+    const targetUnit = row.unit || row.kode_unit;
+
     try {
-      await onDeleteActivity(deleteTarget.id);
-      const targetUnit = deleteTarget.kode_unit;
+      // Panggil onDeleteActivity jika disediakan oleh parent
+      if (onDeleteActivity) {
+        await onDeleteActivity(row);
+      } else {
+        const res = await fetch(endpoint, { method: 'DELETE' });
+        if (!res.ok) {
+          throw new Error('Gagal menghapus data dari server');
+        }
+      }
+
+      // Hapus baris dari state tabel secara instan
+      setDataList((prev) => prev.filter((item) => {
+        if (item.id === row.id) return false;
+        if (isRencanaPending && (item.id === targetPlanId || item.id_rencana_kerja === targetPlanId || item.rencana_id === targetPlanId)) return false;
+        if (!isRencanaPending && row.id_aktivitas && item.id_aktivitas === row.id_aktivitas) return false;
+        return true;
+      }));
+
+      // Broadcast socket agar list di menu Rencana Kerja & Android juga ikut terhapus
+      if (isRencanaPending) {
+        socket.emit("RENCANA_KERJA_DELETED", { id: targetPlanId });
+      } else {
+        socket.emit("AKTIVITAS_DELETED", { id: targetActId });
+      }
+
       setDeleteTarget(null);
-      setFeedbackNotice(`Laporan unit ${targetUnit} berhasil dihapus dari database!`);
+      setFeedbackNotice(`${isRencanaPending ? 'Rencana kerja' : 'Laporan realisasi'} unit ${targetUnit} berhasil dihapus dari database!`);
       setTimeout(() => setFeedbackNotice(null), 3500);
     } catch (err: unknown) {
       alert((err as Error).message);
@@ -1204,9 +1260,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
-        title="Konfirmasi Hapus Laporan Aktivitas"
-        message="Apakah Anda yakin ingin menghapus data laporan aktivitas lapangan ini?"
-        itemName={deleteTarget ? `Unit: ${deleteTarget.kode_unit} | Aktivitas: ${deleteTarget.nama_aktivitas} (${deleteTarget.tanggal})` : undefined}
+        title={deleteTarget ? ((deleteTarget.status_realisasi === 'BELUM_INPUT' || !deleteTarget.id_aktivitas) ? "Konfirmasi Hapus Rencana Kerja" : "Konfirmasi Hapus Laporan Realisasi") : "Konfirmasi Hapus Data"}
+        message={deleteTarget ? ((deleteTarget.status_realisasi === 'BELUM_INPUT' || !deleteTarget.id_aktivitas) 
+          ? `Apakah Anda yakin ingin menghapus rencana kerja unit ${deleteTarget.unit || deleteTarget.kode_unit} yang masih berstatus menunggu realisasi lapangan?`
+          : `Apakah Anda yakin ingin menghapus data laporan realisasi aktivitas unit ${deleteTarget.unit || deleteTarget.kode_unit}?`) : ""}
+        itemName={deleteTarget ? `Unit: ${deleteTarget.unit || deleteTarget.kode_unit} | Aktivitas: ${deleteTarget.nama_aktivitas || deleteTarget.aktivitas} (${deleteTarget.tanggal})` : undefined}
         isDeleting={isDeleting}
       />
 

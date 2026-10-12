@@ -120,6 +120,8 @@ export interface AktivitasKendala {
 
 export interface HasilInputAktivitas {
   id: number | string;
+  id_aktivitas?: number | string | null;
+  unit?: string | null;
   client_transaction_id?: string | null;
   rencana_id?: string | null;
   id_rencana_kerja?: string | null;
