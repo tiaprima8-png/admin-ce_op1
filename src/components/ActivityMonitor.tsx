@@ -48,27 +48,101 @@ function formatKendalaDuration(menit: number): string {
   return `${sisa} menit`;
 }
 
-function parseKendalaList(kendala: unknown): Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }> {
+export interface ParsedKendalaItem {
+  nama_kendala: string;
+  kendala?: string;
+  nama?: string;
+  kode_kendala?: string;
+  kode?: string;
+  jam_mulai?: string;
+  jam_awal?: string;
+  jam_selesai?: string;
+  jam_akhir?: string;
+  waktu_mulai?: string;
+  waktu_selesai?: string;
+  durasi_jam?: number | string;
+  durasi?: number | string;
+  hambatan?: number | string;
+  durasi_menit?: number;
+  keterangan?: string;
+}
+
+function parseKendalaList(kendala: unknown): ParsedKendalaItem[] {
   if (!kendala) return [];
-  if (Array.isArray(kendala)) return kendala;
+  
+  const normalize = (item: any): ParsedKendalaItem | null => {
+    if (!item) return null;
+    if (typeof item === 'string') {
+      const trimmed = item.trim();
+      return trimmed ? {
+        nama_kendala: trimmed,
+        kendala: trimmed,
+        nama: trimmed,
+        kode_kendala: '-',
+        kode: '-',
+        jam_mulai: '-',
+        jam_awal: '-',
+        jam_selesai: '-',
+        jam_akhir: '-',
+        durasi_jam: 0,
+        durasi: 0,
+        hambatan: 0
+      } : null;
+    }
+    if (typeof item === 'object') {
+      const nama = item.nama_kendala || item.kendala || item.nama || item.keterangan || 'Kendala Operasional';
+      const kode = item.kode_kendala || item.kode || item.id_kendala || '-';
+      const start = item.jam_mulai || item.jam_awal || item.waktu_mulai || '-';
+      const end = item.jam_selesai || item.jam_akhir || item.waktu_selesai || '-';
+      const durasi = item.durasi_jam !== undefined ? item.durasi_jam : (item.durasi !== undefined ? item.durasi : (item.hambatan !== undefined ? item.hambatan : (item.durasi_menit ? Math.round((item.durasi_menit / 60) * 10) / 10 : 0)));
+      const durasiMnt = item.durasi_menit !== undefined ? item.durasi_menit : (parseFloat(String(durasi)) ? parseFloat(String(durasi)) * 60 : undefined);
+
+      return {
+        nama_kendala: String(nama),
+        kendala: String(nama),
+        nama: String(nama),
+        kode_kendala: String(kode),
+        kode: String(kode),
+        jam_mulai: String(start),
+        jam_awal: String(start),
+        jam_selesai: String(end),
+        jam_akhir: String(end),
+        waktu_mulai: String(start),
+        waktu_selesai: String(end),
+        durasi_jam: durasi,
+        durasi: durasi,
+        hambatan: durasi,
+        durasi_menit: durasiMnt,
+        keterangan: item.keterangan ? String(item.keterangan) : undefined
+      };
+    }
+    return null;
+  };
+
+  if (Array.isArray(kendala)) {
+    return kendala.map(normalize).filter((k): k is ParsedKendalaItem => k !== null);
+  }
+
   if (typeof kendala === 'object' && kendala !== null) {
-    if ('nama_kendala' in (kendala as Record<string, unknown>)) {
-      return [kendala as { nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }];
-    }
+    const single = normalize(kendala);
+    return single ? [single] : [];
   }
+
   if (typeof kendala === 'string') {
+    const trimmed = kendala.trim();
+    if (!trimmed || trimmed === '[]') return [];
     try {
-      const parsed = JSON.parse(kendala);
-      if (Array.isArray(parsed)) return parsed;
-      if (typeof parsed === 'object' && parsed !== null && 'nama_kendala' in parsed) {
-        return [parsed];
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map(normalize).filter((k): k is ParsedKendalaItem => k !== null);
       }
+      const single = normalize(parsed);
+      return single ? [single] : [];
     } catch {
-      if (kendala.trim() && kendala.trim() !== '[]') {
-        return [{ nama_kendala: kendala.trim() }];
-      }
+      return [{ nama_kendala: trimmed }];
     }
   }
+
   return [];
 }
 
@@ -170,7 +244,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         jumlah_liter_solar: numSolar,
         stik_awal: raw.stik_awal ?? null,
         stik_akhir: raw.stik_akhir ?? null,
+        kendala: raw.kendala || raw.kendala_list || null,
         kendala_list: raw.kendala || raw.kendala_list || null,
+        ada_kendala: raw.ada_kendala ?? ((raw.kendala && raw.kendala.length > 0) ? 1 : 0),
         is_hm_awal_corrected: raw.is_hm_awal_corrected ?? 0,
         alasan_koreksi_hm: raw.alasan_koreksi_hm ?? null,
         created_at: raw.created_at || new Date().toISOString(),
@@ -813,7 +889,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 const isGlowing = highlightIds.has(row.id) || 
                   highlightIds.has(Number(row.id)) || 
                   newActivityIds.has(typeof row.id === 'number' ? row.id : parseInt(String(row.id), 10));
-                const kendalaItems = parseKendalaList(row.kendala_list);
+                const kendalaItems = (Array.isArray(row.kendala) && row.kendala.length > 0)
+                  ? row.kendala
+                  : parseKendalaList(row.kendala || row.kendala_list || row.kendala_data);
+                if (!row.kendala || !Array.isArray(row.kendala) || row.kendala.length === 0) {
+                  if (kendalaItems && kendalaItems.length > 0) {
+                    row.kendala = kendalaItems;
+                  }
+                }
                 const isMalam = (row.shift_kerja || '').toUpperCase() === 'MALAM';
 
                 return (
@@ -970,43 +1053,15 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           </div>
                         )}
 
-                        {/* Baris 2: Badge Peringatan Kendala (Sesuai spesifikasi: ⚠️ [Jumlah] Kendala: [Nama-nama Kendala]) */}
-                        {(row.ada_kendala === 1 || Boolean(row.ada_kendala) || (kendalaItems && kendalaItems.length > 0)) && (
-                          <div className="pt-0.5 space-y-1">
-                            {(() => {
-                              const kCount = kendalaItems.length > 0 ? kendalaItems.length : 1;
-                              const namesList = kendalaItems.map(k => k.nama_kendala).filter(Boolean).join(', ');
-                              const labelText = `⚠️ ${kCount} Kendala${namesList ? `: ${namesList}` : ''}`;
-                              return (
-                                <div
-                                  className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-950 bg-amber-50/90 border border-amber-300 rounded-md px-2 py-0.5 max-w-full leading-tight shadow-2xs"
-                                  title={labelText}
-                                >
-                                  <span className="text-amber-600 shrink-0 text-xs">⚠️</span>
-                                  <span className="truncate">{labelText}</span>
-                                </div>
-                              );
-                            })()}
-
-                            {/* Render detail timing kendala individual jika ada waktu/durasi */}
-                            {kendalaItems.length > 0 && kendalaItems.some(k => k.waktu_mulai || k.durasi_menit) && (
-                              <div className="flex flex-wrap gap-1 pt-0.5">
-                                {kendalaItems.map((k, kIdx) => {
-                                  const range = (k.waktu_mulai && k.waktu_selesai) ? `${k.waktu_mulai}-${k.waktu_selesai}` : '';
-                                  const durasi = k.durasi_menit !== undefined ? formatKendalaDuration(k.durasi_menit) : '';
-                                  const detailTiming = [range, durasi].filter(Boolean).join(' | ');
-                                  if (!detailTiming) return null;
-                                  return (
-                                    <span
-                                      key={kIdx}
-                                      className="inline-flex items-center text-[9px] font-mono text-amber-800 bg-amber-100/60 border border-amber-200 rounded px-1.5 py-0.2"
-                                    >
-                                      {k.nama_kendala}: {detailTiming}
-                                    </span>
-                                  );
-                                })}
+                        {/* Baris 2: Badge Peringatan Kendala Lapangan (Visual peringatan merah/rose pada baris unit di tabel Beranda) */}
+                        {row.kendala && row.kendala.length > 0 && (
+                          <div className="mt-1.5 flex flex-col gap-1">
+                            {row.kendala.map((k: any, idx: number) => (
+                              <div key={idx} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-rose-50 border border-rose-200 text-rose-700 font-medium">
+                                <span className="text-rose-500 font-bold">⚠️ #{idx + 1} {k.nama_kendala || k.kendala || k.nama} [{k.kode_kendala || k.kode || '-'}]</span>
+                                <span className="text-slate-500 text-[11px]">({k.jam_mulai || k.jam_awal} - {k.jam_selesai || k.jam_akhir} • Hambatan: {k.durasi_jam || k.durasi || k.hambatan} Jam)</span>
                               </div>
-                            )}
+                            ))}
                           </div>
                         )}
 

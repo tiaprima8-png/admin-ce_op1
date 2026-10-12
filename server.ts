@@ -1809,32 +1809,87 @@ async function startServer() {
         estimasiKonsumsi = Math.round((jumlah_liter_solar / (stikAkhir - stikAwal)) * 10) / 10;
       }
 
-      // Tangkap kendala (array objek atau string)
-      const kendalaRaw = req.body.kendala_list || req.body.kendala || req.body.kendala_lapangan || rawKendalaList || [];
-      let kendalaListStr: string = '[]';
-      let parsedKendalaArr: unknown[] = [];
-      if (Array.isArray(kendalaRaw)) {
-        kendalaListStr = JSON.stringify(kendalaRaw);
-        parsedKendalaArr = kendalaRaw;
-      } else if (typeof kendalaRaw === 'object' && kendalaRaw !== null) {
-        kendalaListStr = JSON.stringify([kendalaRaw]);
-        parsedKendalaArr = [kendalaRaw];
-      } else if (typeof kendalaRaw === 'string' && kendalaRaw.trim()) {
-        try {
-          const parsed = JSON.parse(kendalaRaw);
-          if (Array.isArray(parsed)) {
-            kendalaListStr = JSON.stringify(parsed);
-            parsedKendalaArr = parsed;
-          } else {
-            kendalaListStr = JSON.stringify([parsed]);
-            parsedKendalaArr = [parsed];
+      // 1. Tangkap seluruh kemungkinan key kendala dari Android:
+      const rawKendala = 
+        req.body.kendala_lapangan || 
+        req.body.kendala_list || 
+        req.body.kendala || 
+        req.body.daftar_kendala || 
+        rawKendalaList || 
+        [];
+
+      // Pastikan tersimpan sebagai format JSON String yang valid
+      const kendalaJson = typeof rawKendala === 'string' 
+        ? rawKendala 
+        : JSON.stringify(Array.isArray(rawKendala) ? rawKendala : [rawKendala]);
+
+      const jumlahKendala = Array.isArray(rawKendala) ? rawKendala.length : (rawKendala ? 1 : 0);
+
+      // Parse array objek kendala untuk respons & broadcast real-time
+      let parsedKendalaArr: any[] = [];
+      try {
+        const parsed = typeof rawKendala === 'string' ? JSON.parse(rawKendala || '[]') : (rawKendala || []);
+        const arr = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+        parsedKendalaArr = arr.map((item: any, idx: number) => {
+          if (typeof item === 'string') {
+            const trimmed = item.trim();
+            return {
+              nama_kendala: trimmed,
+              kendala: trimmed,
+              nama: trimmed,
+              kode_kendala: '-',
+              kode: '-',
+              jam_mulai: '-',
+              jam_awal: '-',
+              jam_selesai: '-',
+              jam_akhir: '-',
+              durasi_jam: 0,
+              durasi: 0,
+              hambatan: 0
+            };
           }
-        } catch {
-          kendalaListStr = JSON.stringify([{ nama_kendala: kendalaRaw.trim() }]);
-          parsedKendalaArr = [{ nama_kendala: kendalaRaw.trim() }];
+          const nama = item.nama_kendala || item.kendala || item.nama || `Kendala #${idx + 1}`;
+          const kode = item.kode_kendala || item.kode || item.id_kendala || '-';
+          const jamMulai = item.jam_mulai || item.jam_awal || item.waktu_mulai || '-';
+          const jamSelesai = item.jam_selesai || item.jam_akhir || item.waktu_selesai || '-';
+          const durasi = item.durasi_jam !== undefined ? item.durasi_jam : (item.durasi !== undefined ? item.durasi : (item.hambatan !== undefined ? item.hambatan : (item.durasi_menit ? Math.round((item.durasi_menit / 60) * 10) / 10 : 0)));
+          return {
+            ...item,
+            nama_kendala: nama,
+            kendala: nama,
+            nama: nama,
+            kode_kendala: kode,
+            kode: kode,
+            jam_mulai: jamMulai,
+            jam_awal: jamMulai,
+            jam_selesai: jamSelesai,
+            jam_akhir: jamSelesai,
+            durasi_jam: durasi,
+            durasi: durasi,
+            hambatan: durasi
+          };
+        });
+      } catch {
+        if (typeof rawKendala === 'string' && rawKendala.trim() && rawKendala !== '[]') {
+          parsedKendalaArr = [{
+            nama_kendala: rawKendala.trim(),
+            kendala: rawKendala.trim(),
+            nama: rawKendala.trim(),
+            kode_kendala: '-',
+            kode: '-',
+            jam_mulai: '-',
+            jam_awal: '-',
+            jam_selesai: '-',
+            jam_akhir: '-',
+            durasi_jam: 0,
+            durasi: 0,
+            hambatan: 0
+          }];
         }
       }
-      const adaKendala = (parsedKendalaArr.length > 0) ? 1 : 0;
+
+      const kendalaListStr = kendalaJson;
+      const adaKendala = (jumlahKendala > 0 || parsedKendalaArr.length > 0) ? 1 : 0;
 
       // HM Awal Correction Audit handling
       const is_hm_awal_corrected = (rawIsHmAwalCorrected === true || rawIsHmAwalCorrected === 1 || rawIsHmAwalCorrected === '1' || rawIsHmAwalCorrected === 'true') ? 1 : 0;
@@ -2387,14 +2442,65 @@ async function startServer() {
           return true;
         })
         .map(r => {
-        let parsedKendala: Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number; keterangan?: string }> = [];
-        if (r.kendala_list) {
-          try {
-            const parsed = typeof r.kendala_list === 'string' ? JSON.parse(r.kendala_list) : r.kendala_list;
-            parsedKendala = Array.isArray(parsed) ? parsed : [parsed];
-          } catch {
-            parsedKendala = [{ nama_kendala: String(r.kendala_list) }];
-          }
+        let parsedKendala: Array<any> = [];
+        try {
+          const rawK = r.kendala_list || r.kendala_data || '[]';
+          const parsed = typeof rawK === 'string' ? JSON.parse(rawK || '[]') : (rawK || []);
+          const arr = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+          parsedKendala = arr.map((item: any, idx: number) => {
+            if (typeof item === 'string') {
+              const trimmed = item.trim();
+              return {
+                nama_kendala: trimmed,
+                kendala: trimmed,
+                nama: trimmed,
+                kode_kendala: '-',
+                kode: '-',
+                jam_mulai: '-',
+                jam_awal: '-',
+                jam_selesai: '-',
+                jam_akhir: '-',
+                durasi_jam: 0,
+                durasi: 0,
+                hambatan: 0
+              };
+            }
+            const nama = item.nama_kendala || item.kendala || item.nama || `Kendala #${idx + 1}`;
+            const kode = item.kode_kendala || item.kode || item.id_kendala || '-';
+            const jamMulai = item.jam_mulai || item.jam_awal || item.waktu_mulai || '-';
+            const jamSelesai = item.jam_selesai || item.jam_akhir || item.waktu_selesai || '-';
+            const durasi = item.durasi_jam !== undefined ? item.durasi_jam : (item.durasi !== undefined ? item.durasi : (item.hambatan !== undefined ? item.hambatan : (item.durasi_menit ? Math.round((item.durasi_menit / 60) * 10) / 10 : 0)));
+            return {
+              ...item,
+              nama_kendala: nama,
+              kendala: nama,
+              nama: nama,
+              kode_kendala: kode,
+              kode: kode,
+              jam_mulai: jamMulai,
+              jam_awal: jamMulai,
+              jam_selesai: jamSelesai,
+              jam_akhir: jamSelesai,
+              durasi_jam: durasi,
+              durasi: durasi,
+              hambatan: durasi
+            };
+          });
+        } catch {
+          parsedKendala = r.kendala_list ? [{
+            nama_kendala: String(r.kendala_list),
+            kendala: String(r.kendala_list),
+            nama: String(r.kendala_list),
+            kode_kendala: '-',
+            kode: '-',
+            jam_mulai: '-',
+            jam_awal: '-',
+            jam_selesai: '-',
+            jam_akhir: '-',
+            durasi_jam: 0,
+            durasi: 0,
+            hambatan: 0
+          }] : [];
         }
         const hasFoto = Boolean(r.foto_bukti && String(r.foto_bukti).trim() !== '');
         const hasFotoSolar = Boolean(r.is_isi_solar === 1 || hasFoto);
@@ -2430,6 +2536,7 @@ async function startServer() {
           has_foto_hm: hasFoto,
           has_foto_unit: hasFoto,
           has_foto: hasFoto,
+          kendala: parsedKendala,
           kendala_list: parsedKendala,
           ada_kendala: adaKendala,
           stik_awal: stikSolarAwal,
@@ -2597,32 +2704,87 @@ async function startServer() {
         estimasiKonsumsi = Math.round((jumlah_liter_solar / (stikAkhir - stikAwal)) * 10) / 10;
       }
 
-      // Tangkap kendala (array objek atau string)
-      const kendalaRaw = req.body.kendala_list || req.body.kendala || req.body.kendala_lapangan || rawKendalaList || [];
-      let kendalaListStr: string = '[]';
-      let parsedKendalaArr: unknown[] = [];
-      if (Array.isArray(kendalaRaw)) {
-        kendalaListStr = JSON.stringify(kendalaRaw);
-        parsedKendalaArr = kendalaRaw;
-      } else if (typeof kendalaRaw === 'object' && kendalaRaw !== null) {
-        kendalaListStr = JSON.stringify([kendalaRaw]);
-        parsedKendalaArr = [kendalaRaw];
-      } else if (typeof kendalaRaw === 'string' && kendalaRaw.trim()) {
-        try {
-          const parsed = JSON.parse(kendalaRaw);
-          if (Array.isArray(parsed)) {
-            kendalaListStr = JSON.stringify(parsed);
-            parsedKendalaArr = parsed;
-          } else {
-            kendalaListStr = JSON.stringify([parsed]);
-            parsedKendalaArr = [parsed];
+      // Tangkap seluruh kemungkinan key kendala dari Android:
+      const rawKendala = 
+        req.body.kendala_lapangan || 
+        req.body.kendala_list || 
+        req.body.kendala || 
+        req.body.daftar_kendala || 
+        rawKendalaList || 
+        [];
+
+      // Pastikan tersimpan sebagai format JSON String yang valid
+      const kendalaJson = typeof rawKendala === 'string' 
+        ? rawKendala 
+        : JSON.stringify(Array.isArray(rawKendala) ? rawKendala : [rawKendala]);
+
+      const jumlahKendala = Array.isArray(rawKendala) ? rawKendala.length : (rawKendala ? 1 : 0);
+
+      // Parse array objek kendala untuk respons & broadcast real-time
+      let parsedKendalaArr: any[] = [];
+      try {
+        const parsed = typeof rawKendala === 'string' ? JSON.parse(rawKendala || '[]') : (rawKendala || []);
+        const arr = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+        parsedKendalaArr = arr.map((item: any, idx: number) => {
+          if (typeof item === 'string') {
+            const trimmed = item.trim();
+            return {
+              nama_kendala: trimmed,
+              kendala: trimmed,
+              nama: trimmed,
+              kode_kendala: '-',
+              kode: '-',
+              jam_mulai: '-',
+              jam_awal: '-',
+              jam_selesai: '-',
+              jam_akhir: '-',
+              durasi_jam: 0,
+              durasi: 0,
+              hambatan: 0
+            };
           }
-        } catch {
-          kendalaListStr = JSON.stringify([{ nama_kendala: kendalaRaw.trim() }]);
-          parsedKendalaArr = [{ nama_kendala: kendalaRaw.trim() }];
+          const nama = item.nama_kendala || item.kendala || item.nama || `Kendala #${idx + 1}`;
+          const kode = item.kode_kendala || item.kode || item.id_kendala || '-';
+          const jamMulai = item.jam_mulai || item.jam_awal || item.waktu_mulai || '-';
+          const jamSelesai = item.jam_selesai || item.jam_akhir || item.waktu_selesai || '-';
+          const durasi = item.durasi_jam !== undefined ? item.durasi_jam : (item.durasi !== undefined ? item.durasi : (item.hambatan !== undefined ? item.hambatan : (item.durasi_menit ? Math.round((item.durasi_menit / 60) * 10) / 10 : 0)));
+          return {
+            ...item,
+            nama_kendala: nama,
+            kendala: nama,
+            nama: nama,
+            kode_kendala: kode,
+            kode: kode,
+            jam_mulai: jamMulai,
+            jam_awal: jamMulai,
+            jam_selesai: jamSelesai,
+            jam_akhir: jamSelesai,
+            durasi_jam: durasi,
+            durasi: durasi,
+            hambatan: durasi
+          };
+        });
+      } catch {
+        if (typeof rawKendala === 'string' && rawKendala.trim() && rawKendala !== '[]') {
+          parsedKendalaArr = [{
+            nama_kendala: rawKendala.trim(),
+            kendala: rawKendala.trim(),
+            nama: rawKendala.trim(),
+            kode_kendala: '-',
+            kode: '-',
+            jam_mulai: '-',
+            jam_awal: '-',
+            jam_selesai: '-',
+            jam_akhir: '-',
+            durasi_jam: 0,
+            durasi: 0,
+            hambatan: 0
+          }];
         }
       }
-      const adaKendala = (parsedKendalaArr.length > 0) ? 1 : 0;
+
+      const kendalaListStr = kendalaJson;
+      const adaKendala = (jumlahKendala > 0 || parsedKendalaArr.length > 0) ? 1 : 0;
 
       // HM Awal Correction Audit handling
       const is_hm_awal_corrected = rawIsHmAwalCorrected !== undefined
@@ -2817,6 +2979,7 @@ async function startServer() {
           stik_solar_akhir: stikSolarAkhir,
           estimasi_konsumsi_solar: estKonsumsi,
           ada_kendala: adaKendala,
+          kendala: parsedKendala,
           kendala_list: parsedKendala
         }
       });

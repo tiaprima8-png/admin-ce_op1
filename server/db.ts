@@ -318,6 +318,7 @@ function initTablesAndSeed(db: Database) {
       stik_solar_akhir REAL DEFAULT 0,
       estimasi_konsumsi_solar REAL DEFAULT 0,
       kendala_list TEXT,
+      kendala_data TEXT,
       ada_kendala INTEGER DEFAULT 0
     );
 
@@ -463,6 +464,10 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN kendala_list TEXT;");
       console.log('Added kendala_list column to hasil_input_aktivitas');
     }
+    if (cols && !cols.includes('kendala_data')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN kendala_data TEXT;");
+      console.log('Added kendala_data column to hasil_input_aktivitas');
+    }
     if (cols && !cols.includes('rencana_id')) {
       db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN rencana_id TEXT;");
       console.log('Added rencana_id column to hasil_input_aktivitas');
@@ -565,6 +570,10 @@ function initTablesAndSeed(db: Database) {
     if (actCols && !actCols.includes('kendala_list')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_list TEXT;");
       console.log('Added kendala_list column to aktivitas_unit');
+    }
+    if (actCols && !actCols.includes('kendala_data')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_data TEXT;");
+      console.log('Added kendala_data column to aktivitas_unit');
     }
     if (actCols && !actCols.includes('ada_kendala')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN ada_kendala INTEGER DEFAULT 0;");
@@ -989,19 +998,19 @@ function initTablesAndSeed(db: Database) {
     db.run("UPDATE hasil_input_aktivitas SET stik_awal = 60.0, stik_akhir = 35.0 WHERE kode_unit = 'DT-101' AND stik_awal IS NULL");
 
     const sampleKendalaDZ02 = JSON.stringify([
-      { nama_kendala: 'Tunggu Solar', waktu_mulai: '08:30', waktu_selesai: '10:00', durasi_menit: 90 },
-      { nama_kendala: 'Perbaikan Implement', waktu_mulai: '13:15', waktu_selesai: '14:00', durasi_menit: 45 }
+      { nama_kendala: 'Tunggu Solar', kode_kendala: 'KND-01', jam_mulai: '08:30', jam_selesai: '10:00', durasi_jam: 1.5, hambatan: 1.5, waktu_mulai: '08:30', waktu_selesai: '10:00', durasi_menit: 90 },
+      { nama_kendala: 'Perbaikan Implement', kode_kendala: 'KND-02', jam_mulai: '13:15', jam_selesai: '14:00', durasi_jam: 0.75, hambatan: 0.75, waktu_mulai: '13:15', waktu_selesai: '14:00', durasi_menit: 45 }
     ]);
     const sampleKendalaGD01 = JSON.stringify([
-      { nama_kendala: 'Tunggu Cuaca', waktu_mulai: '07:00', waktu_selesai: '09:30', durasi_menit: 150 }
+      { nama_kendala: 'Tunggu Cuaca', kode_kendala: 'KND-03', jam_mulai: '07:00', jam_selesai: '09:30', durasi_jam: 2.5, hambatan: 2.5, waktu_mulai: '07:00', waktu_selesai: '09:30', durasi_menit: 150 }
     ]);
     const sampleKendalaHEH1 = JSON.stringify([
-      { nama_kendala: 'Cek unit, Implement Pemanasan mesin', waktu_mulai: '06:30', waktu_selesai: '07:00', durasi_menit: 30 }
+      { nama_kendala: 'Cek unit, Implement Pemanasan mesin', kode_kendala: 'KND-04', jam_mulai: '06:30', jam_selesai: '07:00', durasi_jam: 0.5, hambatan: 0.5, waktu_mulai: '06:30', waktu_selesai: '07:00', durasi_menit: 30 }
     ]);
 
-    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'DZ-02' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaDZ02]);
-    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'GD-01' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaGD01]);
-    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'HEH1' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaHEH1]);
+    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ?, kendala_data = ?, ada_kendala = 1 WHERE kode_unit = 'DZ-02' AND (kendala_list IS NULL OR kendala_list = '' OR kendala_list = '[]')", [sampleKendalaDZ02, sampleKendalaDZ02]);
+    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ?, kendala_data = ?, ada_kendala = 1 WHERE kode_unit = 'GD-01' AND (kendala_list IS NULL OR kendala_list = '' OR kendala_list = '[]')", [sampleKendalaGD01, sampleKendalaGD01]);
+    db.run("UPDATE hasil_input_aktivitas SET kendala_list = ?, kendala_data = ?, ada_kendala = 1 WHERE kode_unit = 'HEH1' AND (kendala_list IS NULL OR kendala_list = '' OR kendala_list = '[]')", [sampleKendalaHEH1, sampleKendalaHEH1]);
 
     // Backfill sample corrected HM awal on DT-101 for realistic testing & immediate verification
     db.run("UPDATE hasil_input_aktivitas SET is_hm_awal_corrected = 1, alasan_koreksi_hm = 'Salah input shift malam' WHERE kode_unit = 'DT-101' AND (is_hm_awal_corrected IS NULL OR is_hm_awal_corrected = 0)");

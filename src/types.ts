@@ -164,7 +164,9 @@ export interface HasilInputAktivitas {
   stik_solar_akhir?: number | null;
   estimasi_konsumsi_solar?: number | null;
   ada_kendala?: number | boolean;
+  kendala?: any[] | null;
   kendala_list?: KendalaItem[] | string | null;
+  kendala_data?: any;
   is_hm_awal_corrected?: boolean | number;
   alasan_koreksi_hm?: string | null;
   created_at: string;
