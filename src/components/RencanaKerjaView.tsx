@@ -19,7 +19,7 @@ import {
   Truck,
   UserCheck
 } from 'lucide-react';
-import { RencanaKerja, Unit, Operator, Lokasi } from '../types';
+import { RencanaKerja, Unit, Operator, Lokasi, AktivitasUnit } from '../types';
 
 interface RencanaKerjaViewProps {
   rencanaList: RencanaKerja[];
@@ -27,6 +27,7 @@ interface RencanaKerjaViewProps {
   operators: Operator[];
   lokasiList: Lokasi[];
   supervisors: string[];
+  aktivitasList?: AktivitasUnit[];
   onRefresh: () => void;
   onTerbitkanSpk: (id: string, nomorSpk: string) => Promise<void>;
   onCreateRencana: (data: Partial<RencanaKerja>) => Promise<void>;
@@ -39,6 +40,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   operators,
   lokasiList,
   supervisors,
+  aktivitasList = [],
   onRefresh,
   onTerbitkanSpk,
   onCreateRencana,
@@ -69,7 +71,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   const [formOperator, setFormOperator] = useState('');
   const [formKodeLokasi, setFormKodeLokasi] = useState('');
   const [formShift, setFormShift] = useState<'SIANG' | 'MALAM'>('SIANG');
-  const [formStatusUnit, setFormStatusUnit] = useState<'OPERASI' | 'STANDBY' | 'BREAKDOWN'>('OPERASI');
+  const [formAktivitas, setFormAktivitas] = useState('');
   const [formNomorSpk, setFormNomorSpk] = useState('');
   const [formKeterangan, setFormKeterangan] = useState('');
 
@@ -165,6 +167,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
     setIsCreating(true);
     try {
+      const selectedAct = aktivitasList.find(a => a.nama_aktivitas === formAktivitas);
       await onCreateRencana({
         nama_pengawas: formPengawas,
         tanggal: formTanggal,
@@ -172,17 +175,20 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
         operator: formOperator,
         kode_lokasi: formKodeLokasi,
         shift_kerja: formShift,
-        status_unit: formStatusUnit,
+        id_aktivitas: selectedAct?.id,
+        kode_sap: selectedAct?.kode_sap,
+        satuan: selectedAct?.satuan,
         nomor_spk: formNomorSpk.trim() || undefined,
-        keterangan_rencana: formKeterangan,
-        nama_aktivitas: formKeterangan,
-        aktivitas: formKeterangan
+        keterangan_rencana: formKeterangan || formAktivitas,
+        nama_aktivitas: formAktivitas || formKeterangan,
+        aktivitas: formAktivitas || formKeterangan
       });
       setIsCreateModalOpen(false);
       setFeedbackNotice('Rencana kerja berhasil ditambahkan ke sistem.');
       setTimeout(() => setFeedbackNotice(null), 3500);
 
       // reset form
+      setFormAktivitas('');
       setFormNomorSpk('');
       setFormKeterangan('');
     } catch (err: unknown) {
@@ -754,17 +760,20 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                   </select>
                 </div>
 
-                {/* Status Unit */}
+                {/* Aktivitas Rencana (Status otomatis ditentukan dari Master Aktivitas) */}
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Status Unit</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Aktivitas Rencana</label>
                   <select
-                    value={formStatusUnit}
-                    onChange={(e) => setFormStatusUnit(e.target.value as 'OPERASI' | 'STANDBY' | 'BREAKDOWN')}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 font-bold"
+                    value={formAktivitas}
+                    onChange={(e) => setFormAktivitas(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500"
                   >
-                    <option value="OPERASI">OPERASI</option>
-                    <option value="STANDBY">STANDBY</option>
-                    <option value="BREAKDOWN">BREAKDOWN</option>
+                    <option value="">-- Pilih Aktivitas (Opsional) --</option>
+                    {aktivitasList.map(a => (
+                      <option key={a.id} value={a.nama_aktivitas}>
+                        {a.nama_aktivitas} [{a.kategori_status || a.status_unit || 'OPERASI'}]
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

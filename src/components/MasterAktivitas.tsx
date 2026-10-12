@@ -14,11 +14,12 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAktivitas, setEditingAktivitas] = useState<AktivitasUnit | null>(null);
 
-  // Form State (Hanya: Jenis Unit, Nama Aktivitas Lapangan, Satuan Ukur, dan Kode SAP Akuntansi - TANPA Kategori)
+  // Form State
   const [jenisUnit, setJenisUnit] = useState('EXCAVATOR');
   const [namaAktivitas, setNamaAktivitas] = useState('');
   const [satuan, setSatuan] = useState('m3');
   const [kodeSap, setKodeSap] = useState('');
+  const [kategoriStatus, setKategoriStatus] = useState<'OPERASI' | 'STANDBY' | 'BREAKDOWN'>('OPERASI');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -33,6 +34,7 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
     setNamaAktivitas('');
     setSatuan('m3');
     setKodeSap(`ACT-SAP-${100 + aktivitasList.length + 1}`);
+    setKategoriStatus('OPERASI');
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -43,6 +45,7 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
     setNamaAktivitas(item.nama_aktivitas);
     setSatuan(item.satuan);
     setKodeSap(item.kode_sap);
+    setKategoriStatus(item.kategori_status || item.status_unit || 'OPERASI');
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -53,7 +56,7 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
     setErrorMessage(null);
 
     try {
-      const url = editingAktivitas ? `/api/aktivitas/${editingAktivitas.id}` : '/api/aktivitas';
+      const url = editingAktivitas ? `/api/master-aktivitas/${editingAktivitas.id}` : '/api/master-aktivitas';
       const method = editingAktivitas ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
@@ -63,7 +66,8 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
           jenis_unit: jenisUnit,
           nama_aktivitas: namaAktivitas,
           satuan,
-          kode_sap: kodeSap
+          kode_sap: kodeSap,
+          kategori_status: kategoriStatus
         })
       });
 
@@ -257,6 +261,7 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <th className="py-3 px-4">Jenis Unit</th>
                 <th className="py-3 px-4">Nama Aktivitas Lapangan</th>
+                <th className="py-3 px-4 text-center">Kategori Status</th>
                 <th className="py-3 px-4">Satuan Ukur</th>
                 <th className="py-3 px-4">Kode SAP Akuntansi</th>
                 <th className="py-3 px-4 text-center">Status</th>
@@ -266,13 +271,14 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-slate-400">
+                  <td colSpan={7} className="text-center py-10 text-slate-400">
                     Tidak ada data aktivitas yang sesuai.
                   </td>
                 </tr>
               ) : (
                 filtered.map((item) => {
                   const isAktif = (item.status_aktif ?? 1) === 1;
+                  const itemKategori = item.kategori_status || item.status_unit || 'OPERASI';
                   return (
                     <tr key={item.id} className={`hover:bg-slate-50/80 transition-colors ${!isAktif ? 'bg-slate-50/50 opacity-65' : ''}`}>
                       <td className="py-3 px-4">
@@ -282,6 +288,26 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
                       </td>
                       <td className="py-3 px-4 font-semibold text-slate-900">
                         {item.nama_aktivitas}
+                      </td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        {itemKategori === 'OPERASI' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                            OPERASI
+                          </span>
+                        )}
+                        {itemKategori === 'STANDBY' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                            STANDBY
+                          </span>
+                        )}
+                        {itemKategori === 'BREAKDOWN' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                            BREAKDOWN
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-slate-700 font-mono">
                         {item.satuan}
@@ -407,6 +433,53 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
                   onChange={(e) => setNamaAktivitas(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Kategori Status Operasional <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setKategoriStatus('OPERASI')}
+                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      kategoriStatus === 'OPERASI'
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${kategoriStatus === 'OPERASI' ? 'bg-white' : 'bg-emerald-500'}`}></span>
+                    <span>OPERASI</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKategoriStatus('STANDBY')}
+                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      kategoriStatus === 'STANDBY'
+                        ? 'bg-amber-500 border-amber-500 text-white shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${kategoriStatus === 'STANDBY' ? 'bg-white' : 'bg-amber-500'}`}></span>
+                    <span>STANDBY</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKategoriStatus('BREAKDOWN')}
+                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      kategoriStatus === 'BREAKDOWN'
+                        ? 'bg-rose-600 border-rose-600 text-white shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${kategoriStatus === 'BREAKDOWN' ? 'bg-white' : 'bg-rose-500'}`}></span>
+                    <span>BREAKDOWN</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Status unit pada Beranda & Analitik akan otomatis disetel mengikuti kategori ini.
+                </p>
               </div>
 
               <div>

@@ -887,6 +887,7 @@ export default function App() {
               operators={operators}
               lokasiList={lokasiList}
               supervisors={supervisors}
+              aktivitasList={aktivitasList}
               onRefresh={fetchRencanaList}
               onTerbitkanSpk={handleTerbitkanSpk}
               onCreateRencana={handleCreateRencana}

@@ -43,6 +43,8 @@ export interface AktivitasUnitRow {
   nama_aktivitas: string;
   satuan: string;
   kode_sap: string;
+  kategori_status?: 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
+  status_unit?: 'OPERASI' | 'STANDBY' | 'BREAKDOWN';
   status_aktif: number;
   stik_solar_awal?: number;
   stik_solar_akhir?: number;
@@ -311,6 +313,8 @@ function initTablesAndSeed(db: Database) {
       nama_aktivitas TEXT NOT NULL,
       satuan TEXT NOT NULL,
       kode_sap TEXT NOT NULL,
+      kategori_status TEXT DEFAULT 'OPERASI',
+      status_unit TEXT DEFAULT 'OPERASI',
       is_hm_awal_corrected INTEGER DEFAULT 0,
       alasan_koreksi_hm TEXT DEFAULT NULL,
       status_aktif INTEGER DEFAULT 1,
@@ -616,9 +620,60 @@ function initTablesAndSeed(db: Database) {
       console.log('Added id_aktivitas column to rencana_kerja');
     }
 
-    // Ensure view master_aktivitas exists for transparent query joins
+    // Ensure kategori_status and status_unit columns exist in aktivitas_unit
     try {
-      db.run("CREATE VIEW IF NOT EXISTS master_aktivitas AS SELECT * FROM aktivitas_unit;");
+      const actInfo = db.exec("PRAGMA table_info(aktivitas_unit)");
+      const actCols = actInfo[0]?.values.map(v => v[1]);
+      if (actCols && !actCols.includes('kategori_status')) {
+        db.run("ALTER TABLE aktivitas_unit ADD COLUMN kategori_status TEXT DEFAULT 'OPERASI';");
+        console.log('Added kategori_status column to aktivitas_unit');
+      }
+      if (actCols && !actCols.includes('status_unit')) {
+        db.run("ALTER TABLE aktivitas_unit ADD COLUMN status_unit TEXT DEFAULT 'OPERASI';");
+        console.log('Added status_unit column to aktivitas_unit');
+      }
+      db.run("UPDATE aktivitas_unit SET kategori_status = 'OPERASI' WHERE kategori_status IS NULL OR kategori_status = '';");
+      db.run("UPDATE aktivitas_unit SET kategori_status = 'STANDBY' WHERE LOWER(nama_aktivitas) LIKE '%standby%';");
+      db.run("UPDATE aktivitas_unit SET kategori_status = 'BREAKDOWN' WHERE LOWER(nama_aktivitas) LIKE '%breakdown%';");
+      db.run("UPDATE aktivitas_unit SET status_unit = kategori_status WHERE status_unit IS NULL OR status_unit = '' OR status_unit != kategori_status;");
+    } catch (actErr) {
+      console.warn('AktivitasUnit migration note:', actErr);
+    }
+
+    // Refresh view master_aktivitas and INSTEAD OF triggers for transparent operations
+    try {
+      db.run("DROP TRIGGER IF EXISTS trg_master_act_ins;");
+      db.run("DROP TRIGGER IF EXISTS trg_master_act_upd;");
+      db.run("DROP TRIGGER IF EXISTS trg_master_act_del;");
+      db.run("DROP VIEW IF EXISTS master_aktivitas;");
+      db.run("CREATE VIEW master_aktivitas AS SELECT * FROM aktivitas_unit;");
+      db.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_act_ins INSTEAD OF INSERT ON master_aktivitas
+        BEGIN
+          INSERT INTO aktivitas_unit (uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, kategori_status, status_unit)
+          VALUES (NEW.uuid, NEW.client_transaction_id, NEW.jenis_unit, NEW.nama_aktivitas, NEW.satuan, NEW.kode_sap, COALESCE(NEW.status_aktif, 1), COALESCE(NEW.kategori_status, 'OPERASI'), COALESCE(NEW.kategori_status, 'OPERASI'));
+        END;
+      `);
+      db.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_act_upd INSTEAD OF UPDATE ON master_aktivitas
+        BEGIN
+          UPDATE aktivitas_unit SET
+            jenis_unit = NEW.jenis_unit,
+            nama_aktivitas = NEW.nama_aktivitas,
+            satuan = NEW.satuan,
+            kode_sap = NEW.kode_sap,
+            status_aktif = COALESCE(NEW.status_aktif, OLD.status_aktif),
+            kategori_status = COALESCE(NEW.kategori_status, OLD.kategori_status, 'OPERASI'),
+            status_unit = COALESCE(NEW.kategori_status, OLD.kategori_status, 'OPERASI')
+          WHERE id = OLD.id;
+        END;
+      `);
+      db.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_act_del INSTEAD OF DELETE ON master_aktivitas
+        BEGIN
+          DELETE FROM aktivitas_unit WHERE id = OLD.id;
+        END;
+      `);
     } catch (viewErr) {
       console.warn('View master_aktivitas create notice:', viewErr);
     }
@@ -842,19 +897,21 @@ function initTablesAndSeed(db: Database) {
       ('WT-05', 'WATER TRUCK', 'Hino Ranger 500', 'Budi Santoso', 2490.1, '2026-10-08 15:10:00');
     `);
 
-    // Seed Aktivitas (Tanpa Kategori)
+    // Seed Aktivitas (Dengan Kategori Status Otomatis)
     db.run(`
-      INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap) VALUES
-      ('EXCAVATOR', 'Galian Tanah Lunak', 'm3', 'ACT-SAP-101'),
-      ('EXCAVATOR', 'Loading Overburden (OB)', 'BCM', 'ACT-SAP-102'),
-      ('EXCAVATOR', 'Pembuatan Saluran Air (Ditch)', 'm', 'ACT-SAP-103'),
-      ('BULLDOZER', 'Clearing & Grubbing Lahan', 'm2', 'ACT-SAP-104'),
-      ('BULLDOZER', 'Dozing & Ripping OB', 'm3', 'ACT-SAP-105'),
-      ('BULLDOZER', 'Perawatan Disposal Area', 'jam', 'ACT-SAP-106'),
-      ('DUMP TRUCK', 'Hauling Overburden ke Disposal', 'rit', 'ACT-SAP-107'),
-      ('DUMP TRUCK', 'Hauling Ore / Batubara ke Stockpile', 'ton', 'ACT-SAP-108'),
-      ('MOTOR GRADER', 'Perawatan Jalan Tambang (Grading)', 'km', 'ACT-SAP-109'),
-      ('WATER TRUCK', 'Penyiraman Jalan Berdebu', 'tangki', 'ACT-SAP-110');
+      INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap, kategori_status, status_unit) VALUES
+      ('EXCAVATOR', 'Galian Tanah Lunak', 'm3', 'ACT-SAP-101', 'OPERASI', 'OPERASI'),
+      ('EXCAVATOR', 'Loading Overburden (OB)', 'BCM', 'ACT-SAP-102', 'OPERASI', 'OPERASI'),
+      ('EXCAVATOR', 'Pembuatan Saluran Air (Ditch)', 'm', 'ACT-SAP-103', 'OPERASI', 'OPERASI'),
+      ('BULLDOZER', 'Clearing & Grubbing Lahan', 'm2', 'ACT-SAP-104', 'OPERASI', 'OPERASI'),
+      ('BULLDOZER', 'Dozing & Ripping OB', 'm3', 'ACT-SAP-105', 'OPERASI', 'OPERASI'),
+      ('BULLDOZER', 'Perawatan Disposal Area', 'jam', 'ACT-SAP-106', 'OPERASI', 'OPERASI'),
+      ('DUMP TRUCK', 'Hauling Overburden ke Disposal', 'rit', 'ACT-SAP-107', 'OPERASI', 'OPERASI'),
+      ('DUMP TRUCK', 'Hauling Ore / Batubara ke Stockpile', 'ton', 'ACT-SAP-108', 'OPERASI', 'OPERASI'),
+      ('MOTOR GRADER', 'Perawatan Jalan Tambang (Grading)', 'km', 'ACT-SAP-109', 'OPERASI', 'OPERASI'),
+      ('WATER TRUCK', 'Penyiraman Jalan Berdebu', 'tangki', 'ACT-SAP-110', 'OPERASI', 'OPERASI'),
+      ('EXCAVATOR', 'Standby Hujan & Kondisi Licin', 'jam', 'ACT-SAP-111', 'STANDBY', 'STANDBY'),
+      ('DUMP TRUCK', 'Breakdown Engine / Sistem Hidrolik', 'jam', 'ACT-SAP-112', 'BREAKDOWN', 'BREAKDOWN');
     `);
 
     // Seed Operators (Tanpa Jabatan)

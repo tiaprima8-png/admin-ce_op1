@@ -520,7 +520,7 @@ async function startServer() {
         `SELECT kode_lokasi, wilayah, luas_bruto, luas_netto, status_aktif, created_at FROM lokasi WHERE status_aktif = 1 ORDER BY kode_lokasi ASC`
       );
       const masterAktivitas = queryAll<AktivitasUnitRow>(
-        `SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC`
+        `SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, 'OPERASI') as kategori_status, COALESCE(status_unit, kategori_status, 'OPERASI') as status_unit, status_aktif FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC`
       );
       const masterOperator = queryAll<OperatorRow>(
         `SELECT id, nama_operator, nik, nama_pengawas, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC`
@@ -656,11 +656,11 @@ async function startServer() {
       if (pengawas && pengawas !== 'Semua') {
         units = queryAll<UnitRow>('SELECT * FROM units WHERE nama_pengawas = ? AND status_aktif = 1 ORDER BY kode_unit ASC', [pengawas]);
         operators = queryAll<OperatorRow>('SELECT * FROM operators WHERE nama_pengawas = ? AND status_aktif = 1 ORDER BY nama_operator ASC', [pengawas]);
-        aktivitas = queryAll<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
+        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
       } else {
         units = queryAll<UnitRow>('SELECT * FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC');
         operators = queryAll<OperatorRow>('SELECT * FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC');
-        aktivitas = queryAll<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
+        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
       }
 
       res.json({
@@ -792,7 +792,6 @@ async function startServer() {
       // Normalisasi format tanggal bisnis (ke ISO YYYY-MM-DD) dan simpan langsung ke kolom tanggal SQLite
       const tgl = formatToISODate(tanggal);
       const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
-      const status_unit = (rawStatusUnit || 'OPERASI').toUpperCase();
       const shift_kerja = (rawShift || 'SIANG').toUpperCase();
       const status_spk = rawStatusSpk || (nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK');
 
@@ -800,17 +799,17 @@ async function startServer() {
       let resolvedKodeSap = (rawKodeSap || '').trim();
       let resolvedSatuan = (rawSatuan || 'm3').trim();
 
-      // Look up master activity by ID or Kode SAP or matching name
+      // Look up master activity by ID or Kode SAP or matching name to get kategori_status automatically
       let actMatch: AktivitasUnitRow | null = null;
       if (rawIdAktivitas) {
-        actMatch = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE id = ?', [rawIdAktivitas]);
+        actMatch = queryOne<AktivitasUnitRow>('SELECT * FROM master_aktivitas WHERE id = ?', [rawIdAktivitas]);
       }
       if (!actMatch && resolvedKodeSap) {
-        actMatch = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE kode_sap = ?', [resolvedKodeSap]);
+        actMatch = queryOne<AktivitasUnitRow>('SELECT * FROM master_aktivitas WHERE kode_sap = ?', [resolvedKodeSap]);
       }
       if (!actMatch && resolvedNamaAktivitas) {
         actMatch = queryOne<AktivitasUnitRow>(
-          'SELECT * FROM aktivitas_unit WHERE LOWER(nama_aktivitas) = LOWER(?) OR LOWER(?) LIKE "%" || LOWER(nama_aktivitas) || "%" LIMIT 1',
+          'SELECT * FROM master_aktivitas WHERE LOWER(nama_aktivitas) = LOWER(?) OR LOWER(?) LIKE "%" || LOWER(nama_aktivitas) || "%" LIMIT 1',
           [resolvedNamaAktivitas, resolvedNamaAktivitas]
         );
       }
@@ -823,6 +822,13 @@ async function startServer() {
       if (!resolvedKodeSap) {
         resolvedKodeSap = 'ACT-SAP-101';
       }
+
+      // Otomatis tentukan status_unit berdasarkan kategori_status dari master aktivitas
+      const autoStatus = actMatch?.kategori_status || actMatch?.status_unit || null;
+      const statusCandidate = (rawStatusUnit || autoStatus || 'OPERASI').toUpperCase();
+      const status_unit = ['OPERASI', 'STANDBY', 'BREAKDOWN'].includes(statusCandidate)
+        ? statusCandidate
+        : 'OPERASI';
 
       const insertSql = `
         INSERT INTO rencana_kerja (
@@ -1795,8 +1801,18 @@ async function startServer() {
         foto_bukti = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
       }
 
-      // Status Unit & Solar handling
-      const statusUnitStr = (rawStatusUnit || linkedPlan?.status_unit || 'OPERASI').toUpperCase();
+      // Status Unit & Solar handling: Otomatis tentukan status dari master_aktivitas jika tidak disertakan
+      let autoActStatus: string | null = null;
+      if (kode_sap || nama_aktivitas) {
+        const matchedAct = queryOne<AktivitasUnitRow>(
+          `SELECT kategori_status, status_unit FROM master_aktivitas WHERE (kode_sap = ? AND kode_sap != '') OR LOWER(nama_aktivitas) = LOWER(?) LIMIT 1`,
+          [kode_sap || '', nama_aktivitas || '']
+        );
+        if (matchedAct) {
+          autoActStatus = matchedAct.kategori_status || matchedAct.status_unit || null;
+        }
+      }
+      const statusUnitStr = (rawStatusUnit || autoActStatus || linkedPlan?.status_unit || 'OPERASI').toUpperCase();
       const status_unit = ['OPERASI', 'STANDBY', 'BREAKDOWN'].includes(statusUnitStr) ? statusUnitStr : 'OPERASI';
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
       const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawJumlahLiterSolar) || 0) : 0;
@@ -2248,7 +2264,8 @@ async function startServer() {
             COALESCE(h.nama_pengawas, r.nama_pengawas) as nama_pengawas,
             r.tanggal as tanggal,
             COALESCE(h.tanggal_kerja, h.tanggal, r.tanggal) as tanggal_kerja,
-            COALESCE(h.status_unit, r.status_unit, 'OPERASI') as status_unit,
+            COALESCE(ma_act.kategori_status, ma_r.kategori_status, h.status_unit, r.status_unit, 'OPERASI') as status_unit,
+            COALESCE(ma_act.kategori_status, ma_r.kategori_status, h.status_unit, r.status_unit, 'OPERASI') as kategori_status,
             COALESCE(h.kode_unit, r.kode_unit) as kode_unit,
             COALESCE(h.kode_unit, r.kode_unit) as unit,
             h.nama_aktivitas as aktivitas_aktual,
@@ -2338,7 +2355,8 @@ async function startServer() {
             h.nama_pengawas,
             h.tanggal,
             COALESCE(h.tanggal_kerja, h.tanggal) as tanggal_kerja,
-            h.status_unit,
+            COALESCE(ma_h.kategori_status, h.status_unit, 'OPERASI') as status_unit,
+            COALESCE(ma_h.kategori_status, h.status_unit, 'OPERASI') as kategori_status,
             h.kode_unit,
             h.kode_unit as unit,
             h.nama_aktivitas as aktivitas_aktual,
@@ -2690,8 +2708,19 @@ async function startServer() {
         ? parseFloat(hm_harian_berjalan)
         : Math.round((numHmAkhir - numHmAwal) * 10) / 10;
 
-      // Status Unit & Solar handling
-      const statusUnitStr = (rawStatusUnit || 'OPERASI').toUpperCase();
+      // Status Unit & Solar handling: Otomatis tentukan status dari master_aktivitas jika tidak disertakan
+      let autoActStatus: string | null = null;
+      if (kode_sap || nama_aktivitas) {
+        const matchedAct = queryOne<AktivitasUnitRow>(
+          `SELECT kategori_status, status_unit FROM master_aktivitas WHERE (kode_sap = ? AND kode_sap != '') OR LOWER(nama_aktivitas) = LOWER(?) LIMIT 1`,
+          [kode_sap || '', nama_aktivitas || '']
+        );
+        if (matchedAct) {
+          autoActStatus = matchedAct.kategori_status || matchedAct.status_unit || null;
+        }
+      }
+      const existingRow = queryOne<HasilInputAktivitasRow>('SELECT status_unit FROM hasil_input_aktivitas WHERE id = ?', [id]);
+      const statusUnitStr = (rawStatusUnit || autoActStatus || existingRow?.status_unit || 'OPERASI').toUpperCase();
       const status_unit = ['OPERASI', 'STANDBY', 'BREAKDOWN'].includes(statusUnitStr) ? statusUnitStr : 'OPERASI';
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
       const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawJumlahLiterSolar) || 0) : 0;
@@ -3045,7 +3074,7 @@ async function startServer() {
 
   // 4B. ANALYTICS & SUMMARY AGGREGATION ENDPOINT
   // Fast SQL Queries with GROUP BY (kode_unit, nama_aktivitas, status_unit)
-  app.get('/api/analytics', (req: Request, res: Response) => {
+  app.get(['/api/analitik', '/api/analytics'], (req: Request, res: Response) => {
     try {
       const { startDate, endDate, pengawas, unit } = req.query;
       let whereClause = ' WHERE 1=1';
@@ -3158,17 +3187,37 @@ async function startServer() {
       });
 
       const totalHours = Math.round((operasiHours + standbyHours + breakdownHours) * 10) / 10;
+      const total_jam_operasi = Math.round(operasiHours * 10) / 10;
+      const total_jam_standby = Math.round(standbyHours * 10) / 10;
+      const total_jam_breakdown = Math.round(breakdownHours * 10) / 10;
+
+      // PA (Physical Availability): (Jam Operasi + Jam Standby) / Total Jam * 100%
+      const pa = totalHours > 0
+        ? Math.round(((total_jam_operasi + total_jam_standby) / totalHours) * 1000) / 10
+        : 100;
+
+      // UA (Utilization of Availability): Jam Operasi / (Jam Operasi + Jam Standby) * 100%
+      const availableHours = total_jam_operasi + total_jam_standby;
+      const ua = availableHours > 0
+        ? Math.round((total_jam_operasi / availableHours) * 1000) / 10
+        : 100;
+
       const statusWaktu = {
         operasi_count: operasiCount,
-        operasi_hours: Math.round(operasiHours * 10) / 10,
+        operasi_hours: total_jam_operasi,
+        total_jam_operasi,
         operasi_percent: totalHours > 0 ? Math.round((operasiHours / totalHours) * 100) : 0,
         standby_count: standbyCount,
-        standby_hours: Math.round(standbyHours * 10) / 10,
+        standby_hours: total_jam_standby,
+        total_jam_standby,
         standby_percent: totalHours > 0 ? Math.round((standbyHours / totalHours) * 100) : 0,
         breakdown_count: breakdownCount,
-        breakdown_hours: Math.round(breakdownHours * 10) / 10,
+        breakdown_hours: total_jam_breakdown,
+        total_jam_breakdown,
         breakdown_percent: totalHours > 0 ? Math.round((breakdownHours / totalHours) * 100) : 0,
-        total_hours: totalHours
+        total_hours: totalHours,
+        pa,
+        ua
       };
 
       // 4. Metric Grand Totals
@@ -3187,6 +3236,11 @@ async function startServer() {
         totalHm,
         rasioKonsumsi,
         totalRecords: unitData.length,
+        total_jam_operasi,
+        total_jam_standby,
+        total_jam_breakdown,
+        pa,
+        ua,
         unitData,
         aktivitasData,
         statusWaktu
@@ -3320,11 +3374,11 @@ async function startServer() {
     }
   });
 
-  // 6. MASTER AKTIVITAS CRUD (Supports Soft Delete)
-  app.get('/api/aktivitas', (req: Request, res: Response) => {
+  // 6. MASTER AKTIVITAS CRUD (Supports Soft Delete & Kategori Status Otomatis)
+  app.get(['/api/master-aktivitas', '/api/aktivitas'], (req: Request, res: Response) => {
     try {
       const { status } = req.query;
-      let sql = 'SELECT * FROM aktivitas_unit WHERE 1=1';
+      let sql = 'SELECT id, uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif, stik_solar_awal, stik_solar_akhir, estimasi_konsumsi_solar, kendala_list, ada_kendala FROM aktivitas_unit WHERE 1=1';
       const params: (string | number)[] = [];
 
       if (status !== undefined && status !== 'Semua' && status !== '') {
@@ -3340,14 +3394,19 @@ async function startServer() {
     }
   });
 
-  app.post('/api/aktivitas', (req: Request, res: Response) => {
+  app.post(['/api/master-aktivitas', '/api/aktivitas'], (req: Request, res: Response) => {
     try {
-      const { jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif } = req.body;
+      const { jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, kategori_status: rawKategoriStatus } = req.body;
       const activeStatus = status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1;
+      const validKategori = ['OPERASI', 'STANDBY', 'BREAKDOWN'];
+      const kategori_status = rawKategoriStatus && validKategori.includes(String(rawKategoriStatus).toUpperCase())
+        ? String(rawKategoriStatus).toUpperCase()
+        : 'OPERASI';
+
       const resDb = execute(`
-        INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif)
-        VALUES (?, ?, ?, ?, ?)
-      `, [jenis_unit, nama_aktivitas, satuan, kode_sap, activeStatus]);
+        INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, kategori_status, status_unit)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [jenis_unit, nama_aktivitas, satuan, kode_sap, activeStatus, kategori_status, kategori_status]);
 
       const inserted = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE id = ?', [resDb.lastInsertRowId]);
       res.status(201).json(inserted);
@@ -3356,19 +3415,35 @@ async function startServer() {
     }
   });
 
-  app.put('/api/aktivitas/:id', (req: Request, res: Response) => {
+  app.put(['/api/master-aktivitas/:id', '/api/aktivitas/:id'], (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const { jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif } = req.body;
+      const { jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, kategori_status: rawKategoriStatus } = req.body;
       const existing = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE id = ?', [id]);
+      if (!existing) {
+        return res.status(404).json({ error: 'Aktivitas tidak ditemukan' });
+      }
+
       const activeStatus = status_aktif !== undefined
         ? (status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1)
         : (existing?.status_aktif ?? 1);
 
+      const validKategori = ['OPERASI', 'STANDBY', 'BREAKDOWN'];
+      const kategori_status = rawKategoriStatus && validKategori.includes(String(rawKategoriStatus).toUpperCase())
+        ? String(rawKategoriStatus).toUpperCase()
+        : (existing?.kategori_status || 'OPERASI');
+
       execute(`
-        UPDATE aktivitas_unit SET jenis_unit = ?, nama_aktivitas = ?, satuan = ?, kode_sap = ?, status_aktif = ?
+        UPDATE aktivitas_unit SET 
+          jenis_unit = ?, 
+          nama_aktivitas = ?, 
+          satuan = ?, 
+          kode_sap = ?, 
+          status_aktif = ?,
+          kategori_status = ?,
+          status_unit = ?
         WHERE id = ?
-      `, [jenis_unit, nama_aktivitas, satuan, kode_sap, activeStatus, id]);
+      `, [jenis_unit, nama_aktivitas, satuan, kode_sap, activeStatus, kategori_status, kategori_status, id]);
 
       const updated = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE id = ?', [id]);
       res.json(updated);
@@ -3377,7 +3452,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/aktivitas/:id', (req: Request, res: Response) => {
+  app.delete(['/api/master-aktivitas/:id', '/api/aktivitas/:id'], (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
       execute('UPDATE aktivitas_unit SET status_aktif = 0 WHERE id = ?', [id]);

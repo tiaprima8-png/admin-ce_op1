@@ -38,6 +38,8 @@ export interface AktivitasUnit {
   nama_aktivitas: string;
   satuan: string;
   kode_sap: string;
+  kategori_status?: UnitStatus;
+  status_unit?: UnitStatus;
   status_aktif?: number;
   stik_solar_awal?: number;
   stik_solar_akhir?: number;
@@ -155,6 +157,7 @@ export interface HasilInputAktivitas {
   has_foto_hm?: boolean;
   has_foto?: boolean;
   status_unit: UnitStatus;
+  kategori_status?: UnitStatus;
   is_isi_solar?: boolean | number;
   solar?: number | null;
   jumlah_liter_solar?: number | null;
@@ -217,6 +220,11 @@ export interface StatusWaktuAnalytics {
   breakdown_hours: number;
   breakdown_percent: number;
   total_hours: number;
+  total_jam_operasi?: number;
+  total_jam_standby?: number;
+  total_jam_breakdown?: number;
+  pa?: number;
+  ua?: number;
 }
 
 export interface AnalyticsSummary {
@@ -224,6 +232,11 @@ export interface AnalyticsSummary {
   totalHm: number;
   rasioKonsumsi: number;
   totalRecords: number;
+  total_jam_operasi?: number;
+  total_jam_standby?: number;
+  total_jam_breakdown?: number;
+  pa?: number;
+  ua?: number;
   unitData: UnitAnalyticsRow[];
   aktivitasData: AktivitasAnalyticsRow[];
   statusWaktu: StatusWaktuAnalytics;

@@ -130,6 +130,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
   const totalFreqBreakdownAllUnits = unitData.reduce((acc, u) => acc + u.freq_breakdown_standby, 0);
   const grandRatio = totalHmAllUnits > 0 ? Math.round((totalSolarAllUnits / totalHmAllUnits) * 100) / 100 : 0;
 
+  // PA (Physical Availability) & UA (Utilization of Availability)
+  const pa = analyticsData?.pa ?? statusWaktu.pa ?? (
+    statusWaktu.total_hours > 0
+      ? Math.round(((statusWaktu.operasi_hours + statusWaktu.standby_hours) / statusWaktu.total_hours) * 1000) / 10
+      : 100
+  );
+  const availableHours = (statusWaktu.operasi_hours + statusWaktu.standby_hours);
+  const ua = analyticsData?.ua ?? statusWaktu.ua ?? (
+    availableHours > 0
+      ? Math.round((statusWaktu.operasi_hours / availableHours) * 1000) / 10
+      : 100
+  );
+
   return (
     <div className="space-y-6">
 
@@ -361,7 +374,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
 
       </div>
 
-      {/* PANEL RANGKUMAN STATUS WAKTU KERJA (PROGRESS BAR & BREAKDOWN) */}
+      {/* PANEL RANGKUMAN STATUS WAKTU KERJA & METRIK PA / UA */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
@@ -370,7 +383,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
               <span>Rangkuman Distribusi Waktu Kerja Operasional Fleet</span>
             </h3>
             <p className="text-xs text-slate-500">
-              Perbandingan persentase waktu: Jam Kerja Efektif vs Standby vs Breakdown
+              Perbandingan waktu: Working Hours (Operasi), Standby Hours, Breakdown Hours & Rasio Ketersediaan (PA / UA)
             </p>
           </div>
           <div className="text-xs text-slate-600 font-medium">
@@ -378,81 +391,148 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
           </div>
         </div>
 
-        {/* Visual Progress Bar (Multi-Segment) */}
-        <div className="w-full h-5 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
-          {/* Segment 1: Operasi Efektif (Hijau Emerald) */}
-          <div
-            style={{ width: `${Math.max(statusWaktu.operasi_percent, 2)}%` }}
-            className="bg-emerald-600 h-full flex items-center justify-center text-[10px] font-bold text-white transition-all"
-            title={`Operasi Efektif: ${statusWaktu.operasi_percent}% (${statusWaktu.operasi_hours}h)`}
-          >
-            {statusWaktu.operasi_percent > 8 && `${statusWaktu.operasi_percent}%`}
+        {/* Visual Progress Bar (Multi-Segment Proporsi % Jam Kerja) */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+            <span>Proporsi Jam Kerja Armada (%):</span>
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1 text-emerald-800">
+                <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                <span>Operasi: {statusWaktu.operasi_percent}%</span>
+              </span>
+              <span className="inline-flex items-center gap-1 text-amber-800">
+                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span>Standby: {statusWaktu.standby_percent}%</span>
+              </span>
+              <span className="inline-flex items-center gap-1 text-rose-800">
+                <span className="w-2 h-2 rounded-full bg-rose-600"></span>
+                <span>Breakdown: {statusWaktu.breakdown_percent}%</span>
+              </span>
+            </div>
           </div>
 
-          {/* Segment 2: Standby (Amber / Oranye) */}
-          <div
-            style={{ width: `${Math.max(statusWaktu.standby_percent, statusWaktu.standby_hours > 0 ? 2 : 0)}%` }}
-            className="bg-amber-500 h-full flex items-center justify-center text-[10px] font-bold text-white transition-all"
-            title={`Standby: ${statusWaktu.standby_percent}% (${statusWaktu.standby_hours}h)`}
-          >
-            {statusWaktu.standby_percent > 8 && `${statusWaktu.standby_percent}%`}
-          </div>
+          <div className="w-full h-5 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+            {/* Segment 1: Operasi Efektif (Hijau Emerald) */}
+            <div
+              style={{ width: `${Math.max(statusWaktu.operasi_percent, statusWaktu.operasi_hours > 0 ? 2 : 0)}%` }}
+              className="bg-emerald-600 h-full flex items-center justify-center text-[10px] font-bold text-white transition-all"
+              title={`Working Hours (Operasi): ${statusWaktu.operasi_percent}% (${statusWaktu.operasi_hours}h)`}
+            >
+              {statusWaktu.operasi_percent > 8 && `${statusWaktu.operasi_percent}%`}
+            </div>
 
-          {/* Segment 3: Breakdown (Merah / Rose) */}
-          <div
-            style={{ width: `${Math.max(statusWaktu.breakdown_percent, statusWaktu.breakdown_hours > 0 ? 2 : 0)}%` }}
-            className="bg-rose-600 h-full flex items-center justify-center text-[10px] font-bold text-white transition-all"
-            title={`Breakdown: ${statusWaktu.breakdown_percent}% (${statusWaktu.breakdown_hours}h)`}
-          >
-            {statusWaktu.breakdown_percent > 8 && `${statusWaktu.breakdown_percent}%`}
+            {/* Segment 2: Standby (Amber / Oranye) */}
+            <div
+              style={{ width: `${Math.max(statusWaktu.standby_percent, statusWaktu.standby_hours > 0 ? 2 : 0)}%` }}
+              className="bg-amber-500 h-full flex items-center justify-center text-[10px] font-bold text-white transition-all"
+              title={`Standby Hours: ${statusWaktu.standby_percent}% (${statusWaktu.standby_hours}h)`}
+            >
+              {statusWaktu.standby_percent > 8 && `${statusWaktu.standby_percent}%`}
+            </div>
+
+            {/* Segment 3: Breakdown (Merah / Rose) */}
+            <div
+              style={{ width: `${Math.max(statusWaktu.breakdown_percent, statusWaktu.breakdown_hours > 0 ? 2 : 0)}%` }}
+              className="bg-rose-600 h-full flex items-center justify-center text-[10px] font-bold text-white transition-all"
+              title={`Breakdown Hours: ${statusWaktu.breakdown_percent}% (${statusWaktu.breakdown_hours}h)`}
+            >
+              {statusWaktu.breakdown_percent > 8 && `${statusWaktu.breakdown_percent}%`}
+            </div>
           </div>
         </div>
 
-        {/* Status Indicator Cards */}
+        {/* Status Indicator Cards: Working Hours, Standby Hours, Breakdown Hours */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
           
-          {/* Card Operasi */}
+          {/* Card Working Hours (Operasi) */}
           <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <span className="w-3 h-3 rounded-full bg-emerald-600"></span>
               <div>
-                <span className="text-xs font-bold text-emerald-950 block">Jam Operasi Efektif</span>
+                <span className="text-xs font-bold text-emerald-950 block">Working Hours (Operasi)</span>
                 <span className="text-[11px] text-emerald-700">{statusWaktu.operasi_count} transaksi laporan</span>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-sm font-extrabold text-emerald-900 block font-mono">{statusWaktu.operasi_hours}h</span>
+              <span className="text-sm font-extrabold text-emerald-900 block font-mono">{statusWaktu.operasi_hours} Jam</span>
               <span className="text-[11px] font-bold text-emerald-700">{statusWaktu.operasi_percent}%</span>
             </div>
           </div>
 
-          {/* Card Standby */}
+          {/* Card Standby Hours */}
           <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <span className="w-3 h-3 rounded-full bg-amber-500"></span>
               <div>
-                <span className="text-xs font-bold text-amber-950 block">Jam Unit Standby</span>
+                <span className="text-xs font-bold text-amber-950 block">Standby Hours</span>
                 <span className="text-[11px] text-amber-700">{statusWaktu.standby_count} transaksi laporan</span>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-sm font-extrabold text-amber-900 block font-mono">{statusWaktu.standby_hours}h</span>
+              <span className="text-sm font-extrabold text-amber-900 block font-mono">{statusWaktu.standby_hours} Jam</span>
               <span className="text-[11px] font-bold text-amber-700">{statusWaktu.standby_percent}%</span>
             </div>
           </div>
 
-          {/* Card Breakdown */}
+          {/* Card Breakdown Hours */}
           <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <span className="w-3 h-3 rounded-full bg-rose-600"></span>
               <div>
-                <span className="text-xs font-bold text-rose-950 block">Jam Unit Breakdown</span>
+                <span className="text-xs font-bold text-rose-950 block">Breakdown Hours</span>
                 <span className="text-[11px] text-rose-700">{statusWaktu.breakdown_count} transaksi laporan</span>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-sm font-extrabold text-rose-900 block font-mono">{statusWaktu.breakdown_hours}h</span>
+              <span className="text-sm font-extrabold text-rose-900 block font-mono">{statusWaktu.breakdown_hours} Jam</span>
               <span className="text-[11px] font-bold text-rose-700">{statusWaktu.breakdown_percent}%</span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* METRIK EFISIENSI FLEET: Physical Availability (PA) & Utilization of Availability (UA) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+          
+          {/* Card PA (Physical Availability) */}
+          <div className="p-3.5 bg-slate-50/80 border border-slate-200 rounded-xl flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-900">Physical Availability (PA)</span>
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded ${pa >= 85 ? 'bg-emerald-100 text-emerald-800' : pa >= 70 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {pa >= 85 ? 'PRIMA' : pa >= 70 ? 'CUKUP' : 'RENDAH'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Kesiapan mekanis armada: (Operasi + Standby) ÷ Total Jam
+              </p>
+            </div>
+            <div className="text-right pl-3">
+              <span className="text-lg font-extrabold text-slate-900 font-mono block">
+                {pa}%
+              </span>
+              <span className="text-[10px] text-slate-500 font-medium">Kesiapan Unit</span>
+            </div>
+          </div>
+
+          {/* Card UA (Utilization of Availability) */}
+          <div className="p-3.5 bg-slate-50/80 border border-slate-200 rounded-xl flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-900">Utilization of Availability (UA)</span>
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded ${ua >= 80 ? 'bg-emerald-100 text-emerald-800' : ua >= 65 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {ua >= 80 ? 'OPTIMAL' : ua >= 65 ? 'CUKUP' : 'KURANG'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Efisiensi utilisasi unit siap pakai: Operasi ÷ (Operasi + Standby)
+              </p>
+            </div>
+            <div className="text-right pl-3">
+              <span className="text-lg font-extrabold text-slate-900 font-mono block">
+                {ua}%
+              </span>
+              <span className="text-[10px] text-slate-500 font-medium">Utilisasi Efektif</span>
             </div>
           </div>
 

@@ -152,9 +152,17 @@ function initTablesAndSeed(db2) {
       nama_aktivitas TEXT NOT NULL,
       satuan TEXT NOT NULL,
       kode_sap TEXT NOT NULL,
+      kategori_status TEXT DEFAULT 'OPERASI',
+      status_unit TEXT DEFAULT 'OPERASI',
       is_hm_awal_corrected INTEGER DEFAULT 0,
       alasan_koreksi_hm TEXT DEFAULT NULL,
-      status_aktif INTEGER DEFAULT 1
+      status_aktif INTEGER DEFAULT 1,
+      stik_solar_awal REAL DEFAULT 0,
+      stik_solar_akhir REAL DEFAULT 0,
+      estimasi_konsumsi_solar REAL DEFAULT 0,
+      kendala_list TEXT,
+      kendala_data TEXT,
+      ada_kendala INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS operators (
@@ -229,7 +237,11 @@ function initTablesAndSeed(db2) {
       jumlah_liter_solar REAL DEFAULT 0.00,
       stik_awal REAL,
       stik_akhir REAL,
+      stik_solar_awal REAL DEFAULT 0,
+      stik_solar_akhir REAL DEFAULT 0,
+      estimasi_konsumsi_solar REAL DEFAULT 0,
       kendala_list TEXT,
+      ada_kendala INTEGER DEFAULT 0,
       is_hm_awal_corrected INTEGER DEFAULT 0,
       alasan_koreksi_hm TEXT DEFAULT NULL,
       created_at TEXT NOT NULL
@@ -290,6 +302,10 @@ function initTablesAndSeed(db2) {
       db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN kendala_list TEXT;");
       console.log("Added kendala_list column to hasil_input_aktivitas");
     }
+    if (cols && !cols.includes("kendala_data")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN kendala_data TEXT;");
+      console.log("Added kendala_data column to hasil_input_aktivitas");
+    }
     if (cols && !cols.includes("rencana_id")) {
       db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN rencana_id TEXT;");
       console.log("Added rencana_id column to hasil_input_aktivitas");
@@ -333,6 +349,25 @@ function initTablesAndSeed(db2) {
       db2.run("UPDATE hasil_input_aktivitas SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
       console.log("Added tanggal_kerja column to hasil_input_aktivitas");
     }
+    if (cols && !cols.includes("stik_solar_awal")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN stik_solar_awal REAL DEFAULT 0;");
+      db2.run("UPDATE hasil_input_aktivitas SET stik_solar_awal = COALESCE(stik_awal, 0);");
+      console.log("Added stik_solar_awal column to hasil_input_aktivitas");
+    }
+    if (cols && !cols.includes("stik_solar_akhir")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN stik_solar_akhir REAL DEFAULT 0;");
+      db2.run("UPDATE hasil_input_aktivitas SET stik_solar_akhir = COALESCE(stik_akhir, 0);");
+      console.log("Added stik_solar_akhir column to hasil_input_aktivitas");
+    }
+    if (cols && !cols.includes("estimasi_konsumsi_solar")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN estimasi_konsumsi_solar REAL DEFAULT 0;");
+      console.log("Added estimasi_konsumsi_solar column to hasil_input_aktivitas");
+    }
+    if (cols && !cols.includes("ada_kendala")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN ada_kendala INTEGER DEFAULT 0;");
+      db2.run("UPDATE hasil_input_aktivitas SET ada_kendala = CASE WHEN kendala_list IS NOT NULL AND TRIM(kendala_list) != '' AND TRIM(kendala_list) != '[]' THEN 1 ELSE 0 END;");
+      console.log("Added ada_kendala column to hasil_input_aktivitas");
+    }
     const actInfo = db2.exec("PRAGMA table_info(aktivitas_unit)");
     const actCols = actInfo[0]?.values.map((v) => v[1]);
     if (actCols && !actCols.includes("is_hm_awal_corrected")) {
@@ -355,6 +390,30 @@ function initTablesAndSeed(db2) {
         console.warn("Index on aktivitas_unit(uuid) already exists or ignored:", idxErr);
       }
       console.log("Added uuid column to aktivitas_unit");
+    }
+    if (actCols && !actCols.includes("stik_solar_awal")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN stik_solar_awal REAL DEFAULT 0;");
+      console.log("Added stik_solar_awal column to aktivitas_unit");
+    }
+    if (actCols && !actCols.includes("stik_solar_akhir")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN stik_solar_akhir REAL DEFAULT 0;");
+      console.log("Added stik_solar_akhir column to aktivitas_unit");
+    }
+    if (actCols && !actCols.includes("estimasi_konsumsi_solar")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN estimasi_konsumsi_solar REAL DEFAULT 0;");
+      console.log("Added estimasi_konsumsi_solar column to aktivitas_unit");
+    }
+    if (actCols && !actCols.includes("kendala_list")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_list TEXT;");
+      console.log("Added kendala_list column to aktivitas_unit");
+    }
+    if (actCols && !actCols.includes("kendala_data")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_data TEXT;");
+      console.log("Added kendala_data column to aktivitas_unit");
+    }
+    if (actCols && !actCols.includes("ada_kendala")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN ada_kendala INTEGER DEFAULT 0;");
+      console.log("Added ada_kendala column to aktivitas_unit");
     }
     const rkInfo = db2.exec("PRAGMA table_info(rencana_kerja)");
     const rkCols = rkInfo[0]?.values.map((v) => v[1]);
@@ -391,7 +450,56 @@ function initTablesAndSeed(db2) {
       console.log("Added id_aktivitas column to rencana_kerja");
     }
     try {
-      db2.run("CREATE VIEW IF NOT EXISTS master_aktivitas AS SELECT * FROM aktivitas_unit;");
+      const actInfo2 = db2.exec("PRAGMA table_info(aktivitas_unit)");
+      const actCols2 = actInfo2[0]?.values.map((v) => v[1]);
+      if (actCols2 && !actCols2.includes("kategori_status")) {
+        db2.run("ALTER TABLE aktivitas_unit ADD COLUMN kategori_status TEXT DEFAULT 'OPERASI';");
+        console.log("Added kategori_status column to aktivitas_unit");
+      }
+      if (actCols2 && !actCols2.includes("status_unit")) {
+        db2.run("ALTER TABLE aktivitas_unit ADD COLUMN status_unit TEXT DEFAULT 'OPERASI';");
+        console.log("Added status_unit column to aktivitas_unit");
+      }
+      db2.run("UPDATE aktivitas_unit SET kategori_status = 'OPERASI' WHERE kategori_status IS NULL OR kategori_status = '';");
+      db2.run("UPDATE aktivitas_unit SET kategori_status = 'STANDBY' WHERE LOWER(nama_aktivitas) LIKE '%standby%';");
+      db2.run("UPDATE aktivitas_unit SET kategori_status = 'BREAKDOWN' WHERE LOWER(nama_aktivitas) LIKE '%breakdown%';");
+      db2.run("UPDATE aktivitas_unit SET status_unit = kategori_status WHERE status_unit IS NULL OR status_unit = '' OR status_unit != kategori_status;");
+    } catch (actErr) {
+      console.warn("AktivitasUnit migration note:", actErr);
+    }
+    try {
+      db2.run("DROP TRIGGER IF EXISTS trg_master_act_ins;");
+      db2.run("DROP TRIGGER IF EXISTS trg_master_act_upd;");
+      db2.run("DROP TRIGGER IF EXISTS trg_master_act_del;");
+      db2.run("DROP VIEW IF EXISTS master_aktivitas;");
+      db2.run("CREATE VIEW master_aktivitas AS SELECT * FROM aktivitas_unit;");
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_act_ins INSTEAD OF INSERT ON master_aktivitas
+        BEGIN
+          INSERT INTO aktivitas_unit (uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, kategori_status, status_unit)
+          VALUES (NEW.uuid, NEW.client_transaction_id, NEW.jenis_unit, NEW.nama_aktivitas, NEW.satuan, NEW.kode_sap, COALESCE(NEW.status_aktif, 1), COALESCE(NEW.kategori_status, 'OPERASI'), COALESCE(NEW.kategori_status, 'OPERASI'));
+        END;
+      `);
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_act_upd INSTEAD OF UPDATE ON master_aktivitas
+        BEGIN
+          UPDATE aktivitas_unit SET
+            jenis_unit = NEW.jenis_unit,
+            nama_aktivitas = NEW.nama_aktivitas,
+            satuan = NEW.satuan,
+            kode_sap = NEW.kode_sap,
+            status_aktif = COALESCE(NEW.status_aktif, OLD.status_aktif),
+            kategori_status = COALESCE(NEW.kategori_status, OLD.kategori_status, 'OPERASI'),
+            status_unit = COALESCE(NEW.kategori_status, OLD.kategori_status, 'OPERASI')
+          WHERE id = OLD.id;
+        END;
+      `);
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_act_del INSTEAD OF DELETE ON master_aktivitas
+        BEGIN
+          DELETE FROM aktivitas_unit WHERE id = OLD.id;
+        END;
+      `);
     } catch (viewErr) {
       console.warn("View master_aktivitas create notice:", viewErr);
     }
@@ -587,17 +695,19 @@ function initTablesAndSeed(db2) {
       ('WT-05', 'WATER TRUCK', 'Hino Ranger 500', 'Budi Santoso', 2490.1, '2026-10-08 15:10:00');
     `);
     db2.run(`
-      INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap) VALUES
-      ('EXCAVATOR', 'Galian Tanah Lunak', 'm3', 'ACT-SAP-101'),
-      ('EXCAVATOR', 'Loading Overburden (OB)', 'BCM', 'ACT-SAP-102'),
-      ('EXCAVATOR', 'Pembuatan Saluran Air (Ditch)', 'm', 'ACT-SAP-103'),
-      ('BULLDOZER', 'Clearing & Grubbing Lahan', 'm2', 'ACT-SAP-104'),
-      ('BULLDOZER', 'Dozing & Ripping OB', 'm3', 'ACT-SAP-105'),
-      ('BULLDOZER', 'Perawatan Disposal Area', 'jam', 'ACT-SAP-106'),
-      ('DUMP TRUCK', 'Hauling Overburden ke Disposal', 'rit', 'ACT-SAP-107'),
-      ('DUMP TRUCK', 'Hauling Ore / Batubara ke Stockpile', 'ton', 'ACT-SAP-108'),
-      ('MOTOR GRADER', 'Perawatan Jalan Tambang (Grading)', 'km', 'ACT-SAP-109'),
-      ('WATER TRUCK', 'Penyiraman Jalan Berdebu', 'tangki', 'ACT-SAP-110');
+      INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap, kategori_status, status_unit) VALUES
+      ('EXCAVATOR', 'Galian Tanah Lunak', 'm3', 'ACT-SAP-101', 'OPERASI', 'OPERASI'),
+      ('EXCAVATOR', 'Loading Overburden (OB)', 'BCM', 'ACT-SAP-102', 'OPERASI', 'OPERASI'),
+      ('EXCAVATOR', 'Pembuatan Saluran Air (Ditch)', 'm', 'ACT-SAP-103', 'OPERASI', 'OPERASI'),
+      ('BULLDOZER', 'Clearing & Grubbing Lahan', 'm2', 'ACT-SAP-104', 'OPERASI', 'OPERASI'),
+      ('BULLDOZER', 'Dozing & Ripping OB', 'm3', 'ACT-SAP-105', 'OPERASI', 'OPERASI'),
+      ('BULLDOZER', 'Perawatan Disposal Area', 'jam', 'ACT-SAP-106', 'OPERASI', 'OPERASI'),
+      ('DUMP TRUCK', 'Hauling Overburden ke Disposal', 'rit', 'ACT-SAP-107', 'OPERASI', 'OPERASI'),
+      ('DUMP TRUCK', 'Hauling Ore / Batubara ke Stockpile', 'ton', 'ACT-SAP-108', 'OPERASI', 'OPERASI'),
+      ('MOTOR GRADER', 'Perawatan Jalan Tambang (Grading)', 'km', 'ACT-SAP-109', 'OPERASI', 'OPERASI'),
+      ('WATER TRUCK', 'Penyiraman Jalan Berdebu', 'tangki', 'ACT-SAP-110', 'OPERASI', 'OPERASI'),
+      ('EXCAVATOR', 'Standby Hujan & Kondisi Licin', 'jam', 'ACT-SAP-111', 'STANDBY', 'STANDBY'),
+      ('DUMP TRUCK', 'Breakdown Engine / Sistem Hidrolik', 'jam', 'ACT-SAP-112', 'BREAKDOWN', 'BREAKDOWN');
     `);
     db2.run(`
       INSERT INTO operators (nama_operator, nik, nama_pengawas) VALUES
@@ -722,18 +832,18 @@ function initTablesAndSeed(db2) {
     db2.run("UPDATE hasil_input_aktivitas SET stik_awal = 30.0, stik_akhir = 30.0 WHERE kode_unit = 'GD-01' AND stik_awal IS NULL");
     db2.run("UPDATE hasil_input_aktivitas SET stik_awal = 60.0, stik_akhir = 35.0 WHERE kode_unit = 'DT-101' AND stik_awal IS NULL");
     const sampleKendalaDZ02 = JSON.stringify([
-      { nama_kendala: "Tunggu Solar", waktu_mulai: "08:30", waktu_selesai: "10:00", durasi_menit: 90 },
-      { nama_kendala: "Perbaikan Implement", waktu_mulai: "13:15", waktu_selesai: "14:00", durasi_menit: 45 }
+      { nama_kendala: "Tunggu Solar", kode_kendala: "KND-01", jam_mulai: "08:30", jam_selesai: "10:00", durasi_jam: 1.5, hambatan: 1.5, waktu_mulai: "08:30", waktu_selesai: "10:00", durasi_menit: 90 },
+      { nama_kendala: "Perbaikan Implement", kode_kendala: "KND-02", jam_mulai: "13:15", jam_selesai: "14:00", durasi_jam: 0.75, hambatan: 0.75, waktu_mulai: "13:15", waktu_selesai: "14:00", durasi_menit: 45 }
     ]);
     const sampleKendalaGD01 = JSON.stringify([
-      { nama_kendala: "Tunggu Cuaca", waktu_mulai: "07:00", waktu_selesai: "09:30", durasi_menit: 150 }
+      { nama_kendala: "Tunggu Cuaca", kode_kendala: "KND-03", jam_mulai: "07:00", jam_selesai: "09:30", durasi_jam: 2.5, hambatan: 2.5, waktu_mulai: "07:00", waktu_selesai: "09:30", durasi_menit: 150 }
     ]);
     const sampleKendalaHEH1 = JSON.stringify([
-      { nama_kendala: "Cek unit, Implement Pemanasan mesin", waktu_mulai: "06:30", waktu_selesai: "07:00", durasi_menit: 30 }
+      { nama_kendala: "Cek unit, Implement Pemanasan mesin", kode_kendala: "KND-04", jam_mulai: "06:30", jam_selesai: "07:00", durasi_jam: 0.5, hambatan: 0.5, waktu_mulai: "06:30", waktu_selesai: "07:00", durasi_menit: 30 }
     ]);
-    db2.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'DZ-02' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaDZ02]);
-    db2.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'GD-01' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaGD01]);
-    db2.run("UPDATE hasil_input_aktivitas SET kendala_list = ? WHERE kode_unit = 'HEH1' AND (kendala_list IS NULL OR kendala_list = '')", [sampleKendalaHEH1]);
+    db2.run("UPDATE hasil_input_aktivitas SET kendala_list = ?, kendala_data = ?, ada_kendala = 1 WHERE kode_unit = 'DZ-02' AND (kendala_list IS NULL OR kendala_list = '' OR kendala_list = '[]')", [sampleKendalaDZ02, sampleKendalaDZ02]);
+    db2.run("UPDATE hasil_input_aktivitas SET kendala_list = ?, kendala_data = ?, ada_kendala = 1 WHERE kode_unit = 'GD-01' AND (kendala_list IS NULL OR kendala_list = '' OR kendala_list = '[]')", [sampleKendalaGD01, sampleKendalaGD01]);
+    db2.run("UPDATE hasil_input_aktivitas SET kendala_list = ?, kendala_data = ?, ada_kendala = 1 WHERE kode_unit = 'HEH1' AND (kendala_list IS NULL OR kendala_list = '' OR kendala_list = '[]')", [sampleKendalaHEH1, sampleKendalaHEH1]);
     db2.run("UPDATE hasil_input_aktivitas SET is_hm_awal_corrected = 1, alasan_koreksi_hm = 'Salah input shift malam' WHERE kode_unit = 'DT-101' AND (is_hm_awal_corrected IS NULL OR is_hm_awal_corrected = 0)");
   } catch (e) {
     console.warn("Backfill spk and kendala note:", e);

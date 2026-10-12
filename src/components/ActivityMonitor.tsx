@@ -238,8 +238,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         keterangan: raw.keterangan || '',
         foto_bukti: raw.foto_bukti || null,
         has_foto_bukti: Boolean(raw.foto_bukti || raw.has_foto_bukti),
-        has_foto: Boolean(raw.foto_bukti || raw.has_foto_bukti),
-        status_unit: (raw.status_unit || 'OPERASI').toUpperCase(),
+        status_unit: (raw.status_unit || raw.kategori_status || 'OPERASI').toUpperCase(),
+        kategori_status: (raw.kategori_status || raw.status_unit || 'OPERASI').toUpperCase(),
         is_isi_solar: raw.is_isi_solar ?? (numSolar > 0 ? 1 : 0),
         jumlah_liter_solar: numSolar,
         stik_awal: raw.stik_awal ?? null,
@@ -322,7 +322,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         has_foto_bukti: false,
         has_foto: false,
         has_foto_solar: false,
-        status_unit: (raw.status_unit || 'OPERASI').toUpperCase(),
+        status_unit: (raw.status_unit || raw.kategori_status || 'OPERASI').toUpperCase(),
+        kategori_status: (raw.kategori_status || raw.status_unit || 'OPERASI').toUpperCase(),
         is_isi_solar: 0,
         jumlah_liter_solar: null,
         stik_awal: null,
@@ -475,8 +476,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         return false;
       }
 
-      if (selectedStatus !== 'Semua' && item.status_unit !== selectedStatus) {
-        return false;
+      if (selectedStatus !== 'Semua') {
+        const itemStatus = (item.kategori_status || item.status_unit || 'OPERASI').toUpperCase();
+        if (itemStatus !== selectedStatus) {
+          return false;
+        }
       }
 
       // Pastikan baris baru real-time selalu lolos filter tanggal agar langsung terlihat di baris paling atas
@@ -999,24 +1003,31 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           {row.kode_unit}
                         </span>
 
-                        {(!row.status_unit || row.status_unit === 'OPERASI') && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1 h-1 rounded-full bg-emerald-600"></span>
-                            OPERASI
-                          </span>
-                        )}
-                        {row.status_unit === 'STANDBY' && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
-                            <span className="w-1 h-1 rounded-full bg-amber-600"></span>
-                            STANDBY
-                          </span>
-                        )}
-                        {row.status_unit === 'BREAKDOWN' && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                            <span className="w-1 h-1 rounded-full bg-rose-600"></span>
-                            BREAKDOWN
-                          </span>
-                        )}
+                        {(() => {
+                          const st = (row.kategori_status || row.status_unit || 'OPERASI').toUpperCase();
+                          if (st === 'STANDBY') {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                                <span className="w-1 h-1 rounded-full bg-amber-600"></span>
+                                STANDBY
+                              </span>
+                            );
+                          }
+                          if (st === 'BREAKDOWN') {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                <span className="w-1 h-1 rounded-full bg-rose-600"></span>
+                                BREAKDOWN
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <span className="w-1 h-1 rounded-full bg-emerald-600"></span>
+                              OPERASI
+                            </span>
+                          );
+                        })()}
                       </div>
                     </td>
 

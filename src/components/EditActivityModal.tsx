@@ -43,7 +43,6 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [namaPengawas, setNamaPengawas] = useState('');
   const [tanggal, setTanggal] = useState('');
   const [kodeUnit, setKodeUnit] = useState('');
-  const [statusUnit, setStatusUnit] = useState<UnitStatus>('OPERASI');
   const [isIsiSolar, setIsIsiSolar] = useState<boolean>(false);
   const [jumlahLiterSolar, setJumlahLiterSolar] = useState<number>(0);
   const [stikAwal, setStikAwal] = useState<number | ''>('');
@@ -80,7 +79,6 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setNamaPengawas(activity.nama_pengawas);
       setTanggal(activity.tanggal);
       setKodeUnit(activity.kode_unit);
-      setStatusUnit(activity.status_unit || 'OPERASI');
       setIsIsiSolar(Boolean(activity.is_isi_solar) || (Number(activity.jumlah_liter_solar) > 0));
       setJumlahLiterSolar(Number(activity.jumlah_liter_solar) || 0);
       const sAwal = activity.stik_solar_awal !== undefined && activity.stik_solar_awal !== null ? activity.stik_solar_awal : (activity.stik_awal !== undefined && activity.stik_awal !== null ? activity.stik_awal : '');
@@ -232,7 +230,6 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
         hasil_kerja: hasilKerja,
         keterangan,
         foto_bukti: fotoBukti,
-        status_unit: statusUnit,
         is_isi_solar: isIsiSolar ? 1 : 0,
         jumlah_liter_solar: isIsiSolar ? jumlahLiterSolar : 0,
         stik_awal: stikAwal !== '' ? Number(stikAwal) : null,
@@ -379,53 +376,6 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                   </div>
                 ) : null}
               />
-            </div>
-
-            {/* Status Operasional Unit (OPERASI / STANDBY / BREAKDOWN) */}
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Status Operasional Unit <span className="text-rose-500">*</span>
-              </label>
-              <div className="grid grid-cols-3 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setStatusUnit('OPERASI')}
-                  className={`py-2 px-3 text-xs rounded-xl font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    statusUnit === 'OPERASI'
-                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${statusUnit === 'OPERASI' ? 'bg-white' : 'bg-emerald-500'}`}></span>
-                  <span>OPERASI</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setStatusUnit('STANDBY')}
-                  className={`py-2 px-3 text-xs rounded-xl font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    statusUnit === 'STANDBY'
-                      ? 'bg-amber-500 border-amber-500 text-white shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${statusUnit === 'STANDBY' ? 'bg-white' : 'bg-amber-500'}`}></span>
-                  <span>STANDBY</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setStatusUnit('BREAKDOWN')}
-                  className={`py-2 px-3 text-xs rounded-xl font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    statusUnit === 'BREAKDOWN'
-                      ? 'bg-rose-600 border-rose-600 text-white shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${statusUnit === 'BREAKDOWN' ? 'bg-white' : 'bg-rose-500'}`}></span>
-                  <span>BREAKDOWN</span>
-                </button>
-              </div>
             </div>
 
             {/* Pengisian BBM Solar (Hanya Jumlah Liter) */}

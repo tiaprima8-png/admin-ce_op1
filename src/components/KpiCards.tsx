@@ -19,9 +19,13 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ filteredActivities, filterLa
     totalHm += act.hm_harian_berjalan || 0;
     totalSolar += act.jumlah_liter_solar || 0;
 
-    // Cek kendala: jika ada kendala_list atau status BREAKDOWN
+    // Cek kendala: jika ada status BREAKDOWN atau kendala aktif
     let hasKendala = false;
-    if (act.status_unit === 'BREAKDOWN') {
+    const actStatus = (act.kategori_status || act.status_unit || 'OPERASI').toUpperCase();
+    if (actStatus === 'BREAKDOWN') {
+      hasKendala = true;
+    }
+    if (act.ada_kendala && Number(act.ada_kendala) === 1) {
       hasKendala = true;
     }
     if (act.kendala_list) {

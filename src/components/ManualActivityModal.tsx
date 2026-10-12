@@ -43,7 +43,6 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
   const [namaPengawas, setNamaPengawas] = useState(supervisors[0] || 'Budi Santoso');
   const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10));
   const [kodeUnit, setKodeUnit] = useState(units[0]?.kode_unit || '');
-  const [statusUnit, setStatusUnit] = useState<UnitStatus>('OPERASI');
   const [isIsiSolar, setIsIsiSolar] = useState<boolean>(false);
   const [jumlahLiterSolar, setJumlahLiterSolar] = useState<number>(0);
   const [stikAwal, setStikAwal] = useState<number | ''>('');
@@ -205,7 +204,6 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
         hasil_kerja: hasilKerja,
         keterangan,
         foto_bukti: fotoBukti,
-        status_unit: statusUnit,
         is_isi_solar: isIsiSolar ? 1 : 0,
         jumlah_liter_solar: isIsiSolar ? jumlahLiterSolar : 0,
         stik_awal: stikAwal !== '' ? Number(stikAwal) : null,
@@ -352,53 +350,6 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
                   </div>
                 ) : null}
               />
-            </div>
-
-            {/* Status Operasional Unit (OPERASI / STANDBY / BREAKDOWN) */}
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Status Operasional Unit <span className="text-rose-500">*</span>
-              </label>
-              <div className="grid grid-cols-3 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setStatusUnit('OPERASI')}
-                  className={`py-2 px-3 text-xs rounded-xl font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    statusUnit === 'OPERASI'
-                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${statusUnit === 'OPERASI' ? 'bg-white' : 'bg-emerald-500'}`}></span>
-                  <span>OPERASI</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setStatusUnit('STANDBY')}
-                  className={`py-2 px-3 text-xs rounded-xl font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    statusUnit === 'STANDBY'
-                      ? 'bg-amber-500 border-amber-500 text-white shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${statusUnit === 'STANDBY' ? 'bg-white' : 'bg-amber-500'}`}></span>
-                  <span>STANDBY</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setStatusUnit('BREAKDOWN')}
-                  className={`py-2 px-3 text-xs rounded-xl font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    statusUnit === 'BREAKDOWN'
-                      ? 'bg-rose-600 border-rose-600 text-white shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${statusUnit === 'BREAKDOWN' ? 'bg-white' : 'bg-rose-500'}`}></span>
-                  <span>BREAKDOWN</span>
-                </button>
-              </div>
             </div>
 
             {/* Pengisian BBM Solar (Hanya Jumlah Liter) */}

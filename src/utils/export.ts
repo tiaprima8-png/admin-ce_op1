@@ -196,9 +196,11 @@ export function exportAnalyticsToExcel(
     { 'Indikator Kinerja Utama (KPI)': 'Total Penggunaan Seluruh Solar', 'Nilai': `${summary.totalSolar.toLocaleString('id-ID')} Liter`, 'Deskripsi': 'Akumulasi total konsumsi solar periode terpilih' },
     { 'Indikator Kinerja Utama (KPI)': 'Total Seluruh HM Berjalan', 'Nilai': `${summary.totalHm.toLocaleString('id-ID')} HM`, 'Deskripsi': 'Akumulasi seluruh jam operasi Hour Meter fleet' },
     { 'Indikator Kinerja Utama (KPI)': 'Rata-rata Rasio Konsumsi Solar', 'Nilai': `${summary.rasioKonsumsi.toLocaleString('id-ID')} Liter/HM`, 'Deskripsi': 'Rasio konsumsi bahan bakar rata-rata armada' },
-    { 'Indikator Kinerja Utama (KPI)': 'Persentase Waktu Efektif Operasi', 'Nilai': `${summary.statusWaktu.operasi_percent}% (${summary.statusWaktu.operasi_hours} Jam)`, 'Deskripsi': `${summary.statusWaktu.operasi_count} transaksi status OPERASI` },
-    { 'Indikator Kinerja Utama (KPI)': 'Persentase Waktu Standby', 'Nilai': `${summary.statusWaktu.standby_percent}% (${summary.statusWaktu.standby_hours} Jam)`, 'Deskripsi': `${summary.statusWaktu.standby_count} transaksi status STANDBY` },
-    { 'Indikator Kinerja Utama (KPI)': 'Persentase Waktu Breakdown', 'Nilai': `${summary.statusWaktu.breakdown_percent}% (${summary.statusWaktu.breakdown_hours} Jam)`, 'Deskripsi': `${summary.statusWaktu.breakdown_count} transaksi status BREAKDOWN` }
+    { 'Indikator Kinerja Utama (KPI)': 'Working Hours (Operasi)', 'Nilai': `${summary.statusWaktu.operasi_hours} Jam (${summary.statusWaktu.operasi_percent}%)`, 'Deskripsi': `${summary.statusWaktu.operasi_count} transaksi status OPERASI` },
+    { 'Indikator Kinerja Utama (KPI)': 'Standby Hours', 'Nilai': `${summary.statusWaktu.standby_hours} Jam (${summary.statusWaktu.standby_percent}%)`, 'Deskripsi': `${summary.statusWaktu.standby_count} transaksi status STANDBY` },
+    { 'Indikator Kinerja Utama (KPI)': 'Breakdown Hours', 'Nilai': `${summary.statusWaktu.breakdown_hours} Jam (${summary.statusWaktu.breakdown_percent}%)`, 'Deskripsi': `${summary.statusWaktu.breakdown_count} transaksi status BREAKDOWN` },
+    { 'Indikator Kinerja Utama (KPI)': 'Physical Availability (PA)', 'Nilai': `${summary.pa ?? summary.statusWaktu.pa ?? 100}%`, 'Deskripsi': 'Rasio ketersediaan fisik armada: (Jam Operasi + Jam Standby) / Total Jam' },
+    { 'Indikator Kinerja Utama (KPI)': 'Utilization of Availability (UA)', 'Nilai': `${summary.ua ?? summary.statusWaktu.ua ?? 100}%`, 'Deskripsi': 'Rasio utilisasi kerja unit yang siap pakai: Jam Operasi / (Jam Operasi + Jam Standby)' }
   ];
 
   const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
