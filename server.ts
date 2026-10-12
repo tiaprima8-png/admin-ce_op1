@@ -415,8 +415,12 @@ async function startServer() {
           h.status_unit,
           h.is_isi_solar,
           h.jumlah_liter_solar,
-          h.stik_awal,
-          h.stik_akhir,
+          COALESCE(h.stik_solar_awal, h.stik_awal) as stik_solar_awal,
+          COALESCE(h.stik_solar_akhir, h.stik_akhir) as stik_solar_akhir,
+          COALESCE(h.stik_solar_awal, h.stik_awal) as stik_awal,
+          COALESCE(h.stik_solar_akhir, h.stik_akhir) as stik_akhir,
+          COALESCE(h.estimasi_konsumsi_solar, 0) as estimasi_konsumsi_solar,
+          COALESCE(h.ada_kendala, CASE WHEN h.kendala_list IS NOT NULL AND TRIM(h.kendala_list) != '' AND TRIM(h.kendala_list) != '[]' THEN 1 ELSE 0 END) as ada_kendala,
           h.kendala_list,
           h.is_hm_awal_corrected,
           h.alasan_koreksi_hm,
@@ -480,8 +484,12 @@ async function startServer() {
           solar: Number(h.jumlah_liter_solar || 0),
           jumlah_liter_solar: Number(h.jumlah_liter_solar || 0),
           is_isi_solar: Number(h.is_isi_solar || 0),
-          stik_awal: h.stik_awal != null ? Number(h.stik_awal) : null,
-          stik_akhir: h.stik_akhir != null ? Number(h.stik_akhir) : null,
+          stik_awal: h.stik_awal != null ? Number(h.stik_awal) : (h.stik_solar_awal != null ? Number(h.stik_solar_awal) : null),
+          stik_akhir: h.stik_akhir != null ? Number(h.stik_akhir) : (h.stik_solar_akhir != null ? Number(h.stik_solar_akhir) : null),
+          stik_solar_awal: h.stik_solar_awal != null ? Number(h.stik_solar_awal) : (h.stik_awal != null ? Number(h.stik_awal) : null),
+          stik_solar_akhir: h.stik_solar_akhir != null ? Number(h.stik_solar_akhir) : (h.stik_akhir != null ? Number(h.stik_akhir) : null),
+          estimasi_konsumsi_solar: h.estimasi_konsumsi_solar != null ? Number(h.estimasi_konsumsi_solar) : 0,
+          ada_kendala: Number(h.ada_kendala || 0),
           status: h.status_unit || 'OPERASI',
           status_unit: h.status_unit || 'OPERASI',
           kendala: parsedKendala,
@@ -1785,13 +1793,40 @@ async function startServer() {
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
       const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawJumlahLiterSolar) || 0) : 0;
 
-      // Stik BBM & Kendala handling
-      const numStikAwal = rawStikAwal !== undefined && rawStikAwal !== null && rawStikAwal !== '' ? parseFloat(rawStikAwal) : null;
-      const numStikAkhir = rawStikAkhir !== undefined && rawStikAkhir !== null && rawStikAkhir !== '' ? parseFloat(rawStikAkhir) : null;
-      let kendalaListStr: string | null = null;
-      if (rawKendalaList) {
-        kendalaListStr = typeof rawKendalaList === 'string' ? rawKendalaList : JSON.stringify(rawKendalaList);
+      // Stik BBM & Kendala handling (sesuai spesifikasi)
+      const stikAwal = parseFloat(req.body.stik_solar_awal || req.body.stik_awal || rawStikAwal || 0);
+      const stikAkhir = parseFloat(req.body.stik_solar_akhir || req.body.stik_akhir || rawStikAkhir || 0);
+      let estimasiKonsumsi = parseFloat(req.body.estimasi_konsumsi_solar || req.body.konsumsi_solar || 0);
+      if ((!estimasiKonsumsi || isNaN(estimasiKonsumsi)) && jumlah_liter_solar > 0 && (stikAkhir - stikAwal) > 0) {
+        estimasiKonsumsi = Math.round((jumlah_liter_solar / (stikAkhir - stikAwal)) * 10) / 10;
       }
+
+      // Tangkap kendala (array objek atau string)
+      const kendalaRaw = req.body.kendala_list || req.body.kendala || req.body.kendala_lapangan || rawKendalaList || [];
+      let kendalaListStr: string = '[]';
+      let parsedKendalaArr: unknown[] = [];
+      if (Array.isArray(kendalaRaw)) {
+        kendalaListStr = JSON.stringify(kendalaRaw);
+        parsedKendalaArr = kendalaRaw;
+      } else if (typeof kendalaRaw === 'object' && kendalaRaw !== null) {
+        kendalaListStr = JSON.stringify([kendalaRaw]);
+        parsedKendalaArr = [kendalaRaw];
+      } else if (typeof kendalaRaw === 'string' && kendalaRaw.trim()) {
+        try {
+          const parsed = JSON.parse(kendalaRaw);
+          if (Array.isArray(parsed)) {
+            kendalaListStr = JSON.stringify(parsed);
+            parsedKendalaArr = parsed;
+          } else {
+            kendalaListStr = JSON.stringify([parsed]);
+            parsedKendalaArr = [parsed];
+          }
+        } catch {
+          kendalaListStr = JSON.stringify([{ nama_kendala: kendalaRaw.trim() }]);
+          parsedKendalaArr = [{ nama_kendala: kendalaRaw.trim() }];
+        }
+      }
+      const adaKendala = (parsedKendalaArr.length > 0) ? 1 : 0;
 
       // HM Awal Correction Audit handling
       const is_hm_awal_corrected = (rawIsHmAwalCorrected === true || rawIsHmAwalCorrected === 1 || rawIsHmAwalCorrected === '1' || rawIsHmAwalCorrected === 'true') ? 1 : 0;
@@ -1866,7 +1901,11 @@ async function startServer() {
             jumlah_liter_solar = ?,
             stik_awal = ?,
             stik_akhir = ?,
+            stik_solar_awal = ?,
+            stik_solar_akhir = ?,
+            estimasi_konsumsi_solar = ?,
             kendala_list = ?,
+            ada_kendala = ?,
             is_hm_awal_corrected = ?,
             alasan_koreksi_hm = ?
           WHERE id = ?
@@ -1899,9 +1938,13 @@ async function startServer() {
           status_unit,
           is_isi_solar,
           jumlah_liter_solar,
-          numStikAwal,
-          numStikAkhir,
+          stikAwal,
+          stikAkhir,
+          stikAwal,
+          stikAkhir,
+          estimasiKonsumsi,
           kendalaListStr,
+          adaKendala,
           is_hm_awal_corrected,
           alasan_koreksi_hm,
           existingHia.id
@@ -1909,13 +1952,13 @@ async function startServer() {
 
         if (existingAu) {
           execute(
-            'UPDATE aktivitas_unit SET uuid = COALESCE(?, uuid), nama_aktivitas = ?, satuan = ?, kode_sap = ? WHERE id = ?',
-            [uuid, nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101', existingAu.id]
+            'UPDATE aktivitas_unit SET uuid = COALESCE(?, uuid), nama_aktivitas = ?, satuan = ?, kode_sap = ?, stik_solar_awal = ?, stik_solar_akhir = ?, estimasi_konsumsi_solar = ?, kendala_list = ?, ada_kendala = ? WHERE id = ?',
+            [uuid, nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101', stikAwal, stikAkhir, estimasiKonsumsi, kendalaListStr, adaKendala, existingAu.id]
           );
         } else if (uuid) {
           execute(
-            'INSERT OR IGNORE INTO aktivitas_unit (uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif) VALUES (?, ?, ?, ?, ?, ?, 1)',
-            [uuid, uuid, status_unit || 'Excavator', nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101']
+            'INSERT OR IGNORE INTO aktivitas_unit (uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, stik_solar_awal, stik_solar_akhir, estimasi_konsumsi_solar, kendala_list, ada_kendala) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)',
+            [uuid, uuid, status_unit || 'Excavator', nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101', stikAwal, stikAkhir, estimasiKonsumsi, kendalaListStr, adaKendala]
           );
         }
 
@@ -1927,9 +1970,9 @@ async function startServer() {
             uuid, client_transaction_id, rencana_id, nama_pengawas, tanggal, tanggal_kerja, kode_unit, nama_aktivitas, kode_sap, satuan,
             operator, nik_operator, kode_lokasi, lokasi, nomor_spk, shift_kerja, jam_kerja, hm_awal, hm_akhir,
             hm_harian_berjalan, hasil_kerja, keterangan, foto_bukti,
-            status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, kendala_list,
+            status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, stik_solar_awal, stik_solar_akhir, estimasi_konsumsi_solar, kendala_list, ada_kendala,
             is_hm_awal_corrected, alasan_koreksi_hm, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const insertResult = execute(insertSql, [
@@ -1959,9 +2002,13 @@ async function startServer() {
           status_unit,
           is_isi_solar,
           jumlah_liter_solar,
-          numStikAwal,
-          numStikAkhir,
+          stikAwal,
+          stikAkhir,
+          stikAwal,
+          stikAkhir,
+          estimasiKonsumsi,
           kendalaListStr,
+          adaKendala,
           is_hm_awal_corrected,
           alasan_koreksi_hm,
           createdAt
@@ -1971,8 +2018,8 @@ async function startServer() {
 
         if (uuid) {
           execute(
-            'INSERT OR IGNORE INTO aktivitas_unit (uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif) VALUES (?, ?, ?, ?, ?, ?, 1)',
-            [uuid, uuid, status_unit || 'Excavator', nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101']
+            'INSERT OR IGNORE INTO aktivitas_unit (uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, stik_solar_awal, stik_solar_akhir, estimasi_konsumsi_solar, kendala_list, ada_kendala) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)',
+            [uuid, uuid, status_unit || 'Excavator', nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101', stikAwal, stikAkhir, estimasiKonsumsi, kendalaListStr, adaKendala]
           );
         }
 
@@ -2068,10 +2115,16 @@ async function startServer() {
         durasi: finalRow?.jam_kerja !== undefined ? finalRow.jam_kerja : numJamKerja,
         solar: finalRow?.jumlah_liter_solar !== undefined ? finalRow.jumlah_liter_solar : jumlah_liter_solar,
         jumlah_liter_solar: finalRow?.jumlah_liter_solar !== undefined ? finalRow.jumlah_liter_solar : jumlah_liter_solar,
+        stik_awal: stikAwal,
+        stik_akhir: stikAkhir,
+        stik_solar_awal: stikAwal,
+        stik_solar_akhir: stikAkhir,
+        estimasi_konsumsi_solar: estimasiKonsumsi,
+        ada_kendala: adaKendala,
         status_realisasi: 'TEREALISASI',
         status_spk: 'TEREALISASI',
-        kendala: kendalaListStr,
-        kendala_list: kendalaListStr,
+        kendala: parsedKendalaArr,
+        kendala_list: parsedKendalaArr,
         created_at: finalRow?.created_at || createdAt,
         timestamp: new Date().toISOString()
       };
@@ -2179,8 +2232,12 @@ async function startServer() {
             h.foto_bukti,
             h.is_isi_solar,
             h.jumlah_liter_solar,
-            h.stik_awal,
-            h.stik_akhir,
+            COALESCE(h.stik_solar_awal, h.stik_awal) as stik_solar_awal,
+            COALESCE(h.stik_solar_akhir, h.stik_akhir) as stik_solar_akhir,
+            COALESCE(h.stik_solar_awal, h.stik_awal) as stik_awal,
+            COALESCE(h.stik_solar_akhir, h.stik_akhir) as stik_akhir,
+            COALESCE(h.estimasi_konsumsi_solar, 0) as estimasi_konsumsi_solar,
+            COALESCE(h.ada_kendala, CASE WHEN h.kendala_list IS NOT NULL AND TRIM(h.kendala_list) != '' AND TRIM(h.kendala_list) != '[]' THEN 1 ELSE 0 END) as ada_kendala,
             h.kendala_list,
             h.is_hm_awal_corrected,
             h.alasan_koreksi_hm,
@@ -2237,8 +2294,12 @@ async function startServer() {
             h.foto_bukti,
             h.is_isi_solar,
             h.jumlah_liter_solar,
-            h.stik_awal,
-            h.stik_akhir,
+            COALESCE(h.stik_solar_awal, h.stik_awal) as stik_solar_awal,
+            COALESCE(h.stik_solar_akhir, h.stik_akhir) as stik_solar_akhir,
+            COALESCE(h.stik_solar_awal, h.stik_awal) as stik_awal,
+            COALESCE(h.stik_solar_akhir, h.stik_akhir) as stik_akhir,
+            COALESCE(h.estimasi_konsumsi_solar, 0) as estimasi_konsumsi_solar,
+            COALESCE(h.ada_kendala, CASE WHEN h.kendala_list IS NOT NULL AND TRIM(h.kendala_list) != '' AND TRIM(h.kendala_list) != '[]' THEN 1 ELSE 0 END) as ada_kendala,
             h.kendala_list,
             h.is_hm_awal_corrected,
             h.alasan_koreksi_hm,
@@ -2314,12 +2375,13 @@ async function startServer() {
           return true;
         })
         .map(r => {
-        let parsedKendala = null;
+        let parsedKendala: Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number; keterangan?: string }> = [];
         if (r.kendala_list) {
           try {
-            parsedKendala = JSON.parse(r.kendala_list);
+            const parsed = typeof r.kendala_list === 'string' ? JSON.parse(r.kendala_list) : r.kendala_list;
+            parsedKendala = Array.isArray(parsed) ? parsed : [parsed];
           } catch {
-            parsedKendala = r.kendala_list;
+            parsedKendala = [{ nama_kendala: String(r.kendala_list) }];
           }
         }
         const hasFoto = Boolean(r.foto_bukti && String(r.foto_bukti).trim() !== '');
@@ -2330,6 +2392,15 @@ async function startServer() {
           r.nama_aktivitas || 
           r.aktivitas || 
           '-';
+
+        const stikSolarAwal = r.stik_solar_awal !== null && r.stik_solar_awal !== undefined ? parseFloat(r.stik_solar_awal) : (r.stik_awal !== null && r.stik_awal !== undefined ? parseFloat(r.stik_awal) : null);
+        const stikSolarAkhir = r.stik_solar_akhir !== null && r.stik_solar_akhir !== undefined ? parseFloat(r.stik_solar_akhir) : (r.stik_akhir !== null && r.stik_akhir !== undefined ? parseFloat(r.stik_akhir) : null);
+        let estKonsumsi = r.estimasi_konsumsi_solar !== null && r.estimasi_konsumsi_solar !== undefined ? parseFloat(r.estimasi_konsumsi_solar) : 0;
+        if ((!estKonsumsi || estKonsumsi === 0) && r.jumlah_liter_solar && stikSolarAwal !== null && stikSolarAkhir !== null && (stikSolarAkhir - stikSolarAwal) > 0) {
+          estKonsumsi = Math.round((parseFloat(r.jumlah_liter_solar) / (stikSolarAkhir - stikSolarAwal)) * 10) / 10;
+        }
+
+        const adaKendala = (r.ada_kendala === 1 || parsedKendala.length > 0) ? 1 : 0;
 
         return {
           ...r,
@@ -2348,6 +2419,12 @@ async function startServer() {
           has_foto_unit: hasFoto,
           has_foto: hasFoto,
           kendala_list: parsedKendala,
+          ada_kendala: adaKendala,
+          stik_awal: stikSolarAwal,
+          stik_akhir: stikSolarAkhir,
+          stik_solar_awal: stikSolarAwal,
+          stik_solar_akhir: stikSolarAkhir,
+          estimasi_konsumsi_solar: estKonsumsi,
           hm_awal: r.hm_awal !== null && r.hm_awal !== undefined ? parseFloat(r.hm_awal) : null,
           hm_akhir: r.hm_akhir !== null && r.hm_akhir !== undefined ? parseFloat(r.hm_akhir) : null,
           hm_harian_berjalan: r.hm_harian_berjalan !== null && r.hm_harian_berjalan !== undefined ? parseFloat(r.hm_harian_berjalan) : null,
@@ -2457,8 +2534,8 @@ async function startServer() {
     }
   });
 
-  // PUT /api/rekapitulasi/:id
-  app.put('/api/rekapitulasi/:id', upload.single('foto_bukti') as unknown as express.RequestHandler, (req: Request, res: Response) => {
+  // PUT /api/rekapitulasi/:id & /api/aktivitas-unit/:id
+  app.put(['/api/rekapitulasi/:id', '/api/aktivitas-unit/:id'], upload.single('foto_bukti') as unknown as express.RequestHandler, (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
       const {
@@ -2500,12 +2577,40 @@ async function startServer() {
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
       const jumlah_liter_solar = is_isi_solar === 1 ? (parseFloat(rawJumlahLiterSolar) || 0) : 0;
 
-      const numStikAwal = rawStikAwal !== undefined && rawStikAwal !== null && rawStikAwal !== '' ? parseFloat(rawStikAwal) : null;
-      const numStikAkhir = rawStikAkhir !== undefined && rawStikAkhir !== null && rawStikAkhir !== '' ? parseFloat(rawStikAkhir) : null;
-      let kendalaListStr: string | null = null;
-      if (rawKendalaList) {
-        kendalaListStr = typeof rawKendalaList === 'string' ? rawKendalaList : JSON.stringify(rawKendalaList);
+      // Tangkap field solar & kendala dari request body sesuai spesifikasi
+      const stikAwal = parseFloat(req.body.stik_solar_awal || req.body.stik_awal || rawStikAwal || 0);
+      const stikAkhir = parseFloat(req.body.stik_solar_akhir || req.body.stik_akhir || rawStikAkhir || 0);
+      let estimasiKonsumsi = parseFloat(req.body.estimasi_konsumsi_solar || req.body.konsumsi_solar || 0);
+      if ((!estimasiKonsumsi || isNaN(estimasiKonsumsi)) && jumlah_liter_solar > 0 && (stikAkhir - stikAwal) > 0) {
+        estimasiKonsumsi = Math.round((jumlah_liter_solar / (stikAkhir - stikAwal)) * 10) / 10;
       }
+
+      // Tangkap kendala (array objek atau string)
+      const kendalaRaw = req.body.kendala_list || req.body.kendala || req.body.kendala_lapangan || rawKendalaList || [];
+      let kendalaListStr: string = '[]';
+      let parsedKendalaArr: unknown[] = [];
+      if (Array.isArray(kendalaRaw)) {
+        kendalaListStr = JSON.stringify(kendalaRaw);
+        parsedKendalaArr = kendalaRaw;
+      } else if (typeof kendalaRaw === 'object' && kendalaRaw !== null) {
+        kendalaListStr = JSON.stringify([kendalaRaw]);
+        parsedKendalaArr = [kendalaRaw];
+      } else if (typeof kendalaRaw === 'string' && kendalaRaw.trim()) {
+        try {
+          const parsed = JSON.parse(kendalaRaw);
+          if (Array.isArray(parsed)) {
+            kendalaListStr = JSON.stringify(parsed);
+            parsedKendalaArr = parsed;
+          } else {
+            kendalaListStr = JSON.stringify([parsed]);
+            parsedKendalaArr = [parsed];
+          }
+        } catch {
+          kendalaListStr = JSON.stringify([{ nama_kendala: kendalaRaw.trim() }]);
+          parsedKendalaArr = [{ nama_kendala: kendalaRaw.trim() }];
+        }
+      }
+      const adaKendala = (parsedKendalaArr.length > 0) ? 1 : 0;
 
       // HM Awal Correction Audit handling
       const is_hm_awal_corrected = rawIsHmAwalCorrected !== undefined
@@ -2533,7 +2638,7 @@ async function startServer() {
             shift_kerja = ?, jam_kerja = ?, hm_awal = ?, hm_akhir = ?, hm_harian_berjalan = ?,
             hasil_kerja = ?, keterangan = ?, foto_bukti = ?,
             status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?,
-            stik_awal = ?, stik_akhir = ?, kendala_list = ?,
+            stik_awal = ?, stik_akhir = ?, stik_solar_awal = ?, stik_solar_akhir = ?, estimasi_konsumsi_solar = ?, kendala_list = ?, ada_kendala = ?,
             is_hm_awal_corrected = ?, alasan_koreksi_hm = ?
           WHERE id = ?
         `;
@@ -2558,9 +2663,13 @@ async function startServer() {
           status_unit,
           is_isi_solar,
           jumlah_liter_solar,
-          numStikAwal,
-          numStikAkhir,
+          stikAwal,
+          stikAkhir,
+          stikAwal,
+          stikAkhir,
+          estimasiKonsumsi,
           kendalaListStr,
+          adaKendala,
           is_hm_awal_corrected,
           alasan_koreksi_hm,
           id
@@ -2573,7 +2682,7 @@ async function startServer() {
             shift_kerja = ?, jam_kerja = ?, hm_awal = ?, hm_akhir = ?, hm_harian_berjalan = ?,
             hasil_kerja = ?, keterangan = ?,
             status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?,
-            stik_awal = ?, stik_akhir = ?, kendala_list = ?,
+            stik_awal = ?, stik_akhir = ?, stik_solar_awal = ?, stik_solar_akhir = ?, estimasi_konsumsi_solar = ?, kendala_list = ?, ada_kendala = ?,
             is_hm_awal_corrected = ?, alasan_koreksi_hm = ?
           WHERE id = ?
         `;
@@ -2597,9 +2706,13 @@ async function startServer() {
           status_unit,
           is_isi_solar,
           jumlah_liter_solar,
-          numStikAwal,
-          numStikAkhir,
+          stikAwal,
+          stikAkhir,
+          stikAwal,
+          stikAkhir,
+          estimasiKonsumsi,
           kendalaListStr,
+          adaKendala,
           is_hm_awal_corrected,
           alasan_koreksi_hm,
           id
@@ -2608,18 +2721,93 @@ async function startServer() {
 
       execute(sql, params);
 
+      // Sinkronkan juga master aktivitas_unit jika cocok
+      try {
+        execute(
+          'UPDATE aktivitas_unit SET stik_solar_awal = ?, stik_solar_akhir = ?, estimasi_konsumsi_solar = ?, kendala_list = ?, ada_kendala = ? WHERE nama_aktivitas = ? OR kode_sap = ?',
+          [stikAwal, stikAkhir, estimasiKonsumsi, kendalaListStr, adaKendala, nama_aktivitas, kode_sap]
+        );
+      } catch (errSync) {
+        console.warn('Sync aktivitas_unit notice:', errSync);
+      }
+
       const updatedRow = queryOne<HasilInputAktivitasRow>(
         'SELECT * FROM hasil_input_aktivitas WHERE id = ?',
         [id]
       );
 
+      const formattedUpdatedRow = updatedRow ? {
+        ...updatedRow,
+        stik_awal: stikAwal,
+        stik_akhir: stikAkhir,
+        stik_solar_awal: stikAwal,
+        stik_solar_akhir: stikAkhir,
+        estimasi_konsumsi_solar: estimasiKonsumsi,
+        ada_kendala: adaKendala,
+        kendala_list: parsedKendalaArr
+      } : null;
+
       broadcast({
         event: 'UPDATE_ACTIVITY',
-        data: updatedRow,
+        data: formattedUpdatedRow,
         timestamp: new Date().toISOString()
       });
 
-      res.json({ status: 'success', data: updatedRow });
+      broadcast({
+        event: 'UPDATE_REALISASI',
+        data: formattedUpdatedRow,
+        timestamp: new Date().toISOString()
+      });
+
+      res.json({ status: 'success', data: formattedUpdatedRow });
+    } catch (err: unknown) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // GET /api/rekapitulasi/:id & /api/aktivitas-unit/:id (Detail Aktivitas)
+  app.get(['/api/rekapitulasi/:id', '/api/aktivitas-unit/:id'], (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const row = queryOne<HasilInputAktivitasRow>(
+        'SELECT * FROM hasil_input_aktivitas WHERE id = ?',
+        [id]
+      );
+      if (!row) {
+        return res.status(404).json({ error: 'Data aktivitas tidak ditemukan.' });
+      }
+
+      let parsedKendala: Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }> = [];
+      if (row.kendala_list) {
+        try {
+          const parsed = typeof row.kendala_list === 'string' ? JSON.parse(row.kendala_list) : row.kendala_list;
+          parsedKendala = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          parsedKendala = [{ nama_kendala: String(row.kendala_list) }];
+        }
+      }
+
+      const stikSolarAwal = row.stik_solar_awal !== null && row.stik_solar_awal !== undefined ? parseFloat(String(row.stik_solar_awal)) : (row.stik_awal !== null && row.stik_awal !== undefined ? parseFloat(String(row.stik_awal)) : 0);
+      const stikSolarAkhir = row.stik_solar_akhir !== null && row.stik_solar_akhir !== undefined ? parseFloat(String(row.stik_solar_akhir)) : (row.stik_akhir !== null && row.stik_akhir !== undefined ? parseFloat(String(row.stik_akhir)) : 0);
+      let estKonsumsi = row.estimasi_konsumsi_solar !== null && row.estimasi_konsumsi_solar !== undefined ? parseFloat(String(row.estimasi_konsumsi_solar)) : 0;
+      if ((!estKonsumsi || estKonsumsi === 0) && row.jumlah_liter_solar && (stikSolarAkhir - stikSolarAwal) > 0) {
+        estKonsumsi = Math.round((Number(row.jumlah_liter_solar) / (stikSolarAkhir - stikSolarAwal)) * 10) / 10;
+      }
+      const adaKendala = (row.ada_kendala === 1 || parsedKendala.length > 0) ? 1 : 0;
+
+      res.json({
+        status: 'success',
+        data: {
+          ...row,
+          stik_awal: stikSolarAwal,
+          stik_akhir: stikSolarAkhir,
+          stik_solar_awal: stikSolarAwal,
+          stik_solar_akhir: stikSolarAkhir,
+          estimasi_konsumsi_solar: estKonsumsi,
+          ada_kendala: adaKendala,
+          kendala_list: parsedKendala
+        }
+      });
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
     }

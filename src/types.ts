@@ -39,6 +39,11 @@ export interface AktivitasUnit {
   satuan: string;
   kode_sap: string;
   status_aktif?: number;
+  stik_solar_awal?: number;
+  stik_solar_akhir?: number;
+  estimasi_konsumsi_solar?: number;
+  kendala_list?: KendalaItem[] | string | null;
+  ada_kendala?: number;
 }
 
 export interface Operator {
@@ -153,6 +158,10 @@ export interface HasilInputAktivitas {
   jumlah_liter_solar?: number | null;
   stik_awal?: number | null;
   stik_akhir?: number | null;
+  stik_solar_awal?: number | null;
+  stik_solar_akhir?: number | null;
+  estimasi_konsumsi_solar?: number | null;
+  ada_kendala?: number | boolean;
   kendala_list?: KendalaItem[] | string | null;
   is_hm_awal_corrected?: boolean | number;
   alasan_koreksi_hm?: string | null;

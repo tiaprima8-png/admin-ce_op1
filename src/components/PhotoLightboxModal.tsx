@@ -1,20 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Download, 
-  CheckCircle2, 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  User, 
-  Truck, 
-  HardHat, 
-  FileCheck,
-  Maximize2,
-  ExternalLink,
-  Loader2,
-  AlertCircle
-} from 'lucide-react';
+import { X, ZoomIn, ZoomOut, Download, RotateCw, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { HasilInputAktivitas } from '../types';
 
 interface PhotoLightboxModalProps {
@@ -23,196 +8,208 @@ interface PhotoLightboxModalProps {
 }
 
 export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({ activity, onClose }) => {
-  const [photoUrl, setPhotoUrl] = useState<string | null>(activity?.foto_bukti || null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  useEffect(() => {
-    if (!activity) return;
-
-    if (activity.foto_bukti && activity.foto_bukti.trim() !== '') {
-      setPhotoUrl(activity.foto_bukti);
-      setIsLoading(false);
-      setErrorMessage(null);
+    if (!activity) {
+      setPhotoUrl(null);
+      setError(null);
+      setZoom(1);
+      setRotation(0);
       return;
     }
 
-    // Lazy load photo from dedicated lightweight endpoint
-    setIsLoading(true);
-    setErrorMessage(null);
+    setZoom(1);
+    setRotation(0);
+    setError(null);
+
+    // If activity already has inline photo
+    if (activity.foto_bukti && activity.foto_bukti.length > 50) {
+      setPhotoUrl(activity.foto_bukti);
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise lazy-fetch from backend endpoint
+    let isMounted = true;
+    setLoading(true);
 
     fetch(`/api/rekapitulasi/${activity.id}/foto`)
       .then((res) => {
-        if (!res.ok) throw new Error('Gagal memuat foto bukti dari server.');
+        if (!res.ok) throw new Error('Gagal mengambil foto');
         return res.json();
       })
-      .then((json) => {
-        const fetchedUrl = json.data?.foto_bukti || json.foto_bukti;
-        if (fetchedUrl) {
-          setPhotoUrl(fetchedUrl);
-        } else {
-          setErrorMessage('Foto bukti lapangan tidak ditemukan.');
+      .then((data) => {
+        if (isMounted) {
+          if (data?.data?.foto_bukti) {
+            setPhotoUrl(data.data.foto_bukti);
+          } else {
+            setError('Foto bukti tidak tersedia untuk aktivitas ini.');
+          }
+          setLoading(false);
         }
       })
-      .catch((err: unknown) => {
-        console.error('Error loading photo detail:', err);
-        setErrorMessage((err as Error).message || 'Gagal memuat foto.');
-      })
-      .finally(() => {
-        setIsLoading(false);
+      .catch((err) => {
+        if (isMounted) {
+          setError(err.message || 'Gagal memuat foto');
+          setLoading(false);
+        }
       });
+
+    return () => {
+      isMounted = false;
+    };
   }, [activity]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (activity) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activity, onClose]);
 
   if (!activity) return null;
 
-  const handleDownload = () => {
-    if (!photoUrl) return;
-    const link = document.createElement('a');
-    link.href = photoUrl;
-    const ext = photoUrl.startsWith('data:image/svg') ? 'svg' : 'jpg';
-    link.download = `bukti_lapangan_${activity.kode_unit}_${activity.tanggal}_${activity.id}.${ext}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 3));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.5));
+  const handleRotate = () => setRotation((prev) => (prev + 90) % 360);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      
-      {/* Container Box */}
-      <div className="relative bg-slate-900 rounded-2xl max-w-4xl w-full max-h-[95vh] flex flex-col shadow-2xl border border-slate-700/60 overflow-hidden">
-        
-        {/* Header Bar */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 text-white">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <FileCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white tracking-tight">
-                  Foto Bukti Lapangan: {activity.kode_unit}
-                </h3>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  Terverifikasi Android Mobile
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                {activity.nama_aktivitas} • [{activity.kode_sap}]
-              </p>
-            </div>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex flex-col max-w-4xl w-full max-h-[90vh] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-900/90 text-white shrink-0">
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-emerald-400" />
+              <span>Foto Bukti Lapangan</span>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {activity.kode_unit}
+              </span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {activity.nama_aktivitas || activity.aktivitas || 'Operasional'} • {activity.tanggal_kerja || activity.tanggal} • {activity.nama_pengawas}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
             {photoUrl && (
-              <button
-                onClick={handleDownload}
-                title="Unduh foto bukti lapangan ke perangkat"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/40 rounded-lg transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Unduh Foto</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  title="Perkecil"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  title="Perbesar"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRotate}
+                  title="Putar"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+                <a
+                  href={photoUrl}
+                  download={`bukti-${activity.kode_unit}-${activity.tanggal}.png`}
+                  title="Unduh Foto"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+              </>
             )}
             <button
+              type="button"
               onClick={onClose}
-              title="Tutup dialog (Esc)"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Tutup"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-2"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Image Preview Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-center bg-slate-950/50 min-h-[300px]">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center gap-3 text-emerald-400 py-12">
-              <Loader2 className="w-8 h-8 animate-spin" />
-              <span className="text-xs font-semibold tracking-wide text-slate-300">
-                Memuat foto bukti dari server (Lazy Loading)...
-              </span>
+        {/* Image Container */}
+        <div className="relative flex-1 flex items-center justify-center p-4 bg-slate-950 overflow-hidden min-h-[360px] max-h-[60vh]">
+          {loading ? (
+            <div className="flex flex-col items-center gap-3 text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+              <p className="text-xs">Memuat foto bukti dari server...</p>
             </div>
-          ) : errorMessage ? (
-            <div className="flex flex-col items-center justify-center gap-2 text-rose-400 py-12 text-xs">
-              <AlertCircle className="w-8 h-8 text-rose-500" />
-              <span className="font-semibold">{errorMessage}</span>
+          ) : error ? (
+            <div className="text-center text-slate-400 px-4">
+              <p className="text-sm font-semibold text-rose-400 mb-1">{error}</p>
+              <p className="text-xs text-slate-500">Tidak ada file foto tersimpan untuk laporan ini.</p>
             </div>
           ) : photoUrl ? (
-            <div className="relative max-w-full flex items-center justify-center rounded-xl overflow-hidden shadow-2xl border border-slate-800 bg-slate-900">
+            <div className="w-full h-full flex items-center justify-center overflow-auto p-2">
               <img
                 src={photoUrl}
-                alt={`Bukti lapangan ${activity.kode_unit} - ${activity.nama_aktivitas}`}
-                className="max-h-[58vh] sm:max-h-[64vh] w-auto object-contain rounded-xl select-none"
+                alt={`Bukti ${activity.kode_unit}`}
+                style={{
+                  transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                  transition: 'transform 0.2s ease-in-out',
+                }}
+                className="max-h-[55vh] max-w-full object-contain rounded-lg shadow-lg"
               />
             </div>
-          ) : null}
-        </div>
-
-        {/* Metadata Information Banner */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800/80 text-xs text-slate-300">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-            
-            <div className="flex items-start gap-2">
-              <Truck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Unit & Aktivitas</span>
-                <span className="font-semibold text-slate-100">{activity.kode_unit}</span>
-                <span className="block text-[11px] text-slate-300 truncate">{activity.nama_aktivitas}</span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Lokasi & Pengawas</span>
-                <span className="font-semibold text-slate-100 truncate block">{activity.lokasi}</span>
-                <span className="text-[11px] text-emerald-300 font-medium">{activity.nama_pengawas}</span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <User className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Operator Unit</span>
-                <span className="font-semibold text-slate-100">{activity.operator}</span>
-                <span className="block text-[11px] font-mono text-slate-400">{activity.nik_operator}</span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <Clock className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Shift & HM Berjalan</span>
-                <span className="font-semibold text-slate-100">
-                  {activity.shift_kerja} ({activity.jam_kerja} Jam)
-                </span>
-                <span className="block text-[11px] text-emerald-300 font-bold">
-                  {activity.hm_harian_berjalan} HM (Awal: {activity.hm_awal} → Akhir: {activity.hm_akhir})
-                </span>
-              </div>
-            </div>
-
-          </div>
-
-          {activity.keterangan && (
-            <div className="mt-3 pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center gap-1.5">
-              <span className="font-semibold text-slate-300">Catatan Pengawas:</span>
-              <span>"{activity.keterangan}"</span>
-            </div>
+          ) : (
+            <p className="text-xs text-slate-500">Tidak ada foto bukti</p>
           )}
         </div>
 
+        {/* Footer Details */}
+        <div className="px-5 py-3 border-t border-slate-800 bg-slate-900/90 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span><strong className="text-slate-400">Operator:</strong> {activity.operator || '-'}</span>
+            <span><strong className="text-slate-400">Lokasi:</strong> {activity.lokasi || '-'}</span>
+            <span><strong className="text-slate-400">Shift:</strong> {activity.shift_kerja || '-'}</span>
+            {activity.hm_harian_berjalan != null && (
+              <span><strong className="text-slate-400">HM Berjalan:</strong> {activity.hm_harian_berjalan} Jam</span>
+            )}
+            {activity.jumlah_liter_solar != null && Number(activity.jumlah_liter_solar) > 0 && (
+              <span><strong className="text-slate-400">Solar:</strong> {activity.jumlah_liter_solar} L</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+          >
+            Tutup
+          </button>
+        </div>
       </div>
     </div>
   );
 };
+
+export default PhotoLightboxModal;

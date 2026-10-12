@@ -51,12 +51,22 @@ function formatKendalaDuration(menit: number): string {
 function parseKendalaList(kendala: unknown): Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }> {
   if (!kendala) return [];
   if (Array.isArray(kendala)) return kendala;
+  if (typeof kendala === 'object' && kendala !== null) {
+    if ('nama_kendala' in (kendala as Record<string, unknown>)) {
+      return [kendala as { nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }];
+    }
+  }
   if (typeof kendala === 'string') {
     try {
       const parsed = JSON.parse(kendala);
       if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'object' && parsed !== null && 'nama_kendala' in parsed) {
+        return [parsed];
+      }
     } catch {
-      return [{ nama_kendala: kendala }];
+      if (kendala.trim() && kendala.trim() !== '[]') {
+        return [{ nama_kendala: kendala.trim() }];
+      }
     }
   }
   return [];
@@ -904,30 +914,43 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           </div>
                         )}
 
-                        {/* Baris 2: Stack Kendala jika ada */}
-                        {kendalaItems && kendalaItems.length > 0 && (
-                          <div className="space-y-1 pt-0.5">
-                            {kendalaItems.map((k, kIdx) => {
-                              const range = (k.waktu_mulai && k.waktu_selesai) ? `${k.waktu_mulai} - ${k.waktu_selesai}` : '';
-                              const durasi = k.durasi_menit !== undefined ? formatKendalaDuration(k.durasi_menit) : '';
-                              const detailTiming = [range, durasi].filter(Boolean).join(' | ');
-
+                        {/* Baris 2: Badge Peringatan Kendala (Sesuai spesifikasi: ⚠️ [Jumlah] Kendala: [Nama-nama Kendala]) */}
+                        {(row.ada_kendala === 1 || Boolean(row.ada_kendala) || (kendalaItems && kendalaItems.length > 0)) && (
+                          <div className="pt-0.5 space-y-1">
+                            {(() => {
+                              const kCount = kendalaItems.length > 0 ? kendalaItems.length : 1;
+                              const namesList = kendalaItems.map(k => k.nama_kendala).filter(Boolean).join(', ');
+                              const labelText = `⚠️ ${kCount} Kendala${namesList ? `: ${namesList}` : ''}`;
                               return (
                                 <div
-                                  key={kIdx}
-                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-900 bg-amber-50/90 border border-amber-300 rounded px-1.5 py-0.5 max-w-full leading-tight"
-                                  title={`Kendala: ${k.nama_kendala}${detailTiming ? ` (${detailTiming})` : ''}`}
+                                  className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-950 bg-amber-50/90 border border-amber-300 rounded-md px-2 py-0.5 max-w-full leading-tight shadow-2xs"
+                                  title={labelText}
                                 >
-                                  <span className="text-[11px] shrink-0">⚠️</span>
-                                  <span className="font-bold truncate">{k.nama_kendala}</span>
-                                  {detailTiming && (
-                                    <span className="text-amber-800 font-mono text-[9px] shrink-0 font-normal">
-                                      ({detailTiming})
-                                    </span>
-                                  )}
+                                  <span className="text-amber-600 shrink-0 text-xs">⚠️</span>
+                                  <span className="truncate">{labelText}</span>
                                 </div>
                               );
-                            })}
+                            })()}
+
+                            {/* Render detail timing kendala individual jika ada waktu/durasi */}
+                            {kendalaItems.length > 0 && kendalaItems.some(k => k.waktu_mulai || k.durasi_menit) && (
+                              <div className="flex flex-wrap gap-1 pt-0.5">
+                                {kendalaItems.map((k, kIdx) => {
+                                  const range = (k.waktu_mulai && k.waktu_selesai) ? `${k.waktu_mulai}-${k.waktu_selesai}` : '';
+                                  const durasi = k.durasi_menit !== undefined ? formatKendalaDuration(k.durasi_menit) : '';
+                                  const detailTiming = [range, durasi].filter(Boolean).join(' | ');
+                                  if (!detailTiming) return null;
+                                  return (
+                                    <span
+                                      key={kIdx}
+                                      className="inline-flex items-center text-[9px] font-mono text-amber-800 bg-amber-100/60 border border-amber-200 rounded px-1.5 py-0.2"
+                                    >
+                                      {k.nama_kendala}: {detailTiming}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -1030,25 +1053,42 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             </div>
                           )}
 
-                          {/* Baris 3: Stik BBM / Liter Solar */}
-                          <div className="text-[10px] mt-0.5 font-mono">
-                            {row.stik_awal !== undefined && row.stik_awal !== null && row.stik_akhir !== undefined && row.stik_akhir !== null ? (
-                              <span className="text-slate-600 font-medium">
-                                Stik: {row.stik_awal}→{row.stik_akhir}
-                                {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
-                                  <span className="text-amber-700 font-bold ml-1">
-                                    | {row.jumlah_liter_solar.toLocaleString('id-ID')} L
-                                  </span>
-                                ) : ''}
+                          {/* Baris 3: Badge Liter Solar & Rincian Stik Solar Lapangan */}
+                          <div className="mt-1 flex flex-col items-end gap-0.5">
+                            {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
+                              <span className="inline-flex items-center gap-1 text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-300 text-[10px] font-mono shadow-2xs">
+                                <Fuel className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span>{row.jumlah_liter_solar.toLocaleString('id-ID')} L</span>
                               </span>
-                            ) : row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
-                              <span className="inline-flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
-                                <Fuel className="w-2.5 h-2.5 inline text-amber-600" />
-                                {row.jumlah_liter_solar.toLocaleString('id-ID')} L
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 font-medium">-</span>
-                            )}
+                            ) : null}
+
+                            {(() => {
+                              const sAwal = row.stik_solar_awal !== null && row.stik_solar_awal !== undefined ? row.stik_solar_awal : row.stik_awal;
+                              const sAkhir = row.stik_solar_akhir !== null && row.stik_solar_akhir !== undefined ? row.stik_solar_akhir : row.stik_akhir;
+                              const hasStik = (sAwal !== null && sAwal !== undefined && Number(sAwal) > 0) || (sAkhir !== null && sAkhir !== undefined && Number(sAkhir) > 0);
+                              
+                              let est = row.estimasi_konsumsi_solar;
+                              if ((!est || Number(est) === 0) && row.jumlah_liter_solar && hasStik && sAwal !== null && sAkhir !== null && (Number(sAkhir) - Number(sAwal)) > 0) {
+                                est = Math.round((Number(row.jumlah_liter_solar) / (Number(sAkhir) - Number(sAwal))) * 10) / 10;
+                              }
+
+                              if (!hasStik && (!row.jumlah_liter_solar || row.jumlah_liter_solar <= 0)) {
+                                return <span className="text-slate-300 font-medium text-[10px]">-</span>;
+                              }
+
+                              if (!hasStik) return null;
+
+                              return (
+                                <div className="text-[10px] text-slate-600 font-mono flex items-center justify-end gap-1 flex-wrap mt-0.5">
+                                  <span>Stik: <strong className="text-slate-800">{sAwal ?? 0} / {sAkhir ?? 0} cm</strong></span>
+                                  {est !== null && est !== undefined && Number(est) > 0 && (
+                                    <span className="text-amber-800 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                                      Est: {est} L/cm
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       )}

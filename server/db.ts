@@ -44,6 +44,11 @@ export interface AktivitasUnitRow {
   satuan: string;
   kode_sap: string;
   status_aktif: number;
+  stik_solar_awal?: number;
+  stik_solar_akhir?: number;
+  estimasi_konsumsi_solar?: number;
+  kendala_list?: string | null;
+  ada_kendala?: number;
 }
 
 export interface OperatorRow {
@@ -138,7 +143,11 @@ export interface HasilInputAktivitasRow {
   jumlah_liter_solar: number;
   stik_awal?: number | null;
   stik_akhir?: number | null;
+  stik_solar_awal?: number | null;
+  stik_solar_akhir?: number | null;
+  estimasi_konsumsi_solar?: number | null;
   kendala_list?: string | null;
+  ada_kendala?: number;
   is_hm_awal_corrected?: number;
   alasan_koreksi_hm?: string | null;
   created_at: string;
@@ -304,7 +313,12 @@ function initTablesAndSeed(db: Database) {
       kode_sap TEXT NOT NULL,
       is_hm_awal_corrected INTEGER DEFAULT 0,
       alasan_koreksi_hm TEXT DEFAULT NULL,
-      status_aktif INTEGER DEFAULT 1
+      status_aktif INTEGER DEFAULT 1,
+      stik_solar_awal REAL DEFAULT 0,
+      stik_solar_akhir REAL DEFAULT 0,
+      estimasi_konsumsi_solar REAL DEFAULT 0,
+      kendala_list TEXT,
+      ada_kendala INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS operators (
@@ -379,7 +393,11 @@ function initTablesAndSeed(db: Database) {
       jumlah_liter_solar REAL DEFAULT 0.00,
       stik_awal REAL,
       stik_akhir REAL,
+      stik_solar_awal REAL DEFAULT 0,
+      stik_solar_akhir REAL DEFAULT 0,
+      estimasi_konsumsi_solar REAL DEFAULT 0,
       kendala_list TEXT,
+      ada_kendala INTEGER DEFAULT 0,
       is_hm_awal_corrected INTEGER DEFAULT 0,
       alasan_koreksi_hm TEXT DEFAULT NULL,
       created_at TEXT NOT NULL
@@ -488,6 +506,25 @@ function initTablesAndSeed(db: Database) {
       db.run("UPDATE hasil_input_aktivitas SET tanggal_kerja = COALESCE(tanggal, SUBSTR(created_at, 1, 10)) WHERE tanggal_kerja IS NULL;");
       console.log('Added tanggal_kerja column to hasil_input_aktivitas');
     }
+    if (cols && !cols.includes('stik_solar_awal')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN stik_solar_awal REAL DEFAULT 0;");
+      db.run("UPDATE hasil_input_aktivitas SET stik_solar_awal = COALESCE(stik_awal, 0);");
+      console.log('Added stik_solar_awal column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('stik_solar_akhir')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN stik_solar_akhir REAL DEFAULT 0;");
+      db.run("UPDATE hasil_input_aktivitas SET stik_solar_akhir = COALESCE(stik_akhir, 0);");
+      console.log('Added stik_solar_akhir column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('estimasi_konsumsi_solar')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN estimasi_konsumsi_solar REAL DEFAULT 0;");
+      console.log('Added estimasi_konsumsi_solar column to hasil_input_aktivitas');
+    }
+    if (cols && !cols.includes('ada_kendala')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN ada_kendala INTEGER DEFAULT 0;");
+      db.run("UPDATE hasil_input_aktivitas SET ada_kendala = CASE WHEN kendala_list IS NOT NULL AND TRIM(kendala_list) != '' AND TRIM(kendala_list) != '[]' THEN 1 ELSE 0 END;");
+      console.log('Added ada_kendala column to hasil_input_aktivitas');
+    }
 
     // Migration for aktivitas_unit table
     const actInfo = db.exec("PRAGMA table_info(aktivitas_unit)");
@@ -512,6 +549,26 @@ function initTablesAndSeed(db: Database) {
         console.warn('Index on aktivitas_unit(uuid) already exists or ignored:', idxErr);
       }
       console.log('Added uuid column to aktivitas_unit');
+    }
+    if (actCols && !actCols.includes('stik_solar_awal')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN stik_solar_awal REAL DEFAULT 0;");
+      console.log('Added stik_solar_awal column to aktivitas_unit');
+    }
+    if (actCols && !actCols.includes('stik_solar_akhir')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN stik_solar_akhir REAL DEFAULT 0;");
+      console.log('Added stik_solar_akhir column to aktivitas_unit');
+    }
+    if (actCols && !actCols.includes('estimasi_konsumsi_solar')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN estimasi_konsumsi_solar REAL DEFAULT 0;");
+      console.log('Added estimasi_konsumsi_solar column to aktivitas_unit');
+    }
+    if (actCols && !actCols.includes('kendala_list')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_list TEXT;");
+      console.log('Added kendala_list column to aktivitas_unit');
+    }
+    if (actCols && !actCols.includes('ada_kendala')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN ada_kendala INTEGER DEFAULT 0;");
+      console.log('Added ada_kendala column to aktivitas_unit');
     }
 
     // Migration for rencana_kerja table (updated_at & tanggal_kerja columns)

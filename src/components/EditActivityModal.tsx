@@ -48,6 +48,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [jumlahLiterSolar, setJumlahLiterSolar] = useState<number>(0);
   const [stikAwal, setStikAwal] = useState<number | ''>('');
   const [stikAkhir, setStikAkhir] = useState<number | ''>('');
+  const [estimasiKonsumsi, setEstimasiKonsumsi] = useState<number | ''>('');
   const [kendalaInput, setKendalaInput] = useState<string>('');
   const [waktuMulai, setWaktuMulai] = useState<string>('');
   const [waktuSelesai, setWaktuSelesai] = useState<string>('');
@@ -82,8 +83,12 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setStatusUnit(activity.status_unit || 'OPERASI');
       setIsIsiSolar(Boolean(activity.is_isi_solar) || (Number(activity.jumlah_liter_solar) > 0));
       setJumlahLiterSolar(Number(activity.jumlah_liter_solar) || 0);
-      setStikAwal(activity.stik_awal !== undefined && activity.stik_awal !== null ? activity.stik_awal : '');
-      setStikAkhir(activity.stik_akhir !== undefined && activity.stik_akhir !== null ? activity.stik_akhir : '');
+      const sAwal = activity.stik_solar_awal !== undefined && activity.stik_solar_awal !== null ? activity.stik_solar_awal : (activity.stik_awal !== undefined && activity.stik_awal !== null ? activity.stik_awal : '');
+      const sAkhir = activity.stik_solar_akhir !== undefined && activity.stik_solar_akhir !== null ? activity.stik_solar_akhir : (activity.stik_akhir !== undefined && activity.stik_akhir !== null ? activity.stik_akhir : '');
+      setStikAwal(sAwal);
+      setStikAkhir(sAkhir);
+      const est = activity.estimasi_konsumsi_solar !== undefined && activity.estimasi_konsumsi_solar !== null ? activity.estimasi_konsumsi_solar : '';
+      setEstimasiKonsumsi(est);
       
       // Parse kendala_list
       let parsedKendala: Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }> = [];
@@ -232,7 +237,11 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
         jumlah_liter_solar: isIsiSolar ? jumlahLiterSolar : 0,
         stik_awal: stikAwal !== '' ? Number(stikAwal) : null,
         stik_akhir: stikAkhir !== '' ? Number(stikAkhir) : null,
-        kendala_list: kendalaListItems.length > 0 ? kendalaListItems : null,
+        stik_solar_awal: stikAwal !== '' ? Number(stikAwal) : null,
+        stik_solar_akhir: stikAkhir !== '' ? Number(stikAkhir) : null,
+        estimasi_konsumsi_solar: estimasiKonsumsi !== '' ? Number(estimasiKonsumsi) : 0,
+        kendala_list: kendalaListItems.length > 0 ? kendalaListItems : [],
+        ada_kendala: kendalaListItems.length > 0 ? 1 : 0,
         is_hm_awal_corrected: isHmAwalCorrected ? 1 : 0,
         alasan_koreksi_hm: isHmAwalCorrected ? (alasanKoreksiHm.trim() || 'Koreksi input pengawas') : null
       };
@@ -477,33 +486,67 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 </div>
               )}
 
-              {/* Pengukuran Stik Solar Lapangan */}
-              <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-slate-200">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Stik Solar Awal (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={stikAwal}
-                    onChange={(e) => setStikAwal(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    placeholder="Contoh: 45"
-                    className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono"
-                  />
+              {/* Pengukuran Stik Solar Lapangan & Estimasi Konsumsi */}
+              <div className="pt-2.5 border-t border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Fuel className="w-3.5 h-3.5 text-amber-600" />
+                    Pengukuran Stik & Estimasi Konsumsi Solar
+                  </span>
+                  {jumlahLiterSolar > 0 && stikAwal !== '' && stikAkhir !== '' && (Number(stikAkhir) - Number(stikAwal)) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const calculated = Math.round((jumlahLiterSolar / (Number(stikAkhir) - Number(stikAwal))) * 10) / 10;
+                        setEstimasiKonsumsi(calculated);
+                      }}
+                      className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 transition-colors cursor-pointer"
+                    >
+                      ⚡ Hitung Est ({Math.round((jumlahLiterSolar / (Number(stikAkhir) - Number(stikAwal))) * 10) / 10} L/cm)
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Stik Solar Akhir (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={stikAkhir}
-                    onChange={(e) => setStikAkhir(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    placeholder="Contoh: 20"
-                    className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono"
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Stik Solar Awal (cm)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={stikAwal}
+                      onChange={(e) => setStikAwal(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="Contoh: 60"
+                      className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Stik Solar Akhir (cm)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={stikAkhir}
+                      onChange={(e) => setStikAkhir(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="Contoh: 90"
+                      className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Estimasi Konsumsi Solar (Liter/cm)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={estimasiKonsumsi}
+                      onChange={(e) => setEstimasiKonsumsi(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="Contoh: 30"
+                      className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono font-bold text-amber-900"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -846,30 +889,65 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               </div>
             </div>
 
-            {/* List Kendala yang sudah ditambahkan */}
+            {/* List Kartu Kendala Lapangan yang dikirim dari Android */}
             {kendalaListItems.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                {kendalaListItems.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white border border-amber-200 text-xs shadow-2xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-amber-600 font-bold shrink-0">⚠️</span>
-                      <span className="font-bold text-slate-800 truncate">{item.nama_kendala}</span>
-                      {(item.waktu_mulai || item.waktu_selesai) && (
-                        <span className="text-[11px] text-amber-800 font-mono shrink-0">
-                          ({item.waktu_mulai || '--:--'} s/d {item.waktu_selesai || '--:--'}{item.durasi_menit ? ` | ${Math.floor(item.durasi_menit/60)} jam ${item.durasi_menit%60} mnt` : ''})
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setKendalaListItems(prev => prev.filter((_, i) => i !== idx))}
-                      title="Hapus item kendala ini"
-                      className="text-rose-500 hover:text-rose-700 p-1 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+              <div className="space-y-2 pt-1.5">
+                <div className="text-[11px] font-bold text-amber-950 flex items-center justify-between">
+                  <span>Daftar Kartu Kendala Lapangan:</span>
+                  <span className="text-[10px] text-amber-800 font-mono font-semibold">
+                    {kendalaListItems.length} Hambatan Terdata
+                  </span>
+                </div>
+                {kendalaListItems.map((item, idx) => {
+                  const rangeStr = (item.waktu_mulai || item.waktu_selesai)
+                    ? `${item.waktu_mulai || '--:--'} s/d ${item.waktu_selesai || '--:--'}`
+                    : 'Tidak ditentukan';
+                  const durasiJam = item.durasi_menit !== undefined ? Math.floor(item.durasi_menit / 60) : 0;
+                  const durasiSisaMnt = item.durasi_menit !== undefined ? (item.durasi_menit % 60) : 0;
+                  const durasiStr = item.durasi_menit !== undefined
+                    ? (durasiJam > 0 ? `${durasiJam} Jam ${durasiSisaMnt} Menit` : `${durasiSisaMnt} Menit`)
+                    : '-';
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className="p-3 rounded-xl bg-white border border-amber-300 shadow-2xs hover:border-amber-400 transition-all space-y-2"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="p-1 rounded-md bg-amber-100 text-amber-800 text-xs shrink-0 font-bold">⚠️</span>
+                          <div>
+                            <span className="font-bold text-slate-900 text-xs block leading-tight">
+                              {item.nama_kendala}
+                            </span>
+                            <span className="text-[10px] text-amber-800 font-medium">
+                              Hambatan Operasional Unit Lapangan
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setKendalaListItems(prev => prev.filter((_, i) => i !== idx))}
+                          title="Hapus kendala ini"
+                          className="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-amber-100 text-[11px] font-mono">
+                        <div className="bg-amber-50/70 p-2 rounded-lg border border-amber-200/60">
+                          <span className="text-[10px] text-slate-500 block font-sans font-medium">Rentang Jam:</span>
+                          <span className="font-bold text-slate-800">{rangeStr}</span>
+                        </div>
+                        <div className="bg-amber-50/70 p-2 rounded-lg border border-amber-200/60">
+                          <span className="text-[10px] text-slate-500 block font-sans font-medium">Durasi Hambatan:</span>
+                          <span className="font-bold text-amber-900">{durasiStr}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

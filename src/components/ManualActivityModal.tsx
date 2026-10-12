@@ -48,6 +48,7 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
   const [jumlahLiterSolar, setJumlahLiterSolar] = useState<number>(0);
   const [stikAwal, setStikAwal] = useState<number | ''>('');
   const [stikAkhir, setStikAkhir] = useState<number | ''>('');
+  const [estimasiKonsumsi, setEstimasiKonsumsi] = useState<number | ''>('');
   const [kendalaInput, setKendalaInput] = useState<string>('');
   const [waktuMulai, setWaktuMulai] = useState<string>('');
   const [waktuSelesai, setWaktuSelesai] = useState<string>('');
@@ -209,7 +210,11 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
         jumlah_liter_solar: isIsiSolar ? jumlahLiterSolar : 0,
         stik_awal: stikAwal !== '' ? Number(stikAwal) : null,
         stik_akhir: stikAkhir !== '' ? Number(stikAkhir) : null,
-        kendala_list: kendalaListItems.length > 0 ? kendalaListItems : null,
+        stik_solar_awal: stikAwal !== '' ? Number(stikAwal) : null,
+        stik_solar_akhir: stikAkhir !== '' ? Number(stikAkhir) : null,
+        estimasi_konsumsi_solar: estimasiKonsumsi !== '' ? Number(estimasiKonsumsi) : 0,
+        kendala_list: kendalaListItems.length > 0 ? kendalaListItems : [],
+        ada_kendala: kendalaListItems.length > 0 ? 1 : 0,
         is_hm_awal_corrected: isHmAwalCorrected ? 1 : 0,
         alasan_koreksi_hm: isHmAwalCorrected ? (alasanKoreksiHm.trim() || 'Koreksi input manual pengawas') : null
       };
@@ -454,33 +459,67 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
                 </div>
               )}
 
-              {/* Pengukuran Stik Solar Lapangan */}
-              <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-slate-200">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Stik Solar Awal (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={stikAwal}
-                    onChange={(e) => setStikAwal(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    placeholder="Contoh: 45"
-                    className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono"
-                  />
+              {/* Pengukuran Stik Solar Lapangan & Estimasi Konsumsi */}
+              <div className="pt-2.5 border-t border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Fuel className="w-3.5 h-3.5 text-amber-600" />
+                    Pengukuran Stik & Estimasi Konsumsi Solar
+                  </span>
+                  {jumlahLiterSolar > 0 && stikAwal !== '' && stikAkhir !== '' && (Number(stikAkhir) - Number(stikAwal)) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const calculated = Math.round((jumlahLiterSolar / (Number(stikAkhir) - Number(stikAwal))) * 10) / 10;
+                        setEstimasiKonsumsi(calculated);
+                      }}
+                      className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 transition-colors cursor-pointer"
+                    >
+                      ⚡ Hitung Est ({Math.round((jumlahLiterSolar / (Number(stikAkhir) - Number(stikAwal))) * 10) / 10} L/cm)
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Stik Solar Akhir (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={stikAkhir}
-                    onChange={(e) => setStikAkhir(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    placeholder="Contoh: 20"
-                    className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono"
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Stik Solar Awal (cm)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={stikAwal}
+                      onChange={(e) => setStikAwal(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="Contoh: 60"
+                      className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Stik Solar Akhir (cm)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={stikAkhir}
+                      onChange={(e) => setStikAkhir(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="Contoh: 90"
+                      className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Estimasi Konsumsi Solar (Liter/cm)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={estimasiKonsumsi}
+                      onChange={(e) => setEstimasiKonsumsi(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="Contoh: 30"
+                      className="w-full text-xs rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white font-mono font-bold text-amber-900"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
