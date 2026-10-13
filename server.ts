@@ -22,7 +22,7 @@ import db, {
   type RencanaKerjaRow,
   type MasterKendalaRow,
   type AppSettingRow
-} from './server/db.js';
+} from './server/db.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -161,7 +161,7 @@ async function startServer() {
     const role = getRequesterRole(req);
     if (role === 'MANAGER') {
       const pathUrl = req.path.toLowerCase();
-      const isMasterRoute = 
+      const isMasterOrWriteRoute = 
         pathUrl.startsWith('/master-') ||
         pathUrl.startsWith('/master/') ||
         pathUrl.startsWith('/master') ||
@@ -172,13 +172,15 @@ async function startServer() {
         pathUrl.startsWith('/kendala') ||
         pathUrl.startsWith('/users') ||
         pathUrl.startsWith('/settings') ||
-        pathUrl.startsWith('/app-settings');
+        pathUrl.startsWith('/app-settings') ||
+        pathUrl.startsWith('/rencana-kerja') ||
+        pathUrl.startsWith('/rekapitulasi');
 
-      if (isMasterRoute && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      if (isMasterOrWriteRoute && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
         return res.status(403).json({
           status: 'error',
           code: 'FORBIDDEN_MANAGER_ROLE',
-          error: 'Akses Ditolak (403 Forbidden): Peran MANAGER memiliki hak akses Monitoring & Executive View (Read-Only) dan dilarang menambah, mengubah, atau menghapus Master Data.',
+          error: 'Akses Ditolak (403 Forbidden): Peran MANAGER memiliki hak akses Monitoring & Executive View (Read-Only) dan dilarang menambah, mengubah, atau menghapus Master Data serta Rencana/Realisasi Kerja.',
           role: 'MANAGER'
         });
       }
@@ -793,7 +795,7 @@ async function startServer() {
   // 1B. RENCANA KERJA ENDPOINTS (GET, POST, PUT TERBITKAN-SPK, DELETE)
   app.get('/api/rencana-kerja', (req: Request, res: Response) => {
     try {
-      const { search, pengawas, pengawas_id, status_spk, tanggal } = req.query;
+      const { search, pengawas, pengawas_id, status_spk, tanggal, wilayah } = req.query;
       let sql = `
         SELECT 
           r.*,
@@ -810,6 +812,11 @@ async function startServer() {
         const s = `%${search.trim()}%`;
         sql += ` AND (r.nama_pengawas LIKE ? OR r.kode_unit LIKE ? OR r.operator LIKE ? OR r.kode_lokasi LIKE ? OR r.nomor_spk LIKE ?)`;
         params.push(s, s, s, s, s);
+      }
+
+      if (wilayah && typeof wilayah === 'string' && wilayah !== 'Semua' && wilayah !== 'Semua Wilayah') {
+        sql += ' AND (l.wilayah = ? OR r.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?) OR r.kode_unit IN (SELECT kode_unit FROM units WHERE nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?)))';
+        params.push(wilayah, wilayah, wilayah);
       }
 
       const rawPengawasFilter = (pengawas_id || pengawas) as string | undefined;
@@ -2354,7 +2361,7 @@ async function startServer() {
   // Rekonsiliasi data Beranda secara real-time: LEFT JOIN rencana_kerja & hasil_input_aktivitas
   app.get(['/api/beranda', '/api/rekapitulasi', '/api/aktivitas-unit'], (req: Request, res: Response) => {
     try {
-      const { search, pengawas, unit, shift, status, startDate, endDate } = req.query;
+      const { search, pengawas, unit, shift, status, startDate, endDate, wilayah } = req.query;
 
       let baseSql = `
         SELECT * FROM (
@@ -2519,6 +2526,11 @@ async function startServer() {
         const s = `%${search.trim()}%`;
         baseSql += ` AND (nama_pengawas LIKE ? OR kode_unit LIKE ? OR kode_sap LIKE ? OR operator LIKE ? OR nama_aktivitas LIKE ? OR lokasi LIKE ?)`;
         params.push(s, s, s, s, s, s);
+      }
+
+      if (wilayah && typeof wilayah === 'string' && wilayah !== 'Semua' && wilayah !== 'Semua Wilayah') {
+        baseSql += ' AND (wilayah = ? OR lokasi = ? OR nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?) OR kode_unit IN (SELECT kode_unit FROM units WHERE nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?)))';
+        params.push(wilayah, wilayah, wilayah, wilayah);
       }
 
       if (pengawas && typeof pengawas === 'string' && pengawas !== 'Semua') {
@@ -3178,7 +3190,7 @@ async function startServer() {
   // Fast SQL Queries with GROUP BY (kode_unit, nama_aktivitas, status_unit)
   app.get(['/api/analitik', '/api/analytics'], (req: Request, res: Response) => {
     try {
-      const { startDate, endDate, pengawas, unit, shift, status } = req.query;
+      const { startDate, endDate, pengawas, unit, shift, status, wilayah } = req.query;
       let whereClause = ' WHERE 1=1';
       const params: (string | number)[] = [];
 
@@ -3189,6 +3201,10 @@ async function startServer() {
       if (endDate && typeof endDate === 'string') {
         whereClause += ' AND h.tanggal <= ?';
         params.push(endDate);
+      }
+      if (wilayah && typeof wilayah === 'string' && wilayah !== 'Semua' && wilayah !== 'Semua Wilayah') {
+        whereClause += ` AND (h.kode_lokasi IN (SELECT kode_lokasi FROM lokasi WHERE wilayah = ?) OR h.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?) OR h.kode_unit IN (SELECT kode_unit FROM units WHERE nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?)))`;
+        params.push(wilayah, wilayah, wilayah);
       }
       if (pengawas && typeof pengawas === 'string' && pengawas !== 'Semua') {
         whereClause += ' AND h.nama_pengawas = ?';
@@ -3690,7 +3706,7 @@ async function startServer() {
       }
 
       const user = queryOne<UserRow>(
-        'SELECT id, nama_lengkap, username, password, hak_akses, role, status_aktif FROM users WHERE LOWER(username) = LOWER(?)',
+        'SELECT id, nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif FROM users WHERE LOWER(username) = LOWER(?)',
         [username.trim()]
       );
 
@@ -3710,7 +3726,7 @@ async function startServer() {
         user.role ||
         (user.username === 'admin' ? 'SUPER_ADMIN' :
          user.hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' :
-         user.hak_akses?.toLowerCase() === 'pengawas' ? 'SUPERVISOR' :
+         (user.hak_akses?.toLowerCase() === 'pengawas' || user.hak_akses?.toLowerCase() === 'kasie') ? 'SUPERVISOR' :
          'ADMIN')
       );
 
@@ -3723,8 +3739,9 @@ async function startServer() {
           id: user.id,
           nama_lengkap: user.nama_lengkap,
           username: user.username,
-          hak_akses: user.hak_akses,
+          hak_akses: user.hak_akses === 'Pengawas' ? 'Kasie' : user.hak_akses,
           role: resolvedRole,
+          wilayah: user.wilayah || 'PG1',
           email: `${user.username}@rkce.co.id`
         }
       });
@@ -3737,7 +3754,7 @@ async function startServer() {
   app.get('/api/users', (req: Request, res: Response) => {
     try {
       const { status } = req.query;
-      let sql = 'SELECT id, nama_lengkap, username, hak_akses, role, status_aktif FROM users WHERE 1=1';
+      let sql = 'SELECT id, nama_lengkap, username, hak_akses, role, wilayah, status_aktif FROM users WHERE 1=1';
       const params: (string | number)[] = [];
 
       if (status !== undefined && status !== 'Semua' && status !== '') {
@@ -3755,19 +3772,22 @@ async function startServer() {
 
   app.post('/api/users', (req: Request, res: Response) => {
     try {
-      const { nama_lengkap, username, password, hak_akses, role, status_aktif } = req.body;
+      const { nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif } = req.body;
       const activeStatus = status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1;
       const resolvedRole = role || (
         hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' :
-        hak_akses?.toLowerCase() === 'pengawas' ? 'SUPERVISOR' :
+        (hak_akses?.toLowerCase() === 'pengawas' || hak_akses?.toLowerCase() === 'kasie') ? 'SUPERVISOR' :
         'ADMIN'
       );
-      const resDb = execute(`
-        INSERT INTO users (nama_lengkap, username, password, hak_akses, role, status_aktif)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [nama_lengkap, username, password, hak_akses || 'Pengawas', resolvedRole, activeStatus]);
+      const userWilayah = (wilayah && String(wilayah).trim()) || 'PG1';
+      const userHakAkses = hak_akses || 'Kasie';
 
-      const inserted = queryOne<UserRow>('SELECT id, nama_lengkap, username, hak_akses, role, status_aktif FROM users WHERE id = ?', [resDb.lastInsertRowId]);
+      const resDb = execute(`
+        INSERT INTO users (nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [nama_lengkap, username, password, userHakAkses, resolvedRole, userWilayah, activeStatus]);
+
+      const inserted = queryOne<UserRow>('SELECT id, nama_lengkap, username, hak_akses, role, wilayah, status_aktif FROM users WHERE id = ?', [resDb.lastInsertRowId]);
       res.status(201).json(inserted);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
@@ -3777,7 +3797,7 @@ async function startServer() {
   app.put('/api/users/:id', (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const { nama_lengkap, username, password, hak_akses, role, status_aktif } = req.body;
+      const { nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif } = req.body;
       const existing = queryOne<UserRow>('SELECT * FROM users WHERE id = ?', [id]);
       if (!existing) {
         return res.status(404).json({ error: 'Pengguna tidak ditemukan' });
@@ -3788,19 +3808,21 @@ async function startServer() {
       const resolvedRole = role || (
         hak_akses ? (
           hak_akses.toLowerCase() === 'manager' ? 'MANAGER' :
-          hak_akses.toLowerCase() === 'pengawas' ? 'SUPERVISOR' : 'ADMIN'
+          (hak_akses.toLowerCase() === 'pengawas' || hak_akses.toLowerCase() === 'kasie') ? 'SUPERVISOR' : 'ADMIN'
         ) : (existing?.role || 'ADMIN')
       );
+      const userWilayah = wilayah !== undefined ? (String(wilayah).trim() || 'PG1') : (existing?.wilayah || 'PG1');
+      const userHakAkses = hak_akses || existing?.hak_akses || 'Kasie';
 
       if (password) {
-        execute('UPDATE users SET nama_lengkap = ?, username = ?, password = ?, hak_akses = ?, role = ?, status_aktif = ? WHERE id = ?',
-          [nama_lengkap, username, password, hak_akses, resolvedRole, activeStatus, id]);
+        execute('UPDATE users SET nama_lengkap = ?, username = ?, password = ?, hak_akses = ?, role = ?, wilayah = ?, status_aktif = ? WHERE id = ?',
+          [nama_lengkap, username, password, userHakAkses, resolvedRole, userWilayah, activeStatus, id]);
       } else {
-        execute('UPDATE users SET nama_lengkap = ?, username = ?, hak_akses = ?, role = ?, status_aktif = ? WHERE id = ?',
-          [nama_lengkap, username, hak_akses, resolvedRole, activeStatus, id]);
+        execute('UPDATE users SET nama_lengkap = ?, username = ?, hak_akses = ?, role = ?, wilayah = ?, status_aktif = ? WHERE id = ?',
+          [nama_lengkap, username, userHakAkses, resolvedRole, userWilayah, activeStatus, id]);
       }
 
-      const updated = queryOne<UserRow>('SELECT id, nama_lengkap, username, hak_akses, role, status_aktif FROM users WHERE id = ?', [id]);
+      const updated = queryOne<UserRow>('SELECT id, nama_lengkap, username, hak_akses, role, wilayah, status_aktif FROM users WHERE id = ?', [id]);
       res.json(updated);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });

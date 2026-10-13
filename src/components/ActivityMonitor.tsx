@@ -20,7 +20,7 @@ import {
   Pencil,
   Calendar
 } from 'lucide-react';
-import { HasilInputAktivitas, Unit, AktivitasUnit, Operator } from '../types';
+import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, User } from '../types';
 import { exportToExcel } from '../utils/export';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { KpiCards } from './KpiCards';
@@ -152,6 +152,7 @@ interface ActivityMonitorProps {
   aktivitasList: AktivitasUnit[];
   operators: Operator[];
   supervisors: string[];
+  users?: User[];
   newActivityIds: Set<number | string>;
   onOpenManualModal: () => void;
   onEditActivity: (activity: HasilInputAktivitas) => void;
@@ -167,6 +168,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   aktivitasList,
   operators,
   supervisors,
+  users,
   newActivityIds,
   onOpenManualModal,
   onEditActivity,
@@ -399,10 +401,36 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPengawas, setSelectedPengawas] = useState('Semua');
+  const [selectedWilayah, setSelectedWilayah] = useState('Semua');
   const [selectedUnit, setSelectedUnit] = useState('Semua');
   const [selectedShift, setSelectedShift] = useState('Semua');
   const [selectedStatus, setSelectedStatus] = useState('Semua');
+
+  // User & Unit Wilayah lookup
+  const userWilayahMap = useMemo(() => {
+    const map = new Map<string, string>();
+    map.set('budi santoso', 'PG1');
+    map.set('agus wijaya', 'PG2');
+    map.set('rudi hermawan', 'PG3');
+    if (users) {
+      for (const u of users) {
+        if (u.nama_lengkap && u.wilayah) {
+          map.set(u.nama_lengkap.toLowerCase().trim(), u.wilayah.trim().toUpperCase());
+        }
+      }
+    }
+    return map;
+  }, [users]);
+
+  const unitSupervisorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of units) {
+      if (u.kode_unit && u.nama_pengawas) {
+        map.set(u.kode_unit.toLowerCase().trim(), u.nama_pengawas.toLowerCase().trim());
+      }
+    }
+    return map;
+  }, [units]);
 
   // Date Range State (Default: 7 Hari Terakhir WIB)
   const [startDate, setStartDate] = useState<string>(() => getWibDaysAgo(6));
@@ -468,8 +496,25 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         if (!matchTerm) return false;
       }
 
-      if (selectedPengawas !== 'Semua' && item.nama_pengawas !== selectedPengawas) {
-        return false;
+      // Filter Wilayah Operasional (Kasie & Unit)
+      if (selectedWilayah !== 'Semua') {
+        const itemWilayah = (item.wilayah || '').trim().toUpperCase();
+        const kasieName = (item.nama_pengawas || '').toLowerCase().trim();
+        const kasieWilayah = userWilayahMap.get(kasieName);
+        const unitKasie = unitSupervisorMap.get((item.kode_unit || '').toLowerCase().trim());
+        const unitWilayah = unitKasie ? userWilayahMap.get(unitKasie) : undefined;
+        const targetW = selectedWilayah.toUpperCase();
+
+        const matchWilayah = 
+          itemWilayah === targetW || 
+          kasieWilayah === targetW || 
+          unitWilayah === targetW ||
+          (item.lokasi && item.lokasi.toUpperCase().includes(targetW)) ||
+          (item.kode_lokasi && item.kode_lokasi.toUpperCase().includes(targetW));
+
+        if (!matchWilayah) {
+          return false;
+        }
       }
 
       if (selectedUnit !== 'Semua' && item.kode_unit !== selectedUnit) {
@@ -505,7 +550,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
       return true;
     });
-  }, [dataList, searchTerm, selectedPengawas, selectedUnit, selectedShift, selectedStatus, highlightIds, newActivityIds, startDate, endDate]);
+  }, [dataList, searchTerm, selectedWilayah, selectedUnit, selectedShift, selectedStatus, highlightIds, newActivityIds, startDate, endDate, userWilayahMap, unitSupervisorMap]);
 
   const totalPages = Math.ceil(filteredActivities.length / pageSize) || 1;
   const paginatedActivities = filteredActivities.slice(
@@ -515,7 +560,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   const resetFilters = () => {
     setSearchTerm('');
-    setSelectedPengawas('Semua');
+    setSelectedWilayah('Semua');
     setSelectedUnit('Semua');
     setSelectedShift('Semua');
     setSelectedStatus('Semua');
@@ -527,7 +572,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   const isFilterActive = 
     searchTerm.trim() !== '' ||
-    selectedPengawas !== 'Semua' ||
+    selectedWilayah !== 'Semua' ||
     selectedUnit !== 'Semua' ||
     selectedShift !== 'Semua' ||
     selectedStatus !== 'Semua' ||
@@ -638,7 +683,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Cari Pengawas, Unit, Kode SAP, Lokasi, SPK..."
+              placeholder="Cari Kasie, Wilayah, Unit, Kode SAP, Lokasi, SPK..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -719,19 +764,20 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               <span>Filter:</span>
             </div>
 
-            {/* Dropdown Pengawas (default: "Semua Pengawas") */}
+            {/* Dropdown Wilayah Kerja (default: "Semua Wilayah") */}
             <select
-              value={selectedPengawas}
+              value={selectedWilayah}
               onChange={(e) => {
-                setSelectedPengawas(e.target.value);
+                setSelectedWilayah(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+              title="Filter Wilayah Operasional (PG1, PG2, PG3)"
+              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer font-medium"
             >
-              <option value="Semua">Semua Pengawas</option>
-              {supervisors.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
+              <option value="Semua">Semua Wilayah</option>
+              <option value="PG1">PG1</option>
+              <option value="PG2">PG2</option>
+              <option value="PG3">PG3</option>
             </select>
 
             {/* Dropdown Unit (default: "Semua Unit") */}
@@ -853,9 +899,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 Foto & SPK
               </th>
 
-              {/* Kolom 2 [PENGAWAS & TANGGAL] - ~15% */}
+              {/* Kolom 2 [KASIE & TANGGAL] - ~15% */}
               <th className="w-[15%] py-2.5 px-2.5">
-                Pengawas & Shift
+                Kasie & Shift
               </th>
 
               {/* Kolom 3 [UNIT & STATUS] - ~10% */}

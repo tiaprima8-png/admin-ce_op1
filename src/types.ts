@@ -5,8 +5,9 @@ export interface User {
   nama_lengkap: string;
   username: string;
   password?: string;
-  hak_akses: 'Admin' | 'Pengawas' | 'Manager' | 'Super Admin' | string;
+  hak_akses: 'Admin' | 'Pengawas' | 'Kasie' | 'Manager' | 'Super Admin' | string;
   role?: UserRole;
+  wilayah?: string;
   status_aktif?: number;
 }
 
@@ -16,6 +17,7 @@ export interface AuthUser {
   username: string;
   hak_akses: string;
   role?: UserRole;
+  wilayah?: string;
   email?: string;
   token?: string;
 }
@@ -88,6 +90,7 @@ export interface RencanaKerja {
   tanggal: string;
   tanggal_kerja?: string;
   status_unit: UnitStatus;
+  kategori_status?: UnitStatus;
   kode_unit: string;
   model_unit?: string;
   operator: string;

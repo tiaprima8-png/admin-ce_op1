@@ -15,6 +15,7 @@ export interface UserRow {
   password?: string;
   hak_akses: string;
   role?: UserRole;
+  wilayah?: string;
   status_aktif?: number;
 }
 
@@ -287,6 +288,7 @@ function initTablesAndSeed(db: Database) {
       password TEXT NOT NULL,
       hak_akses TEXT NOT NULL,
       role TEXT DEFAULT 'ADMIN',
+      wilayah TEXT DEFAULT 'PG1',
       status_aktif INTEGER DEFAULT 1
     );
 
@@ -875,7 +877,7 @@ function initTablesAndSeed(db: Database) {
     console.warn('HasilInputAktivitas migration note:', e);
   }
 
-  // Migration & Seed for Users role column
+  // Migration & Seed for Users role and wilayah columns
   try {
     const userInfo = db.exec("PRAGMA table_info(users)");
     const userCols = userInfo[0]?.values.map(v => v[1]);
@@ -883,20 +885,31 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'ADMIN';");
       console.log('Added role column to users');
     }
+    if (userCols && !userCols.includes('wilayah')) {
+      db.run("ALTER TABLE users ADD COLUMN wilayah TEXT DEFAULT 'PG1';");
+      console.log('Added wilayah column to users');
+    }
     if (userCols && !userCols.includes('status_aktif')) {
       db.run("ALTER TABLE users ADD COLUMN status_aktif INTEGER DEFAULT 1;");
     }
     db.run("UPDATE users SET role = 'SUPER_ADMIN' WHERE LOWER(username) = 'admin';");
-    db.run("UPDATE users SET role = 'SUPERVISOR' WHERE LOWER(hak_akses) = 'pengawas' OR LOWER(hak_akses) = 'supervisor';");
+    db.run("UPDATE users SET role = 'SUPERVISOR' WHERE LOWER(hak_akses) = 'pengawas' OR LOWER(hak_akses) = 'kasie' OR LOWER(hak_akses) = 'supervisor';");
     db.run("UPDATE users SET role = 'MANAGER' WHERE LOWER(hak_akses) = 'manager' OR LOWER(username) = 'manager';");
     db.run("UPDATE users SET role = 'ADMIN' WHERE role IS NULL OR role = '';");
+
+    // Backfill Wilayah & Update Terminologi Jabatan ke Kasie
+    db.run("UPDATE users SET wilayah = 'PG1' WHERE LOWER(username) LIKE '%budi%' OR LOWER(nama_lengkap) LIKE '%budi%';");
+    db.run("UPDATE users SET wilayah = 'PG2' WHERE LOWER(username) LIKE '%agus%' OR LOWER(nama_lengkap) LIKE '%agus%';");
+    db.run("UPDATE users SET wilayah = 'PG3' WHERE LOWER(username) LIKE '%rudi%' OR LOWER(nama_lengkap) LIKE '%rudi%';");
+    db.run("UPDATE users SET wilayah = 'Semua Wilayah' WHERE (LOWER(username) = 'admin' OR LOWER(username) = 'manager') AND (wilayah IS NULL OR wilayah = '' OR wilayah = 'PG1');");
+    db.run("UPDATE users SET hak_akses = 'Kasie' WHERE hak_akses = 'Pengawas' OR LOWER(hak_akses) = 'pengawas';");
 
     // Ensure sample Manager user exists
     const managerCheck = db.exec("SELECT id FROM users WHERE LOWER(username) = 'manager' LIMIT 1;");
     if (!managerCheck || !managerCheck[0] || managerCheck[0].values.length === 0) {
       db.run(`
-        INSERT INTO users (nama_lengkap, username, password, hak_akses, role, status_aktif)
-        VALUES ('Ir. Hendra Kusuma', 'manager', 'manager123', 'Manager', 'MANAGER', 1);
+        INSERT INTO users (nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif)
+        VALUES ('Ir. Hendra Kusuma', 'manager', 'manager123', 'Manager', 'MANAGER', 'Semua Wilayah', 1);
       `);
       console.log('Seeded sample Manager user: manager / manager123');
     }
@@ -911,12 +924,12 @@ function initTablesAndSeed(db: Database) {
   if (userCount === 0) {
     // Seed Users
     db.run(`
-      INSERT INTO users (nama_lengkap, username, password, hak_akses, role, status_aktif) VALUES
-      ('Farid Hadi', 'admin', 'admin123', 'Admin', 'SUPER_ADMIN', 1),
-      ('Ir. Hendra Kusuma', 'manager', 'manager123', 'Manager', 'MANAGER', 1),
-      ('Budi Santoso', 'budi.santoso', 'budi123', 'Pengawas', 'SUPERVISOR', 1),
-      ('Agus Wijaya', 'agus.wijaya', 'agus123', 'Pengawas', 'SUPERVISOR', 1),
-      ('Rudi Hermawan', 'rudi.h', 'rudi123', 'Pengawas', 'SUPERVISOR', 1);
+      INSERT INTO users (nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif) VALUES
+      ('Farid Hadi', 'admin', 'admin123', 'Admin', 'SUPER_ADMIN', 'Semua Wilayah', 1),
+      ('Ir. Hendra Kusuma', 'manager', 'manager123', 'Manager', 'MANAGER', 'Semua Wilayah', 1),
+      ('Budi Santoso', 'budi.santoso', 'budi123', 'Kasie', 'SUPERVISOR', 'PG1', 1),
+      ('Agus Wijaya', 'agus.wijaya', 'agus123', 'Kasie', 'SUPERVISOR', 'PG2', 1),
+      ('Rudi Hermawan', 'rudi.h', 'rudi123', 'Kasie', 'SUPERVISOR', 'PG3', 1);
     `);
 
     // Seed Units

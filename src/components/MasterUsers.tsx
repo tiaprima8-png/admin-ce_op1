@@ -20,7 +20,8 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
   const [namaLengkap, setNamaLengkap] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [hakAkses, setHakAkses] = useState<'Admin' | 'Pengawas'>('Pengawas');
+  const [wilayah, setWilayah] = useState('PG1');
+  const [hakAkses, setHakAkses] = useState<'Admin' | 'Kasie' | 'Manager'>('Kasie');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -34,7 +35,8 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
     setNamaLengkap('');
     setUsername('');
     setPassword('');
-    setHakAkses('Pengawas');
+    setWilayah('PG1');
+    setHakAkses('Kasie');
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -44,7 +46,12 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
     setNamaLengkap(u.nama_lengkap);
     setUsername(u.username);
     setPassword('');
-    setHakAkses(u.hak_akses);
+    setWilayah(u.wilayah || 'PG1');
+    setHakAkses(
+      u.role === 'MANAGER' || u.hak_akses?.toLowerCase() === 'manager' 
+        ? 'Manager' 
+        : (u.hak_akses === 'Admin' ? 'Admin' : 'Kasie')
+    );
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -58,10 +65,13 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
       const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
       const method = editingUser ? 'PUT' : 'POST';
 
+      const resolvedRole = hakAkses === 'Manager' ? 'MANAGER' : (hakAkses === 'Admin' ? 'ADMIN' : 'SUPERVISOR');
       const payload: Record<string, string> = {
         nama_lengkap: namaLengkap,
         username,
-        hak_akses: hakAkses
+        hak_akses: hakAkses,
+        role: resolvedRole,
+        wilayah: wilayah || 'PG1'
       };
       if (password) {
         payload.password = password;
@@ -158,6 +168,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
     const match =
       u.nama_lengkap.toLowerCase().includes(q) ||
       u.username.toLowerCase().includes(q) ||
+      (u.wilayah && u.wilayah.toLowerCase().includes(q)) ||
       u.hak_akses.toLowerCase().includes(q);
 
     if (!match) return false;
@@ -230,7 +241,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Cari nama lengkap, username, atau hak akses..."
+              placeholder="Cari nama lengkap, username, wilayah, atau hak akses..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -286,9 +297,10 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <th className="py-3 px-4">Nama Lengkap</th>
+                <th className="py-3 px-4">Nama Lengkap & Wilayah</th>
                 <th className="py-3 px-4">Username Akun</th>
                 <th className="py-3 px-4">Hak Akses Sistem</th>
+                <th className="py-3 px-4 text-center">Wilayah Kerja</th>
                 <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-center">Aksi</th>
               </tr>
@@ -296,7 +308,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-10 text-slate-400">
+                  <td colSpan={6} className="text-center py-10 text-slate-400">
                     Tidak ada data pengguna yang sesuai.
                   </td>
                 </tr>
@@ -306,7 +318,12 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                   return (
                     <tr key={u.id} className={`hover:bg-slate-50/80 transition-colors ${!isAktif ? 'bg-slate-50/50 opacity-65' : ''}`}>
                       <td className="py-3 px-4 font-semibold text-slate-900">
-                        {u.nama_lengkap}
+                        <div className="flex items-center gap-2">
+                          <span>{u.nama_lengkap}</span>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {u.wilayah || 'PG1'}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-600">
                         <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
@@ -314,16 +331,27 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        {u.hak_akses === 'Admin' ? (
+                        {u.role === 'MANAGER' || u.hak_akses?.toLowerCase() === 'manager' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+                            <Shield className="w-3 h-3 text-blue-600" />
+                            MANAGER EKSEKUTIF
+                          </span>
+                        ) : u.hak_akses === 'Admin' || u.role === 'SUPER_ADMIN' || u.role === 'ADMIN' ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                             <Shield className="w-3 h-3 text-emerald-600" />
                             SUPER ADMIN
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                            PENGAWAS LAPANGAN
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                            <Shield className="w-3 h-3 text-amber-600" />
+                            KASIE (KEPALA SEKSI)
                           </span>
                         )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                          {u.wilayah || 'PG1'}
+                        </span>
                       </td>
                       <td className="py-3 px-4 text-center">
                         {isAktif ? (
@@ -469,16 +497,34 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Wilayah Kerja <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={wilayah}
+                  onChange={(e) => setWilayah(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
+                  required
+                >
+                  <option value="PG1">PG1</option>
+                  <option value="PG2">PG2</option>
+                  <option value="PG3">PG3</option>
+                  <option value="Semua Wilayah">Semua Wilayah (Lintas Wilayah / Kantor)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Hak Akses <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={hakAkses}
-                  onChange={(e) => setHakAkses(e.target.value as 'Admin' | 'Pengawas')}
+                  onChange={(e) => setHakAkses(e.target.value as 'Admin' | 'Kasie' | 'Manager')}
                   className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
                   required
                 >
-                  <option value="Pengawas">Pengawas (Akses Input & Mobile Sync)</option>
+                  <option value="Kasie">Kasie (Kepala Seksi - Input & Mobile Sync)</option>
                   <option value="Admin">Admin (Akses Penuh Portal & Master Data)</option>
+                  <option value="Manager">Manager (Monitoring Eksekutif & Analitik)</option>
                 </select>
               </div>
 

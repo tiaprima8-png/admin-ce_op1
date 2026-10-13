@@ -233,7 +233,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200 text-slate-700 hover:text-emerald-800 text-[11px] font-mono font-medium transition-all cursor-pointer"
             >
               <span className="font-bold">budi.santoso</span> / <span className="text-slate-500">budi123</span>
-              <span className="text-[10px] bg-slate-200 text-slate-700 font-sans px-1.5 py-0.2 rounded font-bold">Pengawas</span>
+              <span className="text-[10px] bg-amber-100 text-amber-800 font-sans px-1.5 py-0.2 rounded font-bold">Kasie (PG1)</span>
             </button>
           </div>
         </div>

@@ -302,8 +302,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        {/* System Settings Quick Access */}
-        {onOpenSettings && (
+        {/* System Settings Quick Access (Hanya untuk Admin) */}
+        {!isManager && onOpenSettings && (
           <div className="px-3 py-2 border-t border-slate-200 bg-white shrink-0">
             {!isCollapsed ? (
               <button

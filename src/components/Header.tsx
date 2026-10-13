@@ -51,7 +51,11 @@ export const Header: React.FC<HeaderProps> = ({
   const isManager = currentUser?.role === 'MANAGER' || currentUser?.hak_akses?.toLowerCase() === 'manager';
   const displayRole = isManager 
     ? 'Manager (Eksekutif)' 
-    : (currentUser?.role === 'SUPER_ADMIN' ? 'Super Admin' : (currentUser?.hak_akses || 'Admin'));
+    : (currentUser?.role === 'SUPER_ADMIN' 
+        ? 'Super Admin' 
+        : (currentUser?.role === 'SUPERVISOR' || currentUser?.hak_akses?.toLowerCase() === 'pengawas' || currentUser?.hak_akses?.toLowerCase() === 'kasie'
+            ? `Kasie (${currentUser?.wilayah || 'PG1'})`
+            : (currentUser?.hak_akses || 'Admin')));
   const userInitials = displayName
     .split(' ')
     .filter(Boolean)
@@ -129,8 +133,8 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* 1B. Tombol Akses Cepat Pengaturan Sistem (HM Standar) */}
-          {onOpenSettings && (
+          {/* 1B. Tombol Akses Cepat Pengaturan Sistem (HM Standar) - Hanya untuk Admin */}
+          {!isManager && onOpenSettings && (
             <button
               onClick={onOpenSettings}
               title="Pengaturan Sistem: Standar Operasional HM Mesin"
@@ -194,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 {/* Settings Button */}
-                {onOpenSettings && (
+                {!isManager && onOpenSettings && (
                   <div className="p-1.5 border-b border-slate-100">
                     <button
                       onClick={() => {

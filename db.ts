@@ -14,7 +14,7 @@ import db, {
   type LokasiRow,
   type RencanaKerjaRow,
   type MasterKendalaRow
-} from './server/db.js';
+} from './server/db.ts';
 
 export default db;
 export {

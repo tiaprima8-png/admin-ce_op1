@@ -38,31 +38,52 @@ import { PhotoLightboxModal } from './components/PhotoLightboxModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthUser } from './types';
 
-// Global fetch interceptor to attach auth & role headers to all /api/ calls
+// Global fetch interceptor to attach auth & role headers to all /api/ calls (Safe for iframe/sandboxed environments)
 if (typeof window !== 'undefined' && !(window as any).__rkce_fetch_intercepted) {
   (window as any).__rkce_fetch_intercepted = true;
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    try {
-      const sessionStr = sessionStorage.getItem('rkce_auth');
-      if (sessionStr) {
-        const user = JSON.parse(sessionStr);
-        init = init || {};
-        const headers = new Headers(init.headers || {});
-        if (user.token && !headers.has('Authorization')) {
-          headers.set('Authorization', `Bearer ${user.token}`);
+  try {
+    const rawFetch = window.fetch;
+    if (typeof rawFetch === 'function') {
+      const originalFetch = rawFetch.bind(window);
+      const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        try {
+          const sessionStr = sessionStorage.getItem('rkce_auth');
+          if (sessionStr) {
+            const user = JSON.parse(sessionStr);
+            init = init || {};
+            const headers = new Headers(init.headers || {});
+            if (user.token && !headers.has('Authorization')) {
+              headers.set('Authorization', `Bearer ${user.token}`);
+            }
+            if (user.role && !headers.has('x-user-role')) {
+              headers.set('x-user-role', user.role);
+            }
+            if (user.id && !headers.has('x-user-id')) {
+              headers.set('x-user-id', String(user.id));
+            }
+            init.headers = headers;
+          }
+        } catch {}
+        return originalFetch(input, init);
+      };
+
+      try {
+        window.fetch = customFetch;
+      } catch {
+        try {
+          Object.defineProperty(window, 'fetch', {
+            value: customFetch,
+            writable: true,
+            configurable: true
+          });
+        } catch {
+          // If window.fetch has a strict non-configurable getter in sandboxed iframe, gracefully skip overriding
         }
-        if (user.role && !headers.has('x-user-role')) {
-          headers.set('x-user-role', user.role);
-        }
-        if (user.id && !headers.has('x-user-id')) {
-          headers.set('x-user-id', String(user.id));
-        }
-        init.headers = headers;
       }
-    } catch {}
-    return originalFetch(input, init);
-  };
+    }
+  } catch (err) {
+    console.warn('Fetch interceptor initialization bypassed safely:', err);
+  }
 }
 
 const getStoredSession = (): AuthUser | null => {
@@ -134,6 +155,8 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [hmStandar, setHmStandar] = useState<HmStandarConfig>({ min: 6.0, max: 10.0 });
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const isManager = currentUser?.role === 'MANAGER' || currentUser?.hak_akses?.toLowerCase() === 'manager';
 
   // Extract unique supervisors
   const supervisors = Array.from(new Set(
@@ -303,6 +326,7 @@ export default function App() {
 
   // --- Handlers for Rencana Kerja & SPK ---
   const handleTerbitkanSpk = async (id: string, nomorSpk?: string) => {
+    if (isManager) return;
     const res = await fetch(`/api/rencana-kerja/${id}/terbitkan-spk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -333,6 +357,7 @@ export default function App() {
   };
 
   const handleCreateRencana = async (data: Partial<RencanaKerja>) => {
+    if (isManager) return;
     const res = await fetch('/api/rencana-kerja', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -349,6 +374,7 @@ export default function App() {
   };
 
   const handleDeleteRencana = async (id: string) => {
+    if (isManager) return;
     const res = await fetch(`/api/rencana-kerja/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const err = await res.json();
@@ -359,6 +385,7 @@ export default function App() {
 
   // --- Handlers for Master Lokasi ---
   const handleSaveLokasi = async (lokasi: Lokasi) => {
+    if (isManager) return;
     const res = await fetch('/api/master/lokasi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -379,6 +406,7 @@ export default function App() {
   };
 
   const handleDeleteLokasi = async (kodeLokasi: string) => {
+    if (isManager) return;
     const res = await fetch(`/api/master/lokasi/${encodeURIComponent(kodeLokasi)}`, { method: 'DELETE' });
     if (!res.ok) {
       const err = await res.json();
@@ -388,6 +416,7 @@ export default function App() {
   };
 
   const handleBulkImportLokasi = async (lokasiItems: Lokasi[]) => {
+    if (isManager) return;
     const res = await fetch('/api/master/lokasi/bulk-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -695,6 +724,7 @@ export default function App() {
   }, [fetchStats, fetchUnits, fetchRencanaList]);
 
   const handleDeleteActivity = async (target: number | string | HasilInputAktivitas) => {
+    if (isManager) return;
     try {
       let isRencanaPending = false;
       let endpoint = '';
@@ -829,7 +859,7 @@ export default function App() {
         onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={!isManager ? () => setIsSettingsModalOpen(true) : undefined}
         hmStandar={hmStandar}
         userRole={currentUser?.role}
       />
@@ -848,7 +878,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
-          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenSettings={!isManager ? () => setIsSettingsModalOpen(true) : undefined}
           hmStandar={hmStandar}
         />
 
@@ -890,8 +920,12 @@ export default function App() {
                 operators={operators}
                 supervisors={supervisors}
                 newActivityIds={newActivityIds}
-                onOpenManualModal={() => setIsManualModalOpen(true)}
-                onEditActivity={(item) => setEditingActivity(item)}
+                onOpenManualModal={() => {
+                  if (!isManager) setIsManualModalOpen(true);
+                }}
+                onEditActivity={(item) => {
+                  if (!isManager) setEditingActivity(item);
+                }}
                 onDeleteActivity={handleDeleteActivity}
                 onRefresh={fetchActivities}
                 onViewPhoto={(item) => setViewingPhotoActivity(item)}
