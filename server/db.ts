@@ -25,6 +25,8 @@ export interface UnitRow {
   jenis_unit: string;
   model_unit: string;
   nama_pengawas: string;
+  kasie?: string;
+  wilayah?: string;
   hm_unit_terakhir_diinputkan: number;
   hm_min_standar?: number | null;
   hm_max_standar?: number | null;
@@ -62,6 +64,8 @@ export interface OperatorRow {
   nama_operator: string;
   nik: string;
   nama_pengawas: string;
+  kasie?: string;
+  wilayah?: string;
   status_aktif: number;
 }
 
@@ -919,7 +923,7 @@ function initTablesAndSeed(db: Database) {
     db.run("UPDATE users SET role = 'MANAGER' WHERE LOWER(hak_akses) = 'manager' OR LOWER(username) = 'manager';");
     db.run("UPDATE users SET role = 'ADMIN' WHERE role IS NULL OR role = '';");
 
-    // Backfill Wilayah & Update Terminologi Jabatan ke Kasie
+    // Backfill Wilayah & Update Terminologi Jabatan ke Kasie (Budi -> PG1, Agus -> PG2, Rudi -> PG3)
     db.run("UPDATE users SET wilayah = 'PG1' WHERE LOWER(username) LIKE '%budi%' OR LOWER(nama_lengkap) LIKE '%budi%';");
     db.run("UPDATE users SET wilayah = 'PG2' WHERE LOWER(username) LIKE '%agus%' OR LOWER(nama_lengkap) LIKE '%agus%';");
     db.run("UPDATE users SET wilayah = 'PG3' WHERE LOWER(username) LIKE '%rudi%' OR LOWER(nama_lengkap) LIKE '%rudi%';");
@@ -927,16 +931,16 @@ function initTablesAndSeed(db: Database) {
     db.run("UPDATE users SET hak_akses = 'Kasie' WHERE hak_akses = 'Pengawas' OR LOWER(hak_akses) = 'pengawas';");
 
     // Backfill Wilayah & Penanggung Jawab Kasie untuk Units & Operators
+    db.run("UPDATE units SET kasie = 'Budi Santoso', wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
+    db.run("UPDATE units SET kasie = 'Agus Wijaya', wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
+    db.run("UPDATE units SET kasie = 'Rudi Hermawan', wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
     db.run("UPDATE units SET kasie = nama_pengawas WHERE kasie IS NULL OR kasie = '';");
-    db.run("UPDATE units SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
-    db.run("UPDATE units SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
-    db.run("UPDATE units SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
     db.run("UPDATE units SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
 
+    db.run("UPDATE operators SET kasie = 'Budi Santoso', wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
+    db.run("UPDATE operators SET kasie = 'Agus Wijaya', wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
+    db.run("UPDATE operators SET kasie = 'Rudi Hermawan', wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
     db.run("UPDATE operators SET kasie = nama_pengawas WHERE kasie IS NULL OR kasie = '';");
-    db.run("UPDATE operators SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
-    db.run("UPDATE operators SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
-    db.run("UPDATE operators SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
     db.run("UPDATE operators SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
 
     // Backfill Wilayah untuk Rencana Kerja & Hasil Input Aktivitas
@@ -952,7 +956,12 @@ function initTablesAndSeed(db: Database) {
     db.run("UPDATE hasil_input_aktivitas SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = hasil_input_aktivitas.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '';");
     db.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
 
-    // Pastikan seluruh data master_aktivitas memiliki jenis_unit terisi rapi & valid
+    // Normalisasi jenis_unit pada master aktivitas sesuai peruntukan alat berat
+    db.run("UPDATE aktivitas_unit SET jenis_unit = 'EXCAVATOR' WHERE LOWER(nama_aktivitas) LIKE '%galian%' OR LOWER(nama_aktivitas) LIKE '%loading%' OR LOWER(nama_aktivitas) LIKE '%saluran%' OR LOWER(nama_aktivitas) LIKE '%trenching%';");
+    db.run("UPDATE aktivitas_unit SET jenis_unit = 'BULLDOZER' WHERE LOWER(nama_aktivitas) LIKE '%clearing%' OR LOWER(nama_aktivitas) LIKE '%dozing%' OR LOWER(nama_aktivitas) LIKE '%ripping%' OR LOWER(nama_aktivitas) LIKE '%disposal area%';");
+    db.run("UPDATE aktivitas_unit SET jenis_unit = 'DUMP TRUCK' WHERE LOWER(nama_aktivitas) LIKE '%hauling%' OR LOWER(nama_aktivitas) LIKE '%breakdown%' OR LOWER(nama_aktivitas) LIKE '%angkut%' OR LOWER(nama_aktivitas) LIKE '%dumping%';");
+    db.run("UPDATE aktivitas_unit SET jenis_unit = 'MOTOR GRADER' WHERE LOWER(nama_aktivitas) LIKE '%grading%' OR LOWER(nama_aktivitas) LIKE '%perawatan jalan%';");
+    db.run("UPDATE aktivitas_unit SET jenis_unit = 'WATER TRUCK' WHERE LOWER(nama_aktivitas) LIKE '%penyiraman%' OR LOWER(nama_aktivitas) LIKE '%water%' OR LOWER(nama_aktivitas) LIKE '%siram%';");
     db.run("UPDATE aktivitas_unit SET jenis_unit = UPPER(TRIM(jenis_unit)) WHERE jenis_unit IS NOT NULL;");
     db.run("UPDATE aktivitas_unit SET jenis_unit = 'EXCAVATOR' WHERE jenis_unit IS NULL OR jenis_unit = '';");
 

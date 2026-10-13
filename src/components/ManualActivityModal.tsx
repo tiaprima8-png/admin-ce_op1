@@ -77,27 +77,25 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
 
   // 1. Cascading Filter Unit & Operator per Kasie
   const filteredUnits = useMemo(() => {
-    if (!namaPengawas) return units;
+    if (!namaPengawas) return [];
     const selectedUser = users?.find(u => u.nama_lengkap === namaPengawas || u.username === namaPengawas);
     const targetWilayah = selectedUser?.wilayah?.trim().toUpperCase();
-    const list = units.filter(u => {
+    return units.filter(u => {
       const matchSpv = u.nama_pengawas === namaPengawas || u.kasie === namaPengawas;
-      const matchWil = targetWilayah && u.wilayah?.trim().toUpperCase() === targetWilayah;
+      const matchWil = targetWilayah && targetWilayah !== 'SEMUA WILAYAH' && u.wilayah?.trim().toUpperCase() === targetWilayah;
       return matchSpv || matchWil;
     });
-    return list.length > 0 ? list : units;
   }, [units, namaPengawas, users]);
 
   const filteredOperators = useMemo(() => {
-    if (!namaPengawas) return operators;
+    if (!namaPengawas) return [];
     const selectedUser = users?.find(u => u.nama_lengkap === namaPengawas || u.username === namaPengawas);
     const targetWilayah = selectedUser?.wilayah?.trim().toUpperCase();
-    const list = operators.filter(op => {
+    return operators.filter(op => {
       const matchSpv = op.nama_pengawas === namaPengawas || op.kasie === namaPengawas;
-      const matchWil = targetWilayah && op.wilayah?.trim().toUpperCase() === targetWilayah;
+      const matchWil = targetWilayah && targetWilayah !== 'SEMUA WILAYAH' && op.wilayah?.trim().toUpperCase() === targetWilayah;
       return matchSpv || matchWil;
     });
-    return list.length > 0 ? list : operators;
   }, [operators, namaPengawas, users]);
 
   // Selected Unit Object
@@ -124,7 +122,7 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
       setNamaPengawas(initialSpv);
       
       const spvUnits = units.filter(u => u.nama_pengawas === initialSpv || u.kasie === initialSpv);
-      const initialUnit = spvUnits[0] || units[0];
+      const initialUnit = spvUnits[0] || null;
       if (initialUnit) {
         setKodeUnit(initialUnit.kode_unit);
         setHmAwal(initialUnit.hm_unit_terakhir_diinputkan);
@@ -132,19 +130,31 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
         
         // Filter initial activity for this unit
         const matchingActs = aktivitasList.filter(a => a.jenis_unit?.toUpperCase() === initialUnit.jenis_unit?.toUpperCase());
-        const initAct = matchingActs[0] || aktivitasList[0];
+        const initAct = matchingActs[0] || null;
         if (initAct) {
           setNamaAktivitas(initAct.nama_aktivitas);
           setKodeSap(initAct.kode_sap);
           setSatuan(initAct.satuan);
+        } else {
+          setNamaAktivitas('');
+          setKodeSap('');
+          setSatuan('');
         }
+      } else {
+        setKodeUnit('');
+        setNamaAktivitas('');
+        setKodeSap('');
+        setSatuan('');
       }
 
       const spvOps = operators.filter(o => o.nama_pengawas === initialSpv || o.kasie === initialSpv);
-      const initialOp = spvOps[0] || operators[0];
+      const initialOp = spvOps[0] || null;
       if (initialOp) {
         setOperatorName(initialOp.nama_operator);
         setNikOperator(initialOp.nik);
+      } else {
+        setOperatorName('');
+        setNikOperator('');
       }
       setErrorMessage(null);
     }

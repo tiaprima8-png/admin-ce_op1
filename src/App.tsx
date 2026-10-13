@@ -1062,19 +1062,21 @@ export default function App() {
       />
 
       {/* 2. Modal Edit Activity */}
-      <EditActivityModal
-        activity={editingActivity}
-        onClose={() => setEditingActivity(null)}
-        onSuccess={() => {
-          fetchActivities();
-          fetchStats();
-        }}
-        units={units}
-        aktivitasList={aktivitasList}
-        operators={operators}
-        supervisors={supervisors}
-        users={users}
-      />
+      {editingActivity && (
+        <EditActivityModal
+          activity={editingActivity}
+          onClose={() => setEditingActivity(null)}
+          onSuccess={() => {
+            fetchActivities();
+            fetchStats();
+          }}
+          units={units}
+          aktivitasList={aktivitasList}
+          operators={operators}
+          supervisors={supervisors}
+          users={users}
+        />
+      )}
 
       {/* 3. Modal Lightbox Foto Bukti Lapangan */}
       <PhotoLightboxModal

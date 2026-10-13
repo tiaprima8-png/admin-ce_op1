@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Edit3, AlertCircle, Upload, Trash2, Camera, Calculator, Fuel } from 'lucide-react';
-import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, UnitStatus } from '../types';
+import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, UnitStatus, User } from '../types';
 import { SearchableSelect } from './SearchableSelect';
 
 interface EditActivityModalProps {
@@ -11,6 +11,7 @@ interface EditActivityModalProps {
   aktivitasList: AktivitasUnit[];
   operators: Operator[];
   supervisors: string[];
+  users?: User[];
 }
 
 const STANDARD_KENDALA = [
@@ -38,47 +39,77 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   units,
   aktivitasList,
   operators,
-  supervisors
+  supervisors,
+  users = []
 }) => {
-  const [namaPengawas, setNamaPengawas] = useState('');
-  const [tanggal, setTanggal] = useState('');
-  const [kodeUnit, setKodeUnit] = useState('');
-  const [isIsiSolar, setIsIsiSolar] = useState<boolean>(false);
-  const [jumlahLiterSolar, setJumlahLiterSolar] = useState<number>(0);
-  const [stikAwal, setStikAwal] = useState<number | ''>('');
-  const [stikAkhir, setStikAkhir] = useState<number | ''>('');
-  const [estimasiKonsumsi, setEstimasiKonsumsi] = useState<number | ''>('');
+  // Inisialisasi awal nilai dari prop activity
+  const initialSpv = activity?.nama_pengawas 
+    || (activity as any)?.pengawas 
+    || (activity as any)?.kasie 
+    || units.find(u => u.kode_unit === (activity?.kode_unit || (activity as any)?.unit))?.nama_pengawas 
+    || (supervisors[0] || 'Budi Santoso');
+  const initialUnit = activity?.kode_unit || (activity as any)?.unit || '';
+  const initialAct = activity?.nama_aktivitas || (activity as any)?.aktivitas || (activity as any)?.aktivitas_aktual || '';
+  const initialOp = activity?.operator || (activity as any)?.nama_operator || '';
+  const initialNik = activity?.nik_operator || '';
+
+  const [namaPengawas, setNamaPengawas] = useState(initialSpv);
+  const [tanggal, setTanggal] = useState(activity?.tanggal || (activity as any)?.tanggal_kerja || new Date().toISOString().slice(0, 10));
+  const [kodeUnit, setKodeUnit] = useState(initialUnit);
+  const [isIsiSolar, setIsIsiSolar] = useState<boolean>(Boolean(activity?.is_isi_solar) || Number(activity?.jumlah_liter_solar) > 0);
+  const [jumlahLiterSolar, setJumlahLiterSolar] = useState<number>(Number(activity?.jumlah_liter_solar) || 0);
+  const [stikAwal, setStikAwal] = useState<number | ''>(activity?.stik_solar_awal ?? activity?.stik_awal ?? '');
+  const [stikAkhir, setStikAkhir] = useState<number | ''>(activity?.stik_solar_akhir ?? activity?.stik_akhir ?? '');
+  const [estimasiKonsumsi, setEstimasiKonsumsi] = useState<number | ''>(activity?.estimasi_konsumsi_solar ?? '');
   const [kendalaInput, setKendalaInput] = useState<string>('');
   const [waktuMulai, setWaktuMulai] = useState<string>('');
   const [waktuSelesai, setWaktuSelesai] = useState<string>('');
-  const [kendalaListItems, setKendalaListItems] = useState<Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }>>([]);
-  const [namaAktivitas, setNamaAktivitas] = useState('');
-  const [kodeSap, setKodeSap] = useState('');
-  const [satuan, setSatuan] = useState('');
-  const [operatorName, setOperatorName] = useState('');
-  const [nikOperator, setNikOperator] = useState('');
-  const [nomorSpk, setNomorSpk] = useState('');
-  const [lokasi, setLokasi] = useState('');
-  const [shiftKerja, setShiftKerja] = useState<'Siang' | 'Malam'>('Siang');
-  const [jamKerja, setJamKerja] = useState<number>(10);
-  const [hmAwal, setHmAwal] = useState<number>(0);
-  const [hmAkhir, setHmAkhir] = useState<number>(0);
-  const [isHmAwalCorrected, setIsHmAwalCorrected] = useState(false);
-  const [alasanKoreksiHm, setAlasanKoreksiHm] = useState('');
-  const [hasilKerja, setHasilKerja] = useState<number>(0);
-  const [keterangan, setKeterangan] = useState('');
-  const [fotoBukti, setFotoBukti] = useState<string | null>(null);
-  const [fotoFileName, setFotoFileName] = useState<string | null>(null);
+  const [kendalaListItems, setKendalaListItems] = useState<Array<{ nama_kendala: string; waktu_mulai?: string; waktu_selesai?: string; durasi_menit?: number }>>(() => {
+    if (!activity) return [];
+    if (Array.isArray(activity.kendala_list)) return activity.kendala_list as any;
+    if (typeof activity.kendala_list === 'string') {
+      try {
+        const parsed = JSON.parse(activity.kendala_list);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  });
+  const [namaAktivitas, setNamaAktivitas] = useState(initialAct);
+  const [kodeSap, setKodeSap] = useState(activity?.kode_sap || '');
+  const [satuan, setSatuan] = useState(activity?.satuan || 'm3');
+  const [operatorName, setOperatorName] = useState(initialOp);
+  const [nikOperator, setNikOperator] = useState(initialNik);
+  const [nomorSpk, setNomorSpk] = useState(activity?.nomor_spk || '');
+  const [lokasi, setLokasi] = useState(activity?.lokasi || (activity as any)?.kode_lokasi || 'Pit Area Utama');
+  const [shiftKerja, setShiftKerja] = useState<'Siang' | 'Malam'>(activity?.shift_kerja && activity.shift_kerja.toUpperCase() === 'MALAM' ? 'Malam' : 'Siang');
+  const [jamKerja, setJamKerja] = useState<number>(activity?.jam_kerja ?? 10);
+  const [hmAwal, setHmAwal] = useState<number>(activity?.hm_awal ?? 0);
+  const [hmAkhir, setHmAkhir] = useState<number>(activity?.hm_akhir ?? 0);
+  const [isHmAwalCorrected, setIsHmAwalCorrected] = useState(Boolean(activity?.is_hm_awal_corrected));
+  const [alasanKoreksiHm, setAlasanKoreksiHm] = useState(activity?.alasan_koreksi_hm || '');
+  const [hasilKerja, setHasilKerja] = useState<number>(activity?.hasil_kerja ?? 0);
+  const [keterangan, setKeterangan] = useState(activity?.keterangan || (activity as any)?.keterangan_rencana || '');
+  const [fotoBukti, setFotoBukti] = useState<string | null>(activity?.foto_bukti || null);
+  const [fotoFileName, setFotoFileName] = useState<string | null>(activity?.foto_bukti ? 'Foto Bukti Lapangan Saat Ini' : null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync state when activity changes
+  // Sinkronisasi state ketika activity prop berubah
   useEffect(() => {
     if (activity) {
-      setNamaPengawas(activity.nama_pengawas);
-      setTanggal(activity.tanggal);
-      setKodeUnit(activity.kode_unit);
+      const spv = activity.nama_pengawas 
+        || (activity as any).pengawas 
+        || (activity as any).kasie 
+        || units.find(u => u.kode_unit === (activity.kode_unit || (activity as any).unit))?.nama_pengawas 
+        || (supervisors[0] || 'Budi Santoso');
+      setNamaPengawas(spv);
+      setTanggal(activity.tanggal || (activity as any).tanggal_kerja || new Date().toISOString().slice(0, 10));
+      
+      const un = activity.kode_unit || (activity as any).unit || '';
+      setKodeUnit(un);
+      
       setIsIsiSolar(Boolean(activity.is_isi_solar) || (Number(activity.jumlah_liter_solar) > 0));
       setJumlahLiterSolar(Number(activity.jumlah_liter_solar) || 0);
       const sAwal = activity.stik_solar_awal !== undefined && activity.stik_solar_awal !== null ? activity.stik_solar_awal : (activity.stik_awal !== undefined && activity.stik_awal !== null ? activity.stik_awal : '');
@@ -105,13 +136,16 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setWaktuMulai('');
       setWaktuSelesai('');
 
-      setNamaAktivitas(activity.nama_aktivitas);
-      setKodeSap(activity.kode_sap);
-      setSatuan(activity.satuan);
-      setOperatorName(activity.operator);
-      setNikOperator(activity.nik_operator);
+      const act = activity.nama_aktivitas || (activity as any).aktivitas || (activity as any).aktivitas_aktual || '';
+      setNamaAktivitas(act);
+      setKodeSap(activity.kode_sap || '');
+      setSatuan(activity.satuan || 'm3');
+      
+      const op = activity.operator || (activity as any).nama_operator || '';
+      setOperatorName(op);
+      setNikOperator(activity.nik_operator || '');
       setNomorSpk(activity.nomor_spk || '');
-      setLokasi(activity.lokasi);
+      setLokasi(activity.lokasi || (activity as any).kode_lokasi || 'Pit Area Utama');
       setShiftKerja(activity.shift_kerja && activity.shift_kerja.toUpperCase() === 'MALAM' ? 'Malam' : 'Siang');
       setJamKerja(activity.jam_kerja ?? 10);
       setHmAwal(activity.hm_awal ?? 0);
@@ -119,14 +153,12 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setIsHmAwalCorrected(Boolean(activity.is_hm_awal_corrected));
       setAlasanKoreksiHm(activity.alasan_koreksi_hm || '');
       setHasilKerja(activity.hasil_kerja ?? 0);
-      setKeterangan(activity.keterangan || '');
+      setKeterangan(activity.keterangan || (activity as any).keterangan_rencana || '');
       setFotoBukti(activity.foto_bukti || null);
       setFotoFileName(activity.foto_bukti ? 'Foto Bukti Lapangan Saat Ini' : null);
       setErrorMessage(null);
     }
-  }, [activity]);
-
-  if (!activity) return null;
+  }, [activity, supervisors, units]);
 
   const handleAddKendala = () => {
     if (!kendalaInput) return;
@@ -152,9 +184,100 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     setWaktuSelesai('');
   };
 
-  // Auto-sync when selected Unit changes
+  // Daftar Kasie Penanggung Jawab (selalu sertakan yang sedang terpilih)
+  const availableSupervisors = useMemo(() => {
+    const list = [...supervisors];
+    if (namaPengawas && !list.includes(namaPengawas)) {
+      list.unshift(namaPengawas);
+    }
+    return Array.from(new Set(list));
+  }, [supervisors, namaPengawas]);
+
+  // 1. Cascading Filter Unit & Operator per Kasie
+  const filteredUnits = useMemo(() => {
+    if (!namaPengawas) return units;
+    const selectedUser = users?.find(u => 
+      u.nama_lengkap === namaPengawas || 
+      u.username === namaPengawas ||
+      (namaPengawas && u.nama_lengkap?.toLowerCase().includes(namaPengawas.toLowerCase())) ||
+      (namaPengawas && namaPengawas.toLowerCase().includes(u.nama_lengkap?.toLowerCase()))
+    );
+    const targetWilayah = selectedUser?.wilayah?.trim().toUpperCase();
+    return units.filter(u => {
+      // Selalu sertakan unit yang saat ini sedang aktif dipilih agar tidak hilang
+      if (u.kode_unit === kodeUnit) return true;
+      const matchSpv = 
+        u.nama_pengawas === namaPengawas || 
+        u.kasie === namaPengawas ||
+        (u.nama_pengawas && namaPengawas && u.nama_pengawas.toLowerCase().includes(namaPengawas.toLowerCase())) ||
+        (u.nama_pengawas && namaPengawas && namaPengawas.toLowerCase().includes(u.nama_pengawas.toLowerCase()));
+      const matchWil = targetWilayah && targetWilayah !== 'SEMUA WILAYAH' && u.wilayah?.trim().toUpperCase() === targetWilayah;
+      return matchSpv || matchWil;
+    });
+  }, [units, namaPengawas, users, kodeUnit]);
+
+  const filteredOperators = useMemo(() => {
+    if (!namaPengawas) return operators;
+    const selectedUser = users?.find(u => 
+      u.nama_lengkap === namaPengawas || 
+      u.username === namaPengawas ||
+      (namaPengawas && u.nama_lengkap?.toLowerCase().includes(namaPengawas.toLowerCase())) ||
+      (namaPengawas && namaPengawas.toLowerCase().includes(u.nama_lengkap?.toLowerCase()))
+    );
+    const targetWilayah = selectedUser?.wilayah?.trim().toUpperCase();
+    return operators.filter(op => {
+      // Selalu sertakan operator yang saat ini sedang aktif dipilih agar tidak hilang
+      if (op.nama_operator === operatorName || (nikOperator && op.nik === nikOperator)) return true;
+      const matchSpv = 
+        op.nama_pengawas === namaPengawas || 
+        op.kasie === namaPengawas ||
+        (op.nama_pengawas && namaPengawas && op.nama_pengawas.toLowerCase().includes(namaPengawas.toLowerCase())) ||
+        (op.nama_pengawas && namaPengawas && namaPengawas.toLowerCase().includes(op.nama_pengawas.toLowerCase()));
+      const matchWil = targetWilayah && targetWilayah !== 'SEMUA WILAYAH' && op.wilayah?.trim().toUpperCase() === targetWilayah;
+      return matchSpv || matchWil;
+    });
+  }, [operators, namaPengawas, users, operatorName, nikOperator]);
+
+  // Selected Unit Object
+  const selectedUnitObj = useMemo(() => {
+    return units.find(u => u.kode_unit === kodeUnit);
+  }, [units, kodeUnit]);
+
+  // 2. Cascading Filter Aktivitas per Jenis Unit
+  const filteredAktivitas = useMemo(() => {
+    if (!selectedUnitObj || !selectedUnitObj.jenis_unit) {
+      if (namaAktivitas) {
+        return aktivitasList.filter(a => a.nama_aktivitas === namaAktivitas || (kodeSap && a.kode_sap === kodeSap));
+      }
+      return [];
+    }
+    const targetJenis = selectedUnitObj.jenis_unit.trim().toUpperCase();
+    return aktivitasList.filter(a => {
+      // Selalu sertakan aktivitas yang saat ini sedang aktif dipilih
+      if (a.nama_aktivitas === namaAktivitas || (kodeSap && a.kode_sap === kodeSap)) return true;
+      const aJenis = (a.jenis_unit || '').trim().toUpperCase();
+      return aJenis === targetJenis || aJenis.includes(targetJenis) || targetJenis.includes(aJenis);
+    });
+  }, [aktivitasList, selectedUnitObj, namaAktivitas, kodeSap]);
+
+  // Kasie Change Handler: Reset Unit, Operator, Aktivitas
+  const handleKasieChange = (newKasie: string) => {
+    setNamaPengawas(newKasie);
+    setKodeUnit('');
+    setNamaAktivitas('');
+    setKodeSap('');
+    setSatuan('');
+    setOperatorName('');
+    setNikOperator('');
+  };
+
+  // Auto-sync when selected Unit changes & reset Aktivitas
   const handleUnitSelect = (newKodeUnit: string, unitObj?: Unit) => {
     setKodeUnit(newKodeUnit);
+    // Reset otomatis pilihan aktivitas jika pilihan unit diubah oleh pengguna
+    setNamaAktivitas('');
+    setKodeSap('');
+    setSatuan('');
     if (unitObj) {
       if (unitObj.nama_pengawas && !namaPengawas) {
         setNamaPengawas(unitObj.nama_pengawas);
@@ -165,17 +288,19 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   // Auto-sync Kode SAP & Satuan when Aktivitas changes
   const handleAktivitasSelect = (newNamaAktivitas: string, actObj?: AktivitasUnit) => {
     setNamaAktivitas(newNamaAktivitas);
-    if (actObj) {
-      setKodeSap(actObj.kode_sap);
-      setSatuan(actObj.satuan);
+    const matched = actObj || aktivitasList.find(a => a.nama_aktivitas === newNamaAktivitas);
+    if (matched) {
+      setKodeSap(matched.kode_sap);
+      setSatuan(matched.satuan);
     }
   };
 
   // Auto-sync NIK when Operator changes
   const handleOperatorSelect = (newOperatorName: string, opObj?: Operator) => {
     setOperatorName(newOperatorName);
-    if (opObj) {
-      setNikOperator(opObj.nik);
+    const matched = opObj || operators.find(o => o.nama_operator === newOperatorName);
+    if (matched) {
+      setNikOperator(matched.nik);
     }
   };
 
@@ -207,12 +332,18 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activity) return;
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
+      const targetId = activity.id_aktivitas || activity.id;
+      const selectedUser = users?.find(u => u.nama_lengkap === namaPengawas || u.username === namaPengawas);
+      const resolvedWilayah = selectedUser?.wilayah || activity.wilayah || 'PG1';
+
       const payload = {
         nama_pengawas: namaPengawas,
+        wilayah: resolvedWilayah,
         tanggal,
         kode_unit: kodeUnit,
         nama_aktivitas: namaAktivitas,
@@ -243,7 +374,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
         alasan_koreksi_hm: isHmAwalCorrected ? (alasanKoreksiHm.trim() || 'Koreksi input pengawas') : null
       };
 
-      const res = await fetch(`/api/rekapitulasi/${activity.id}`, {
+      const res = await fetch(`/api/rekapitulasi/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -262,6 +393,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  if (!activity) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
@@ -309,11 +442,12 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               </label>
               <select
                 value={namaPengawas}
-                onChange={(e) => setNamaPengawas(e.target.value)}
+                onChange={(e) => handleKasieChange(e.target.value)}
                 className="w-full text-xs rounded-lg border border-slate-300 p-2.5 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white"
                 required
               >
-                {supervisors.map((spv) => (
+                {!namaPengawas && <option value="">-- Pilih Kasie Penanggung Jawab --</option>}
+                {availableSupervisors.map((spv) => (
                   <option key={spv} value={spv}>{spv}</option>
                 ))}
               </select>
@@ -333,16 +467,16 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               />
             </div>
 
-            {/* Unit Alat Berat (Searchable Selector) */}
+            {/* Unit Alat Berat (Searchable Selector tersaring per Kasie) */}
             <div className="sm:col-span-2">
               <SearchableSelect<Unit>
                 label="Unit Alat Berat"
-                placeholder="Cari berdasarkan kode unit atau jenis alat..."
+                placeholder={filteredUnits.length === 0 ? "Tidak ada unit untuk Kasie ini" : "Cari berdasarkan kode unit atau jenis alat..."}
                 searchPlaceholder="Ketik kode (DT-101) atau jenis (EXCAVATOR, DUMP TRUCK)..."
                 required
                 value={kodeUnit}
                 onChange={handleUnitSelect}
-                options={units}
+                options={filteredUnits}
                 getOptionValue={(u) => u.kode_unit}
                 getOptionLabel={(u) => `${u.kode_unit} - ${u.jenis_unit} (${u.model_unit})`}
                 filterOption={(u, q) =>
@@ -501,16 +635,17 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               </div>
             </div>
 
-            {/* Aktivitas Unit Kerja (Searchable Selector) */}
+            {/* Aktivitas Unit Kerja (Searchable Selector dengan Cascading Filter jenis_unit) */}
             <div className="sm:col-span-2">
               <SearchableSelect<AktivitasUnit>
-                label="Aktivitas Unit Kerja"
-                placeholder="Cari aktivitas atau kode SAP..."
+                label={selectedUnitObj ? `Aktivitas Unit Kerja (Khusus ${selectedUnitObj.jenis_unit})` : "Aktivitas Unit Kerja"}
+                placeholder={!kodeUnit ? "Pilih unit terlebih dahulu" : (filteredAktivitas.length === 0 ? "Tidak ada aktivitas untuk jenis unit ini" : "Cari aktivitas atau kode SAP...")}
                 searchPlaceholder="Ketik nama aktivitas atau kode SAP (ACT-SAP)..."
                 required
+                disabled={!kodeUnit}
                 value={namaAktivitas}
                 onChange={handleAktivitasSelect}
-                options={aktivitasList}
+                options={filteredAktivitas}
                 getOptionValue={(a) => a.nama_aktivitas}
                 getOptionLabel={(a) => `${a.nama_aktivitas} [${a.kode_sap}]`}
                 filterOption={(a, q) =>
@@ -539,6 +674,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                       {a.kode_sap}
                     </span>
                   </div>
+                ) : namaAktivitas ? (
+                  <span className="text-slate-900 font-semibold">{namaAktivitas}</span>
                 ) : null}
               />
             </div>
@@ -564,16 +701,16 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               />
             </div>
 
-            {/* Operator Pelaksana (Searchable Selector) */}
+            {/* Operator Pelaksana (Searchable Selector tersaring per Kasie) */}
             <div className="sm:col-span-2">
               <SearchableSelect<Operator>
                 label="Operator Pelaksana"
-                placeholder="Cari berdasarkan nama operator atau NIK..."
+                placeholder={filteredOperators.length === 0 ? "Tidak ada operator untuk Kasie ini" : "Cari berdasarkan nama operator atau NIK..."}
                 searchPlaceholder="Ketik nama operator atau NIK..."
                 required
                 value={operatorName}
                 onChange={handleOperatorSelect}
-                options={operators}
+                options={filteredOperators}
                 getOptionValue={(op) => op.nama_operator}
                 getOptionLabel={(op) => `${op.nama_operator} (${op.nik})`}
                 filterOption={(op, q) =>
@@ -598,6 +735,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                       {op.nik}
                     </span>
                   </div>
+                ) : operatorName ? (
+                  <span className="text-slate-900 font-semibold">{operatorName}</span>
                 ) : null}
               />
             </div>

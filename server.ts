@@ -618,16 +618,16 @@ async function startServer() {
       // 5. LOGIKA 3: MASTER DATA PENDUKUNG (Unit, Lokasi, Aktivitas, Operator, Kendala, Kasie)
       // ------------------------------------------------------------------
       const masterUnits = queryAll<UnitRow>(
-        `SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, 'PG1') as wilayah, hm_unit_terakhir_diinputkan as hm_terakhir, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC`
+        `SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, (SELECT wilayah FROM users WHERE nama_lengkap = units.nama_pengawas OR username = units.nama_pengawas), 'PG1') as wilayah, hm_unit_terakhir_diinputkan as hm_terakhir, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC`
       );
       const masterLokasi = queryAll<LokasiRow>(
         `SELECT kode_lokasi, wilayah, luas_bruto, luas_netto, status_aktif, created_at FROM lokasi WHERE status_aktif = 1 ORDER BY kode_lokasi ASC`
       );
       const masterAktivitas = queryAll<AktivitasUnitRow>(
-        `SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, 'OPERASI') as kategori_status, COALESCE(status_unit, kategori_status, 'OPERASI') as status_unit, status_aktif, wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC`
+        `SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, 'OPERASI') as kategori_status, COALESCE(status_unit, kategori_status, 'OPERASI') as status_unit, status_aktif, COALESCE(wilayah, 'PG1') as wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC`
       );
       const masterOperator = queryAll<OperatorRow>(
-        `SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, 'PG1') as wilayah, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC`
+        `SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, (SELECT wilayah FROM users WHERE nama_lengkap = operators.nama_pengawas OR username = operators.nama_pengawas), 'PG1') as wilayah, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC`
       );
       const masterKendala = queryAll<MasterKendalaRow>(
         `SELECT id, nama_kendala, status_aktif, created_at FROM master_kendala WHERE status_aktif = 1 ORDER BY id ASC`
@@ -768,13 +768,13 @@ async function startServer() {
       const hm_standar = { min: hm_min, max: hm_max };
 
       if (pengawas && pengawas !== 'Semua') {
-        units = queryAll<UnitRow>('SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, "PG1") as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE (nama_pengawas = ? OR kasie = ?) AND status_aktif = 1 ORDER BY kode_unit ASC', [pengawas, pengawas]);
-        operators = queryAll<OperatorRow>('SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, "PG1") as wilayah, status_aktif FROM operators WHERE (nama_pengawas = ? OR kasie = ?) AND status_aktif = 1 ORDER BY nama_operator ASC', [pengawas, pengawas]);
-        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif, wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
+        units = queryAll<UnitRow>('SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, (SELECT wilayah FROM users WHERE nama_lengkap = units.nama_pengawas OR username = units.nama_pengawas), "PG1") as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE (nama_pengawas = ? OR kasie = ?) AND status_aktif = 1 ORDER BY kode_unit ASC', [pengawas, pengawas]);
+        operators = queryAll<OperatorRow>('SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, (SELECT wilayah FROM users WHERE nama_lengkap = operators.nama_pengawas OR username = operators.nama_pengawas), "PG1") as wilayah, status_aktif FROM operators WHERE (nama_pengawas = ? OR kasie = ?) AND status_aktif = 1 ORDER BY nama_operator ASC', [pengawas, pengawas]);
+        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif, COALESCE(wilayah, "PG1") as wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
       } else {
-        units = queryAll<UnitRow>('SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, "PG1") as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC');
-        operators = queryAll<OperatorRow>('SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, "PG1") as wilayah, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC');
-        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif, wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
+        units = queryAll<UnitRow>('SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, (SELECT wilayah FROM users WHERE nama_lengkap = units.nama_pengawas OR username = units.nama_pengawas), "PG1") as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC');
+        operators = queryAll<OperatorRow>('SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, (SELECT wilayah FROM users WHERE nama_lengkap = operators.nama_pengawas OR username = operators.nama_pengawas), "PG1") as wilayah, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC');
+        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif, COALESCE(wilayah, "PG1") as wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
       }
 
       res.json({
@@ -827,9 +827,9 @@ async function startServer() {
         params.push(s, s, s, s, s);
       }
 
-      if (wilayah && typeof wilayah === 'string' && wilayah !== 'Semua' && wilayah !== 'Semua Wilayah') {
-        sql += ' AND (l.wilayah = ? OR r.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?) OR r.kode_unit IN (SELECT kode_unit FROM units WHERE nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?)))';
-        params.push(wilayah, wilayah, wilayah);
+      if (wilayah && typeof wilayah === 'string' && wilayah.toUpperCase() !== 'SEMUA' && wilayah !== 'Semua Wilayah') {
+        sql += ' AND (r.wilayah = ? OR u.wilayah = ? OR l.wilayah = ? OR r.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?))';
+        params.push(wilayah, wilayah, wilayah, wilayah);
       }
 
       const rawPengawasFilter = (pengawas_id || pengawas) as string | undefined;
@@ -919,16 +919,27 @@ async function startServer() {
 
       // Ambil nilai wilayah dari payload, ATAU cari otomatis dari tabel users berdasarkan Kasie penanggung jawab yang dipilih
       let resolvedWilayah = (req.body.wilayah || '').toString().trim();
-      if (!resolvedWilayah) {
+      if (!resolvedWilayah || resolvedWilayah === 'Semua' || resolvedWilayah === 'Semua Wilayah') {
         const userRow = queryOne<{ wilayah: string }>(
           'SELECT wilayah FROM users WHERE LOWER(nama_lengkap) = LOWER(?) OR LOWER(username) = LOWER(?) LIMIT 1',
           [nama_pengawas, nama_pengawas]
         );
-        if (userRow?.wilayah) {
+        if (userRow?.wilayah && userRow.wilayah !== 'Semua Wilayah') {
           resolvedWilayah = userRow.wilayah;
+        } else if (nama_pengawas.toLowerCase().includes('budi')) {
+          resolvedWilayah = 'PG1';
+        } else if (nama_pengawas.toLowerCase().includes('agus')) {
+          resolvedWilayah = 'PG2';
+        } else if (nama_pengawas.toLowerCase().includes('rudi')) {
+          resolvedWilayah = 'PG3';
         } else {
-          const lokRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM lokasi WHERE kode_lokasi = ? LIMIT 1', [kode_lokasi]);
-          resolvedWilayah = lokRow?.wilayah || 'PG1';
+          const unitRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM units WHERE kode_unit = ? LIMIT 1', [kode_unit]);
+          if (unitRow?.wilayah) {
+            resolvedWilayah = unitRow.wilayah;
+          } else {
+            const lokRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM lokasi WHERE kode_lokasi = ? LIMIT 1', [kode_lokasi]);
+            resolvedWilayah = lokRow?.wilayah || 'PG1';
+          }
         }
       }
 
@@ -2082,13 +2093,19 @@ async function startServer() {
 
       // Ambil nilai wilayah dari payload, ATAU cari otomatis dari tabel users / linked plan / unit
       let resolvedWilayah = (req.body.wilayah || linkedPlan?.wilayah || '').toString().trim();
-      if (!resolvedWilayah) {
+      if (!resolvedWilayah || resolvedWilayah === 'Semua' || resolvedWilayah === 'Semua Wilayah') {
         const userRow = queryOne<{ wilayah: string }>(
           'SELECT wilayah FROM users WHERE LOWER(nama_lengkap) = LOWER(?) OR LOWER(username) = LOWER(?) LIMIT 1',
           [nama_pengawas, nama_pengawas]
         );
-        if (userRow?.wilayah) {
+        if (userRow?.wilayah && userRow.wilayah !== 'Semua Wilayah') {
           resolvedWilayah = userRow.wilayah;
+        } else if (nama_pengawas.toLowerCase().includes('budi')) {
+          resolvedWilayah = 'PG1';
+        } else if (nama_pengawas.toLowerCase().includes('agus')) {
+          resolvedWilayah = 'PG2';
+        } else if (nama_pengawas.toLowerCase().includes('rudi')) {
+          resolvedWilayah = 'PG3';
         } else {
           const unitRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM units WHERE kode_unit = ? LIMIT 1', [kode_unit]);
           resolvedWilayah = unitRow?.wilayah || 'PG1';
@@ -2575,9 +2592,9 @@ async function startServer() {
         params.push(s, s, s, s, s, s);
       }
 
-      if (wilayah && typeof wilayah === 'string' && wilayah !== 'Semua' && wilayah !== 'Semua Wilayah') {
-        baseSql += ' AND (wilayah = ? OR lokasi = ? OR nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?) OR kode_unit IN (SELECT kode_unit FROM units WHERE nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?)))';
-        params.push(wilayah, wilayah, wilayah, wilayah);
+      if (wilayah && typeof wilayah === 'string' && wilayah.toUpperCase() !== 'SEMUA' && wilayah !== 'Semua Wilayah') {
+        baseSql += ' AND (wilayah = ? OR lokasi = ? OR nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?) OR kode_unit IN (SELECT kode_unit FROM units WHERE wilayah = ? OR nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?)))';
+        params.push(wilayah, wilayah, wilayah, wilayah, wilayah);
       }
 
       if (pengawas && typeof pengawas === 'string' && pengawas !== 'Semua') {
@@ -2880,7 +2897,74 @@ async function startServer() {
           autoActStatus = matchedAct.kategori_status || matchedAct.status_unit || null;
         }
       }
-      const existingRow = queryOne<HasilInputAktivitasRow>('SELECT status_unit FROM hasil_input_aktivitas WHERE id = ?', [id]);
+      let existingRow = !isNaN(id) ? queryOne<HasilInputAktivitasRow>('SELECT * FROM hasil_input_aktivitas WHERE id = ?', [id]) : null;
+
+      let resolvedWilayah = req.body.wilayah;
+      if (!resolvedWilayah && nama_pengawas) {
+        const userRow = queryOne<UserRow>('SELECT wilayah FROM users WHERE LOWER(nama_lengkap) = LOWER(?) OR LOWER(username) = LOWER(?)', [nama_pengawas, nama_pengawas]);
+        if (userRow?.wilayah) {
+          resolvedWilayah = userRow.wilayah;
+        }
+      }
+      if (!resolvedWilayah && kode_unit) {
+        const unitRow = queryOne<UnitRow>('SELECT wilayah FROM units WHERE kode_unit = ?', [kode_unit]);
+        if (unitRow?.wilayah) {
+          resolvedWilayah = unitRow.wilayah;
+        }
+      }
+      if (!resolvedWilayah) resolvedWilayah = 'PG1';
+
+      if (!existingRow) {
+        const rawId = req.params.id;
+        const plan = queryOne<RencanaKerjaRow>('SELECT * FROM rencana_kerja WHERE id = ? OR CAST(id AS TEXT) = ?', [rawId, rawId]);
+        if (plan) {
+          execute(`
+            UPDATE rencana_kerja SET
+              nama_pengawas = ?, tanggal = ?, kode_unit = ?, nama_aktivitas = ?,
+              kode_sap = ?, satuan = ?, operator = ?, shift_kerja = ?,
+              keterangan_rencana = ?, nomor_spk = COALESCE(?, nomor_spk), wilayah = ?, updated_at = ?
+            WHERE id = ?
+          `, [
+            nama_pengawas || plan.nama_pengawas,
+            tanggal || plan.tanggal,
+            kode_unit || plan.kode_unit,
+            nama_aktivitas || plan.nama_aktivitas,
+            kode_sap || plan.kode_sap,
+            satuan || plan.satuan,
+            operator || plan.operator,
+            shift_kerja || plan.shift_kerja,
+            keterangan || plan.keterangan_rencana,
+            req.body.nomor_spk || null,
+            resolvedWilayah,
+            new Date().toISOString(),
+            plan.id
+          ]);
+          saveDb();
+          const updatedPlan = queryOne<RencanaKerjaRow>(`
+            SELECT r.*, u.model_unit, l.wilayah
+            FROM rencana_kerja r
+            LEFT JOIN units u ON r.kode_unit = u.kode_unit
+            LEFT JOIN lokasi l ON r.kode_lokasi = l.kode_lokasi
+            WHERE r.id = ?
+          `, [plan.id]);
+          broadcast({
+            event: 'UPDATE_RENCANA',
+            data: updatedPlan,
+            timestamp: new Date().toISOString()
+          });
+          broadcast({
+            event: 'RENCANA_KERJA_UPDATED',
+            data: updatedPlan,
+            timestamp: new Date().toISOString()
+          });
+          return res.json({
+            status: 'success',
+            message: 'Rencana kerja berhasil diperbarui.',
+            data: updatedPlan
+          });
+        }
+      }
+
       const statusUnitStr = (rawStatusUnit || autoActStatus || existingRow?.status_unit || 'OPERASI').toUpperCase();
       const status_unit = ['OPERASI', 'STANDBY', 'BREAKDOWN'].includes(statusUnitStr) ? statusUnitStr : 'OPERASI';
       const is_isi_solar = (rawIsIsiSolar === true || rawIsIsiSolar === 1 || rawIsIsiSolar === '1' || rawIsIsiSolar === 'true') ? 1 : 0;
@@ -3003,7 +3087,7 @@ async function startServer() {
             hasil_kerja = ?, keterangan = ?, foto_bukti = ?,
             status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?,
             stik_awal = ?, stik_akhir = ?, stik_solar_awal = ?, stik_solar_akhir = ?, estimasi_konsumsi_solar = ?, kendala_list = ?, ada_kendala = ?,
-            is_hm_awal_corrected = ?, alasan_koreksi_hm = ?
+            is_hm_awal_corrected = ?, alasan_koreksi_hm = ?, wilayah = ?
           WHERE id = ?
         `;
         params = [
@@ -3036,6 +3120,7 @@ async function startServer() {
           adaKendala,
           is_hm_awal_corrected,
           alasan_koreksi_hm,
+          resolvedWilayah,
           id
         ];
       } else {
@@ -3047,7 +3132,7 @@ async function startServer() {
             hasil_kerja = ?, keterangan = ?,
             status_unit = ?, is_isi_solar = ?, jumlah_liter_solar = ?,
             stik_awal = ?, stik_akhir = ?, stik_solar_awal = ?, stik_solar_akhir = ?, estimasi_konsumsi_solar = ?, kendala_list = ?, ada_kendala = ?,
-            is_hm_awal_corrected = ?, alasan_koreksi_hm = ?
+            is_hm_awal_corrected = ?, alasan_koreksi_hm = ?, wilayah = ?
           WHERE id = ?
         `;
         params = [
@@ -3079,11 +3164,13 @@ async function startServer() {
           adaKendala,
           is_hm_awal_corrected,
           alasan_koreksi_hm,
+          resolvedWilayah,
           id
         ];
       }
 
       execute(sql, params);
+      saveDb();
 
       // Sinkronkan juga master aktivitas_unit jika cocok
       try {
@@ -3201,7 +3288,14 @@ async function startServer() {
   // 4. KPI STATS ENDPOINT
   app.get('/api/stats', (req: Request, res: Response) => {
     try {
-      const rows = queryAll<HasilInputAktivitasRow>('SELECT * FROM hasil_input_aktivitas');
+      const { wilayah } = req.query;
+      let sql = 'SELECT h.* FROM hasil_input_aktivitas h LEFT JOIN units u ON h.kode_unit = u.kode_unit WHERE 1=1';
+      const params: (string | number)[] = [];
+      if (wilayah && typeof wilayah === 'string' && wilayah !== 'Semua' && wilayah !== 'Semua Wilayah') {
+        sql += ' AND (h.wilayah = ? OR u.wilayah = ? OR h.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?))';
+        params.push(wilayah, wilayah, wilayah);
+      }
+      const rows = queryAll<HasilInputAktivitasRow>(sql, params);
       
       let totalHmBerjalan = 0;
       let totalJamKerja = 0;
@@ -3249,8 +3343,8 @@ async function startServer() {
         whereClause += ' AND h.tanggal <= ?';
         params.push(endDate);
       }
-      if (wilayah && typeof wilayah === 'string' && wilayah !== 'Semua' && wilayah !== 'Semua Wilayah') {
-        whereClause += ` AND (h.kode_lokasi IN (SELECT kode_lokasi FROM lokasi WHERE wilayah = ?) OR h.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?) OR h.kode_unit IN (SELECT kode_unit FROM units WHERE nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?)))`;
+      if (wilayah && typeof wilayah === 'string' && wilayah.toUpperCase() !== 'SEMUA' && wilayah !== 'Semua Wilayah') {
+        whereClause += ' AND (h.wilayah = ? OR u.wilayah = ? OR h.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ?))';
         params.push(wilayah, wilayah, wilayah);
       }
       if (pengawas && typeof pengawas === 'string' && pengawas !== 'Semua') {
@@ -3314,6 +3408,7 @@ async function startServer() {
           ROUND(SUM(h.hm_harian_berjalan), 1) as total_hm,
           COUNT(DISTINCT h.kode_unit) as unit_terlibat
         FROM hasil_input_aktivitas h
+        LEFT JOIN units u ON h.kode_unit = u.kode_unit
         ${whereClause}
         GROUP BY h.nama_aktivitas, h.kode_sap, h.satuan
         ORDER BY total_hm DESC
@@ -3335,6 +3430,7 @@ async function startServer() {
           COUNT(*) as count,
           ROUND(SUM(h.jam_kerja), 1) as total_jam
         FROM hasil_input_aktivitas h
+        LEFT JOIN units u ON h.kode_unit = u.kode_unit
         ${whereClause}
         GROUP BY h.status_unit
       `;

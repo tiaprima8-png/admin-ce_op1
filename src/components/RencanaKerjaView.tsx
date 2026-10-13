@@ -120,6 +120,61 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   const [formNomorSpk, setFormNomorSpk] = useState('');
   const [formKeterangan, setFormKeterangan] = useState('');
 
+  // 1. Cascading Filter Unit & Operator per Kasie pada Form Modal Rencana Kerja
+  const filteredFormUnits = useMemo(() => {
+    if (!formPengawas) return [];
+    const selectedUser = users?.find(u => u.nama_lengkap === formPengawas || u.username === formPengawas);
+    const targetWilayah = selectedUser?.wilayah?.trim().toUpperCase();
+    return units.filter(u => {
+      const matchSpv = u.nama_pengawas === formPengawas || u.kasie === formPengawas;
+      const matchWil = targetWilayah && targetWilayah !== 'SEMUA WILAYAH' && u.wilayah?.trim().toUpperCase() === targetWilayah;
+      return matchSpv || matchWil;
+    });
+  }, [units, formPengawas, users]);
+
+  const filteredFormOperators = useMemo(() => {
+    if (!formPengawas) return [];
+    const selectedUser = users?.find(u => u.nama_lengkap === formPengawas || u.username === formPengawas);
+    const targetWilayah = selectedUser?.wilayah?.trim().toUpperCase();
+    return operators.filter(o => {
+      const matchSpv = o.nama_pengawas === formPengawas || o.kasie === formPengawas;
+      const matchWil = targetWilayah && targetWilayah !== 'SEMUA WILAYAH' && o.wilayah?.trim().toUpperCase() === targetWilayah;
+      return matchSpv || matchWil;
+    });
+  }, [operators, formPengawas, users]);
+
+  // Selected Unit Object pada Form Modal
+  const selectedFormUnitObj = useMemo(() => {
+    return units.find(u => u.kode_unit === formKodeUnit);
+  }, [units, formKodeUnit]);
+
+  // 2. Cascading Filter Aktivitas per Jenis Unit pada Form Modal Rencana Kerja
+  const filteredFormAktivitas = useMemo(() => {
+    if (!selectedFormUnitObj || !selectedFormUnitObj.jenis_unit) {
+      return [];
+    }
+    const targetJenis = selectedFormUnitObj.jenis_unit.trim().toUpperCase();
+    return aktivitasList.filter(a => {
+      const aJenis = (a.jenis_unit || '').trim().toUpperCase();
+      return aJenis === targetJenis || aJenis.includes(targetJenis) || targetJenis.includes(aJenis);
+    });
+  }, [aktivitasList, selectedFormUnitObj]);
+
+  // Handlers saat Kasie diubah: Reset Unit, Operator, Aktivitas
+  const handleKasieChange = (newKasie: string) => {
+    setFormPengawas(newKasie);
+    setFormKodeUnit('');
+    setFormOperator('');
+    setFormAktivitas('');
+  };
+
+  // Handlers saat Unit diubah: Reset Aktivitas otomatis
+  const handleUnitChange = (newKodeUnit: string) => {
+    setFormKodeUnit(newKodeUnit);
+    // Reset otomatis pilihan aktivitas jika pilihan unit diubah oleh pengguna
+    setFormAktivitas('');
+  };
+
   // Filtered rows (deduplicated by ID to prevent duplicate key warning)
   const filteredList = useMemo(() => {
     const seenIds = new Set<string>();
@@ -875,16 +930,18 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                 </div>
               </div>
 
-              {/* Kasie */}
+              {/* Kasie (Penanggung Jawab) */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nama Kasie (Penanggung Jawab)</label>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Nama Kasie (Penanggung Jawab) <span className="text-rose-500">*</span>
+                </label>
                 <select
                   required
                   value={formPengawas}
-                  onChange={(e) => setFormPengawas(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500"
+                  onChange={(e) => handleKasieChange(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 bg-white"
                 >
-                  <option value="">-- Pilih Kasie --</option>
+                  <option value="">-- Pilih Kasie / Pengawas --</option>
                   {supervisors.map(p => (
                     <option key={p} value={p}>{p}</option>
                   ))}
@@ -892,34 +949,48 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {/* Unit */}
+                {/* Unit Alat Berat (Tersaring per Kasie) */}
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Kode Unit</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Unit Alat Berat <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     required
+                    disabled={!formPengawas}
                     value={formKodeUnit}
-                    onChange={(e) => setFormKodeUnit(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 font-mono"
+                    onChange={(e) => handleUnitChange(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 font-mono bg-white disabled:bg-slate-100 disabled:text-slate-400"
                   >
-                    <option value="">-- Pilih Unit --</option>
-                    {units.map(u => (
-                      <option key={u.kode_unit} value={u.kode_unit}>{u.kode_unit} - {u.model_unit}</option>
+                    <option value="">
+                      {!formPengawas 
+                        ? "-- Pilih Kasie terlebih dahulu --" 
+                        : (filteredFormUnits.length === 0 ? "-- Tidak ada unit untuk Kasie ini --" : "-- Pilih Unit Alat Berat --")}
+                    </option>
+                    {filteredFormUnits.map(u => (
+                      <option key={u.kode_unit} value={u.kode_unit}>{u.kode_unit} - {u.jenis_unit} ({u.model_unit})</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Aktivitas Rencana (Status otomatis ditentukan dari Master Aktivitas) */}
+                {/* Aktivitas Rencana (Cascading Filter per jenis_unit) */}
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Aktivitas Rencana</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Aktivitas Rencana {selectedFormUnitObj?.jenis_unit ? `(${selectedFormUnitObj.jenis_unit})` : ''}
+                  </label>
                   <select
+                    disabled={!formKodeUnit}
                     value={formAktivitas}
                     onChange={(e) => setFormAktivitas(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 bg-white disabled:bg-slate-100 disabled:text-slate-400"
                   >
-                    <option value="">-- Pilih Aktivitas (Opsional) --</option>
-                    {aktivitasList.map(a => (
+                    <option value="">
+                      {!formKodeUnit 
+                        ? "Pilih unit terlebih dahulu" 
+                        : (filteredFormAktivitas.length === 0 ? "Tidak ada aktivitas untuk jenis unit ini" : "-- Pilih Aktivitas Unit --")}
+                    </option>
+                    {filteredFormAktivitas.map(a => (
                       <option key={a.id} value={a.nama_aktivitas}>
-                        {a.nama_aktivitas} [{a.kategori_status || a.status_unit || 'OPERASI'}]
+                        {a.nama_aktivitas} [{a.kode_sap}] - {a.satuan}
                       </option>
                     ))}
                   </select>
@@ -927,17 +998,24 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {/* Operator */}
+                {/* Operator Pelaksana (Tersaring per Kasie) */}
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Operator</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Operator Pelaksana <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     required
+                    disabled={!formPengawas}
                     value={formOperator}
                     onChange={(e) => setFormOperator(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 bg-white disabled:bg-slate-100 disabled:text-slate-400"
                   >
-                    <option value="">-- Pilih Operator --</option>
-                    {operators.map(o => (
+                    <option value="">
+                      {!formPengawas 
+                        ? "-- Pilih Kasie terlebih dahulu --" 
+                        : (filteredFormOperators.length === 0 ? "-- Tidak ada operator untuk Kasie ini --" : "-- Pilih Operator --")}
+                    </option>
+                    {filteredFormOperators.map(o => (
                       <option key={o.nik} value={o.nama_operator}>{o.nama_operator} ({o.nik})</option>
                     ))}
                   </select>
@@ -945,12 +1023,14 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
                 {/* Lokasi */}
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Kode Lokasi</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Kode Lokasi <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     required
                     value={formKodeLokasi}
                     onChange={(e) => setFormKodeLokasi(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 bg-white"
                   >
                     <option value="">-- Pilih Lokasi --</option>
                     {lokasiList.map(l => (
