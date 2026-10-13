@@ -158,6 +158,7 @@ interface ActivityMonitorProps {
   onDeleteActivity: (target: HasilInputAktivitas | number | string) => Promise<void> | void;
   onRefresh: () => void;
   onViewPhoto: (activity: HasilInputAktivitas) => void;
+  userRole?: string;
 }
 
 export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
@@ -171,8 +172,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   onEditActivity,
   onDeleteActivity,
   onRefresh,
-  onViewPhoto
+  onViewPhoto,
+  userRole
 }) => {
+  const isManager = userRole === 'MANAGER';
+
   // 1. Data list state initialized with props, immediately prependable by WebSocket
   const [dataList, setDataList] = useState<HasilInputAktivitas[]>(activities);
 
@@ -472,13 +476,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         return false;
       }
 
-      if (selectedShift !== 'Semua' && item.shift_kerja !== selectedShift) {
-        return false;
+      if (selectedShift !== 'Semua') {
+        const itemShift = (item.shift_kerja || '').trim().toUpperCase();
+        if (itemShift !== selectedShift.toUpperCase()) {
+          return false;
+        }
       }
 
       if (selectedStatus !== 'Semua') {
-        const itemStatus = (item.kategori_status || item.status_unit || 'OPERASI').toUpperCase();
-        if (itemStatus !== selectedStatus) {
+        const itemStatus = (item.kategori_status || item.status_unit || 'OPERASI').trim().toUpperCase();
+        if (itemStatus !== selectedStatus.toUpperCase()) {
           return false;
         }
       }
@@ -680,15 +687,25 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               <span>Export Excel (.xlsx)</span>
             </button>
 
-            {/* c. Tombol + Tambah Data Manual - style primer hijau solid */}
-            <button
-              type="button"
-              onClick={onOpenManualModal}
-              className="h-10 inline-flex items-center gap-1.5 px-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Tambah Data Manual</span>
-            </button>
+            {/* c. Tombol + Tambah Data Manual - style primer hijau solid (Hanya untuk Admin / Supervisor, disembunyikan untuk Manager) */}
+            {!isManager ? (
+              <button
+                type="button"
+                onClick={onOpenManualModal}
+                className="h-10 inline-flex items-center gap-1.5 px-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Tambah Data Manual</span>
+              </button>
+            ) : (
+              <div 
+                title="Akun Manager memiliki hak akses Monitoring & Executive View (Read-Only)"
+                className="h-10 inline-flex items-center gap-1.5 px-3.5 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg shadow-2xs select-none"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Executive Monitoring View</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -873,7 +890,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
               {/* Kolom 9 [AKSI] - ~4% */}
               <th className="w-[4%] py-2.5 px-1 text-center">
-                Aksi
+                {isManager ? 'Audit' : 'Aksi'}
               </th>
             </tr>
           </thead>
@@ -885,7 +902,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 <td colSpan={9} className="text-center py-12 text-slate-400">
                   <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                   <p className="font-medium text-slate-600">Tidak ada data aktivitas yang sesuai kriteria.</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Gunakan tombol "+ Tambah Data Manual" atau tunggu pengiriman dari aplikasi Android.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {isManager ? 'Menunggu sinkronisasi data aktivitas dari aplikasi Android armada lapangan.' : 'Gunakan tombol "+ Tambah Data Manual" atau tunggu pengiriman dari aplikasi Android.'}
+                  </p>
                 </td>
               </tr>
             ) : (
@@ -1236,26 +1255,35 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     </td>
 
-                    {/* Kolom 9 [AKSI]: Tombol compact Edit & Hapus */}
+                    {/* Kolom 9 [AKSI]: Tombol compact Edit & Hapus (Disembunyikan untuk Manager) */}
                     <td className="py-2.5 px-1 text-center align-top">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onEditActivity(row)}
-                          title="Edit laporan"
-                          className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                      {!isManager ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onEditActivity(row)}
+                            title="Edit laporan"
+                            className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(row)}
+                            title="Hapus laporan"
+                            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span 
+                          className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100" 
+                          title="Mode Audit Eksekutif (Read-Only)"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(row)}
-                          title="Hapus laporan"
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                          Tinjau
+                        </span>
+                      )}
                     </td>
 
                   </tr>

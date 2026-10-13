@@ -18,9 +18,11 @@ import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 interface MasterKendalaProps {
   kendalaList: MasterKendalaType[];
   onRefresh: () => void;
+  userRole?: string;
 }
 
-export const MasterKendala: React.FC<MasterKendalaProps> = ({ kendalaList, onRefresh }) => {
+export const MasterKendala: React.FC<MasterKendalaProps> = ({ kendalaList, onRefresh, userRole }) => {
+  const isManager = userRole === 'MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -250,13 +252,23 @@ export const MasterKendala: React.FC<MasterKendalaProps> = ({ kendalaList, onRef
         </div>
 
         {/* Action Button: Add Kendala */}
-        <button
-          onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
-        >
-          <Plus className="w-3.5 h-3.5 text-white" />
-          <span>Tambah Kendala Baru</span>
-        </button>
+        {!isManager ? (
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
+          >
+            <Plus className="w-3.5 h-3.5 text-white" />
+            <span>Tambah Kendala Baru</span>
+          </button>
+        ) : (
+          <div 
+            title="Akun Manager memiliki hak akses Monitoring & Executive View (Read-Only)"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg shadow-2xs select-none"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Master Data (Read-Only)</span>
+          </div>
+        )}
       </div>
 
       {/* Main Table: 15 Kendala Standar Operasional Civil Engineering */}
@@ -325,41 +337,50 @@ export const MasterKendala: React.FC<MasterKendalaProps> = ({ kendalaList, onRef
 
                   {/* Aksi */}
                   <td className="py-2.5 px-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      {/* Toggle Aktif / Nonaktif */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleStatus(item)}
-                        title={item.status_aktif === 1 ? 'Nonaktifkan kendala ini' : 'Aktifkan kendala ini'}
-                        className={`p-1.5 rounded-md border transition-colors cursor-pointer ${
-                          item.status_aktif === 1
-                            ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200'
-                            : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200'
-                        }`}
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                      </button>
+                    {!isManager ? (
+                      <div className="flex items-center justify-center gap-1">
+                        {/* Toggle Aktif / Nonaktif */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(item)}
+                          title={item.status_aktif === 1 ? 'Nonaktifkan kendala ini' : 'Aktifkan kendala ini'}
+                          className={`p-1.5 rounded-md border transition-colors cursor-pointer ${
+                            item.status_aktif === 1
+                              ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200'
+                              : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200'
+                          }`}
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                        </button>
 
-                      {/* Edit */}
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(item)}
-                        title="Edit nama kendala"
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
+                        {/* Edit */}
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(item)}
+                          title="Edit nama kendala"
+                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
 
-                      {/* Hapus */}
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTarget(item)}
-                        title="Hapus kendala dari database"
-                        className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                        {/* Hapus */}
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(item)}
+                          title="Hapus kendala dari database"
+                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span 
+                        className="inline-block px-2 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100" 
+                        title="Akun Manager: Akses Monitoring Read-Only"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                        Read-Only
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))

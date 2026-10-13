@@ -1,5 +1,5 @@
 import express from 'express';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
@@ -17,6 +17,7 @@ import db, {
   type AktivitasUnitRow,
   type OperatorRow,
   type UserRow,
+  type UserRole,
   type LokasiRow,
   type RencanaKerjaRow,
   type MasterKendalaRow,
@@ -95,6 +96,107 @@ async function startServer() {
   const app = express();
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // Helper to extract role of requesting user from Headers, Token, or Body
+  function getRequesterRole(req: Request): string | null {
+    // 1. Explicit header: x-user-role or x-role
+    const roleHeader = req.headers['x-user-role'] || req.headers['x-role'];
+    if (typeof roleHeader === 'string' && roleHeader.trim()) {
+      return roleHeader.trim().toUpperCase();
+    }
+
+    // 2. Authorization Bearer token (format: rkce_token_<userId>_<timestamp>)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      const tokenMatch = token.match(/^rkce_token_(\d+)_/);
+      if (tokenMatch) {
+        const userId = parseInt(tokenMatch[1], 10);
+        const user = queryOne<UserRow>('SELECT role, hak_akses FROM users WHERE id = ?', [userId]);
+        if (user) {
+          const r = user.role || (user.hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' : (user.hak_akses?.toLowerCase() === 'pengawas' ? 'SUPERVISOR' : 'ADMIN'));
+          return r.toUpperCase();
+        }
+      }
+    }
+
+    // 3. User ID header: x-user-id
+    const userIdHeader = req.headers['x-user-id'];
+    if (userIdHeader) {
+      const userId = parseInt(String(userIdHeader), 10);
+      if (!isNaN(userId)) {
+        const user = queryOne<UserRow>('SELECT role, hak_akses FROM users WHERE id = ?', [userId]);
+        if (user) {
+          const r = user.role || (user.hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' : (user.hak_akses?.toLowerCase() === 'pengawas' ? 'SUPERVISOR' : 'ADMIN'));
+          return r.toUpperCase();
+        }
+      }
+    }
+
+    // 4. Request query or body fallback for role if supplied
+    if (req.query?.user_role && typeof req.query.user_role === 'string') {
+      return (req.query.user_role as string).trim().toUpperCase();
+    }
+    if (req.body?.user_role && typeof req.body.user_role === 'string') {
+      return (req.body.user_role as string).trim().toUpperCase();
+    }
+
+    return null;
+  }
+
+  // RBAC Middleware: Protect Master Data & Deletions for MANAGER Role
+  // Manager: Read-only (GET allowed everywhere, mutating POST/PUT/PATCH/DELETE on master data & data deletion blocked with 403 Forbidden)
+  const rbacMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    const method = req.method.toUpperCase();
+    // Allow all GET / HEAD / OPTIONS requests
+    if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      return next();
+    }
+
+    // Allow auth endpoints (login, logout)
+    if (req.path.startsWith('/auth/')) {
+      return next();
+    }
+
+    const role = getRequesterRole(req);
+    if (role === 'MANAGER') {
+      const pathUrl = req.path.toLowerCase();
+      const isMasterRoute = 
+        pathUrl.startsWith('/master-') ||
+        pathUrl.startsWith('/master/') ||
+        pathUrl.startsWith('/master') ||
+        pathUrl.startsWith('/units') ||
+        pathUrl.startsWith('/aktivitas') ||
+        pathUrl.startsWith('/lokasi') ||
+        pathUrl.startsWith('/operators') ||
+        pathUrl.startsWith('/kendala') ||
+        pathUrl.startsWith('/users') ||
+        pathUrl.startsWith('/settings') ||
+        pathUrl.startsWith('/app-settings');
+
+      if (isMasterRoute && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        return res.status(403).json({
+          status: 'error',
+          code: 'FORBIDDEN_MANAGER_ROLE',
+          error: 'Akses Ditolak (403 Forbidden): Peran MANAGER memiliki hak akses Monitoring & Executive View (Read-Only) dan dilarang menambah, mengubah, atau menghapus Master Data.',
+          role: 'MANAGER'
+        });
+      }
+
+      if (method === 'DELETE') {
+        return res.status(403).json({
+          status: 'error',
+          code: 'FORBIDDEN_MANAGER_ROLE',
+          error: 'Akses Ditolak (403 Forbidden): Peran MANAGER dilarang menghapus data sistem.',
+          role: 'MANAGER'
+        });
+      }
+    }
+
+    next();
+  };
+
+  app.use('/api', rbacMiddleware);
 
   const server = http.createServer(app);
 
@@ -3076,7 +3178,7 @@ async function startServer() {
   // Fast SQL Queries with GROUP BY (kode_unit, nama_aktivitas, status_unit)
   app.get(['/api/analitik', '/api/analytics'], (req: Request, res: Response) => {
     try {
-      const { startDate, endDate, pengawas, unit } = req.query;
+      const { startDate, endDate, pengawas, unit, shift, status } = req.query;
       let whereClause = ' WHERE 1=1';
       const params: (string | number)[] = [];
 
@@ -3095,6 +3197,14 @@ async function startServer() {
       if (unit && typeof unit === 'string' && unit !== 'Semua') {
         whereClause += ' AND h.kode_unit = ?';
         params.push(unit);
+      }
+      if (shift && typeof shift === 'string' && shift !== 'Semua') {
+        whereClause += ' AND UPPER(COALESCE(h.shift_kerja, "")) = ?';
+        params.push(shift.toUpperCase());
+      }
+      if (status && typeof status === 'string' && status !== 'Semua') {
+        whereClause += ' AND UPPER(COALESCE(h.kategori_status, h.status_unit, "OPERASI")) = ?';
+        params.push(status.toUpperCase());
       }
 
       // 1. Aggregation per Unit (Panel Rangkuman Per Unit)
@@ -3580,7 +3690,7 @@ async function startServer() {
       }
 
       const user = queryOne<UserRow>(
-        'SELECT id, nama_lengkap, username, password, hak_akses, status_aktif FROM users WHERE LOWER(username) = LOWER(?)',
+        'SELECT id, nama_lengkap, username, password, hak_akses, role, status_aktif FROM users WHERE LOWER(username) = LOWER(?)',
         [username.trim()]
       );
 
@@ -3596,15 +3706,25 @@ async function startServer() {
         return res.status(401).json({ error: 'Username atau kata sandi tidak sesuai.' });
       }
 
+      const resolvedRole: UserRole = (
+        user.role ||
+        (user.username === 'admin' ? 'SUPER_ADMIN' :
+         user.hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' :
+         user.hak_akses?.toLowerCase() === 'pengawas' ? 'SUPERVISOR' :
+         'ADMIN')
+      );
+
       res.json({
         status: 'success',
         message: 'Login berhasil.',
+        role: resolvedRole,
         token: `rkce_token_${user.id}_${Date.now()}`,
         user: {
           id: user.id,
           nama_lengkap: user.nama_lengkap,
           username: user.username,
           hak_akses: user.hak_akses,
+          role: resolvedRole,
           email: `${user.username}@rkce.co.id`
         }
       });
@@ -3617,7 +3737,7 @@ async function startServer() {
   app.get('/api/users', (req: Request, res: Response) => {
     try {
       const { status } = req.query;
-      let sql = 'SELECT id, nama_lengkap, username, hak_akses, status_aktif FROM users WHERE 1=1';
+      let sql = 'SELECT id, nama_lengkap, username, hak_akses, role, status_aktif FROM users WHERE 1=1';
       const params: (string | number)[] = [];
 
       if (status !== undefined && status !== 'Semua' && status !== '') {
@@ -3635,14 +3755,19 @@ async function startServer() {
 
   app.post('/api/users', (req: Request, res: Response) => {
     try {
-      const { nama_lengkap, username, password, hak_akses, status_aktif } = req.body;
+      const { nama_lengkap, username, password, hak_akses, role, status_aktif } = req.body;
       const activeStatus = status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1;
+      const resolvedRole = role || (
+        hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' :
+        hak_akses?.toLowerCase() === 'pengawas' ? 'SUPERVISOR' :
+        'ADMIN'
+      );
       const resDb = execute(`
-        INSERT INTO users (nama_lengkap, username, password, hak_akses, status_aktif)
-        VALUES (?, ?, ?, ?, ?)
-      `, [nama_lengkap, username, password, hak_akses || 'Pengawas', activeStatus]);
+        INSERT INTO users (nama_lengkap, username, password, hak_akses, role, status_aktif)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [nama_lengkap, username, password, hak_akses || 'Pengawas', resolvedRole, activeStatus]);
 
-      const inserted = queryOne<UserRow>('SELECT id, nama_lengkap, username, hak_akses, status_aktif FROM users WHERE id = ?', [resDb.lastInsertRowId]);
+      const inserted = queryOne<UserRow>('SELECT id, nama_lengkap, username, hak_akses, role, status_aktif FROM users WHERE id = ?', [resDb.lastInsertRowId]);
       res.status(201).json(inserted);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
@@ -3652,21 +3777,30 @@ async function startServer() {
   app.put('/api/users/:id', (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const { nama_lengkap, username, password, hak_akses, status_aktif } = req.body;
+      const { nama_lengkap, username, password, hak_akses, role, status_aktif } = req.body;
       const existing = queryOne<UserRow>('SELECT * FROM users WHERE id = ?', [id]);
+      if (!existing) {
+        return res.status(404).json({ error: 'Pengguna tidak ditemukan' });
+      }
       const activeStatus = status_aktif !== undefined
         ? (status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1)
         : (existing?.status_aktif ?? 1);
+      const resolvedRole = role || (
+        hak_akses ? (
+          hak_akses.toLowerCase() === 'manager' ? 'MANAGER' :
+          hak_akses.toLowerCase() === 'pengawas' ? 'SUPERVISOR' : 'ADMIN'
+        ) : (existing?.role || 'ADMIN')
+      );
 
       if (password) {
-        execute('UPDATE users SET nama_lengkap = ?, username = ?, password = ?, hak_akses = ?, status_aktif = ? WHERE id = ?',
-          [nama_lengkap, username, password, hak_akses, activeStatus, id]);
+        execute('UPDATE users SET nama_lengkap = ?, username = ?, password = ?, hak_akses = ?, role = ?, status_aktif = ? WHERE id = ?',
+          [nama_lengkap, username, password, hak_akses, resolvedRole, activeStatus, id]);
       } else {
-        execute('UPDATE users SET nama_lengkap = ?, username = ?, hak_akses = ?, status_aktif = ? WHERE id = ?',
-          [nama_lengkap, username, hak_akses, activeStatus, id]);
+        execute('UPDATE users SET nama_lengkap = ?, username = ?, hak_akses = ?, role = ?, status_aktif = ? WHERE id = ?',
+          [nama_lengkap, username, hak_akses, resolvedRole, activeStatus, id]);
       }
 
-      const updated = queryOne<UserRow>('SELECT id, nama_lengkap, username, hak_akses, status_aktif FROM users WHERE id = ?', [id]);
+      const updated = queryOne<UserRow>('SELECT id, nama_lengkap, username, hak_akses, role, status_aktif FROM users WHERE id = ?', [id]);
       res.json(updated);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });

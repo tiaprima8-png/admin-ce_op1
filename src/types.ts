@@ -1,10 +1,23 @@
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'MANAGER';
+
 export interface User {
   id: number;
   nama_lengkap: string;
   username: string;
   password?: string;
-  hak_akses: 'Admin' | 'Pengawas';
+  hak_akses: 'Admin' | 'Pengawas' | 'Manager' | 'Super Admin' | string;
+  role?: UserRole;
   status_aktif?: number;
+}
+
+export interface AuthUser {
+  id: number;
+  nama_lengkap: string;
+  username: string;
+  hak_akses: string;
+  role?: UserRole;
+  email?: string;
+  token?: string;
 }
 
 export interface Unit {

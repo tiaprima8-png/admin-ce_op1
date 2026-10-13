@@ -6,9 +6,11 @@ import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 interface MasterUsersProps {
   users: User[];
   onRefresh: () => void;
+  userRole?: string;
 }
 
-export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh }) => {
+export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, userRole }) => {
+  const isManager = userRole === 'MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -259,13 +261,23 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh }) =>
           )}
         </div>
 
-        <button
-          onClick={openAddModal}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Tambah Akun Pengguna</span>
-        </button>
+        {!isManager ? (
+          <button
+            onClick={openAddModal}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Tambah Akun Pengguna</span>
+          </button>
+        ) : (
+          <div 
+            title="Akun Manager memiliki hak akses Monitoring & Executive View (Read-Only)"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg shadow-2xs select-none"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Master Data (Read-Only)</span>
+          </div>
+        )}
       </div>
 
       {/* Users Table */}
@@ -327,48 +339,57 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh }) =>
                         )}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* Toggle Aktif / Nonaktif (Ikon Power) */}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleStatus(u)}
-                            disabled={u.username === 'admin'}
-                            title={u.username === 'admin' ? 'Akun Super Admin utama tidak boleh dinonaktifkan' : isAktif ? 'Nonaktifkan akun ini' : 'Aktifkan kembali akun ini'}
-                            className={`p-1.5 rounded-md border transition-colors ${
-                              u.username === 'admin'
-                                ? 'text-slate-300 border-slate-200 cursor-not-allowed opacity-50'
-                                : isAktif
-                                  ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 cursor-pointer'
-                                  : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200 cursor-pointer'
-                            }`}
-                          >
-                            <Power className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Edit (Pensil) */}
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(u)}
-                            title="Edit akun"
-                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Hapus (Tempat Sampah) */}
-                          {u.username !== 'admin' ? (
+                        {!isManager ? (
+                          <div className="flex items-center justify-center gap-1">
+                            {/* Toggle Aktif / Nonaktif (Ikon Power) */}
                             <button
                               type="button"
-                              onClick={() => handleDeleteClick(u)}
-                              title="Hapus akun"
-                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                              onClick={() => handleToggleStatus(u)}
+                              disabled={u.username === 'admin'}
+                              title={u.username === 'admin' ? 'Akun Super Admin utama tidak boleh dinonaktifkan' : isAktif ? 'Nonaktifkan akun ini' : 'Aktifkan kembali akun ini'}
+                              className={`p-1.5 rounded-md border transition-colors ${
+                                u.username === 'admin'
+                                  ? 'text-slate-300 border-slate-200 cursor-not-allowed opacity-50'
+                                  : isAktif
+                                    ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 cursor-pointer'
+                                    : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200 cursor-pointer'
+                              }`}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Power className="w-3.5 h-3.5" />
                             </button>
-                          ) : (
-                            <span className="w-7"></span>
-                          )}
-                        </div>
+
+                            {/* Edit (Pensil) */}
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(u)}
+                              title="Edit akun"
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Hapus (Tempat Sampah) */}
+                            {u.username !== 'admin' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteClick(u)}
+                                title="Hapus akun"
+                                className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <span className="w-7"></span>
+                            )}
+                          </div>
+                        ) : (
+                          <span 
+                            className="inline-block px-2 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100" 
+                            title="Akun Manager: Akses Monitoring Read-Only"
+                          >
+                            Read-Only
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

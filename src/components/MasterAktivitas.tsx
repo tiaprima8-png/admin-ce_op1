@@ -6,9 +6,11 @@ import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 interface MasterAktivitasProps {
   aktivitasList: AktivitasUnit[];
   onRefresh: () => void;
+  userRole?: string;
 }
 
-export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList, onRefresh }) => {
+export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList, onRefresh, userRole }) => {
+  const isManager = userRole === 'MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -244,13 +246,23 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
           )}
         </div>
 
-        <button
-          onClick={openAddModal}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Tambah Aktivitas & SAP</span>
-        </button>
+        {!isManager ? (
+          <button
+            onClick={openAddModal}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Tambah Aktivitas & SAP</span>
+          </button>
+        ) : (
+          <div 
+            title="Akun Manager memiliki hak akses Monitoring & Executive View (Read-Only)"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg shadow-2xs select-none"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Master Data (Read-Only)</span>
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -265,7 +277,7 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
                 <th className="py-3 px-4">Satuan Ukur</th>
                 <th className="py-3 px-4">Kode SAP Akuntansi</th>
                 <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-center">Aksi</th>
+                <th className="py-3 px-4 text-center">{isManager ? 'Audit' : 'Aksi'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -331,41 +343,50 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
                         )}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* Toggle Aktif / Nonaktif (Ikon Power) */}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleStatus(item)}
-                            title={isAktif ? 'Nonaktifkan aktivitas ini' : 'Aktifkan kembali aktivitas ini'}
-                            className={`p-1.5 rounded-md border transition-colors cursor-pointer ${
-                              isAktif
-                                ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200'
-                                : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200'
-                            }`}
-                          >
-                            <Power className="w-3.5 h-3.5" />
-                          </button>
+                        {!isManager ? (
+                          <div className="flex items-center justify-center gap-1">
+                            {/* Toggle Aktif / Nonaktif (Ikon Power) */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStatus(item)}
+                              title={isAktif ? 'Nonaktifkan aktivitas ini' : 'Aktifkan kembali aktivitas ini'}
+                              className={`p-1.5 rounded-md border transition-colors cursor-pointer ${
+                                isAktif
+                                  ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200'
+                                  : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200'
+                              }`}
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                            </button>
 
-                          {/* Edit (Pensil) */}
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(item)}
-                            title="Edit aktivitas"
-                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
+                            {/* Edit (Pensil) */}
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(item)}
+                              title="Edit aktivitas"
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
 
-                          {/* Hapus (Tempat Sampah) */}
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(item)}
-                            title="Hapus aktivitas dari database"
-                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                            {/* Hapus (Tempat Sampah) */}
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(item)}
+                              title="Hapus aktivitas dari database"
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span 
+                            className="inline-block px-2 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100" 
+                            title="Akun Manager: Akses Monitoring Read-Only"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                            Read-Only
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

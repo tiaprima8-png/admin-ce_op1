@@ -10,13 +10,7 @@ import {
   Sliders
 } from 'lucide-react';
 
-interface AuthUser {
-  id: number;
-  nama_lengkap: string;
-  username: string;
-  hak_akses: string;
-  email?: string;
-}
+import { AuthUser } from '../types';
 
 interface HeaderProps {
   wsStatus: 'connected' | 'connecting' | 'disconnected';
@@ -54,13 +48,16 @@ export const Header: React.FC<HeaderProps> = ({
   const displayName = currentUser?.nama_lengkap || 'Farid Hadi';
   const displayUsername = currentUser?.username || 'admin';
   const displayEmail = currentUser?.email || `${displayUsername}@rkce.co.id`;
-  const displayRole = currentUser?.hak_akses === 'Admin' ? 'Super Admin' : (currentUser?.hak_akses || 'Super Admin');
+  const isManager = currentUser?.role === 'MANAGER' || currentUser?.hak_akses?.toLowerCase() === 'manager';
+  const displayRole = isManager 
+    ? 'Manager (Eksekutif)' 
+    : (currentUser?.role === 'SUPER_ADMIN' ? 'Super Admin' : (currentUser?.hak_akses || 'Admin'));
   const userInitials = displayName
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map(n => n[0].toUpperCase())
-    .join('') || 'AD';
+    .join('') || (isManager ? 'MN' : 'AD');
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-slate-200 h-16 shadow-2xs">

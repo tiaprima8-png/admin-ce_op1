@@ -36,14 +36,33 @@ import { ManualActivityModal } from './components/ManualActivityModal';
 import { EditActivityModal } from './components/EditActivityModal';
 import { PhotoLightboxModal } from './components/PhotoLightboxModal';
 import { SettingsModal } from './components/SettingsModal';
+import { AuthUser } from './types';
 
-interface AuthUser {
-  id: number;
-  nama_lengkap: string;
-  username: string;
-  hak_akses: string;
-  email?: string;
-  token?: string;
+// Global fetch interceptor to attach auth & role headers to all /api/ calls
+if (typeof window !== 'undefined' && !(window as any).__rkce_fetch_intercepted) {
+  (window as any).__rkce_fetch_intercepted = true;
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      const sessionStr = sessionStorage.getItem('rkce_auth');
+      if (sessionStr) {
+        const user = JSON.parse(sessionStr);
+        init = init || {};
+        const headers = new Headers(init.headers || {});
+        if (user.token && !headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${user.token}`);
+        }
+        if (user.role && !headers.has('x-user-role')) {
+          headers.set('x-user-role', user.role);
+        }
+        if (user.id && !headers.has('x-user-id')) {
+          headers.set('x-user-id', String(user.id));
+        }
+        init.headers = headers;
+      }
+    } catch {}
+    return originalFetch(input, init);
+  };
 }
 
 const getStoredSession = (): AuthUser | null => {
@@ -812,6 +831,7 @@ export default function App() {
         onCloseMobile={() => setMobileSidebarOpen(false)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         hmStandar={hmStandar}
+        userRole={currentUser?.role}
       />
 
       {/* 2. MAIN CONTENT AREA (Flexibly offset by sidebar width) */}
@@ -875,6 +895,7 @@ export default function App() {
                 onDeleteActivity={handleDeleteActivity}
                 onRefresh={fetchActivities}
                 onViewPhoto={(item) => setViewingPhotoActivity(item)}
+                userRole={currentUser?.role}
               />
             </div>
           )}
@@ -892,6 +913,7 @@ export default function App() {
               onTerbitkanSpk={handleTerbitkanSpk}
               onCreateRencana={handleCreateRencana}
               onDeleteRencana={handleDeleteRencana}
+              userRole={currentUser?.role}
             />
           )}
 
@@ -903,6 +925,7 @@ export default function App() {
               onSaveLokasi={handleSaveLokasi}
               onDeleteLokasi={handleDeleteLokasi}
               onBulkImport={handleBulkImportLokasi}
+              userRole={currentUser?.role}
             />
           )}
 
@@ -916,6 +939,7 @@ export default function App() {
                 fetchUnits();
                 fetchStats();
               }}
+              userRole={currentUser?.role}
             />
           )}
 
@@ -924,6 +948,7 @@ export default function App() {
             <MasterAktivitas
               aktivitasList={aktivitasList}
               onRefresh={fetchAktivitasList}
+              userRole={currentUser?.role}
             />
           )}
 
@@ -932,6 +957,7 @@ export default function App() {
             <MasterKendala
               kendalaList={kendalaList}
               onRefresh={fetchKendalaList}
+              userRole={currentUser?.role}
             />
           )}
 
@@ -941,6 +967,7 @@ export default function App() {
               operators={operators}
               supervisors={supervisors}
               onRefresh={fetchOperators}
+              userRole={currentUser?.role}
             />
           )}
 
@@ -949,6 +976,7 @@ export default function App() {
             <MasterUsers
               users={users}
               onRefresh={fetchUsers}
+              userRole={currentUser?.role}
             />
           )}
 

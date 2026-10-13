@@ -31,6 +31,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
   const [endDate, setEndDate] = useState('');
   const [selectedPengawas, setSelectedPengawas] = useState('Semua');
   const [selectedUnit, setSelectedUnit] = useState('Semua');
+  const [selectedShift, setSelectedShift] = useState('Semua');
+  const [selectedStatus, setSelectedStatus] = useState('Semua');
 
   // Data States
   const [analyticsData, setAnalyticsData] = useState<AnalyticsSummary | null>(null);
@@ -48,6 +50,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
       if (endDate) params.append('endDate', endDate);
       if (selectedPengawas !== 'Semua') params.append('pengawas', selectedPengawas);
       if (selectedUnit !== 'Semua') params.append('unit', selectedUnit);
+      if (selectedShift !== 'Semua') params.append('shift', selectedShift);
+      if (selectedStatus !== 'Semua') params.append('status', selectedStatus);
 
       const res = await fetch(`/api/analytics?${params.toString()}`);
       if (!res.ok) {
@@ -60,7 +64,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
     } finally {
       setIsLoading(false);
     }
-  }, [startDate, endDate, selectedPengawas, selectedUnit]);
+  }, [startDate, endDate, selectedPengawas, selectedUnit, selectedShift, selectedStatus]);
 
   useEffect(() => {
     fetchAnalytics();
@@ -72,6 +76,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
     setEndDate('');
     setSelectedPengawas('Semua');
     setSelectedUnit('Semua');
+    setSelectedShift('Semua');
+    setSelectedStatus('Semua');
   };
 
   const handlePreset30Days = () => {
@@ -276,8 +282,35 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
             </select>
           </div>
 
+          {/* Filter Shift */}
+          <div className="flex items-center gap-1">
+            <select
+              value={selectedShift}
+              onChange={(e) => setSelectedShift(e.target.value)}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
+            >
+              <option value="Semua">Shift: Semua</option>
+              <option value="SIANG">Shift Siang</option>
+              <option value="MALAM">Shift Malam</option>
+            </select>
+          </div>
+
+          {/* Filter Kategori Status Operasional */}
+          <div className="flex items-center gap-1">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
+            >
+              <option value="Semua">Status: Semua</option>
+              <option value="OPERASI">Status: OPERASI</option>
+              <option value="STANDBY">Status: STANDBY</option>
+              <option value="BREAKDOWN">Status: BREAKDOWN</option>
+            </select>
+          </div>
+
           {/* Reset Filter Button */}
-          {(startDate || endDate || selectedPengawas !== 'Semua' || selectedUnit !== 'Semua') && (
+          {(startDate || endDate || selectedPengawas !== 'Semua' || selectedUnit !== 'Semua' || selectedShift !== 'Semua' || selectedStatus !== 'Semua') && (
             <button
               type="button"
               onClick={handlePresetAll}

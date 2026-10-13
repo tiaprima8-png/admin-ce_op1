@@ -10,6 +10,7 @@ import db, {
   type AktivitasUnitRow,
   type OperatorRow,
   type UserRow,
+  type UserRole,
   type LokasiRow,
   type RencanaKerjaRow,
   type MasterKendalaRow
@@ -29,6 +30,7 @@ export {
   type AktivitasUnitRow,
   type OperatorRow,
   type UserRow,
+  type UserRole,
   type LokasiRow,
   type RencanaKerjaRow,
   type MasterKendalaRow

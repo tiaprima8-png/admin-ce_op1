@@ -6,12 +6,15 @@ import path from 'path';
 let dbInstance: Database | null = null;
 const DB_FILE_PATH = path.resolve(process.cwd(), 'data', 'heavytrack.sqlite');
 
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'MANAGER';
+
 export interface UserRow {
   id: number;
   nama_lengkap: string;
   username: string;
   password?: string;
-  hak_akses: 'Admin' | 'Pengawas';
+  hak_akses: string;
+  role?: UserRole;
   status_aktif?: number;
 }
 
@@ -282,7 +285,9 @@ function initTablesAndSeed(db: Database) {
       nama_lengkap TEXT NOT NULL,
       username TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
-      hak_akses TEXT NOT NULL
+      hak_akses TEXT NOT NULL,
+      role TEXT DEFAULT 'ADMIN',
+      status_aktif INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS units (
@@ -870,6 +875,35 @@ function initTablesAndSeed(db: Database) {
     console.warn('HasilInputAktivitas migration note:', e);
   }
 
+  // Migration & Seed for Users role column
+  try {
+    const userInfo = db.exec("PRAGMA table_info(users)");
+    const userCols = userInfo[0]?.values.map(v => v[1]);
+    if (userCols && !userCols.includes('role')) {
+      db.run("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'ADMIN';");
+      console.log('Added role column to users');
+    }
+    if (userCols && !userCols.includes('status_aktif')) {
+      db.run("ALTER TABLE users ADD COLUMN status_aktif INTEGER DEFAULT 1;");
+    }
+    db.run("UPDATE users SET role = 'SUPER_ADMIN' WHERE LOWER(username) = 'admin';");
+    db.run("UPDATE users SET role = 'SUPERVISOR' WHERE LOWER(hak_akses) = 'pengawas' OR LOWER(hak_akses) = 'supervisor';");
+    db.run("UPDATE users SET role = 'MANAGER' WHERE LOWER(hak_akses) = 'manager' OR LOWER(username) = 'manager';");
+    db.run("UPDATE users SET role = 'ADMIN' WHERE role IS NULL OR role = '';");
+
+    // Ensure sample Manager user exists
+    const managerCheck = db.exec("SELECT id FROM users WHERE LOWER(username) = 'manager' LIMIT 1;");
+    if (!managerCheck || !managerCheck[0] || managerCheck[0].values.length === 0) {
+      db.run(`
+        INSERT INTO users (nama_lengkap, username, password, hak_akses, role, status_aktif)
+        VALUES ('Ir. Hendra Kusuma', 'manager', 'manager123', 'Manager', 'MANAGER', 1);
+      `);
+      console.log('Seeded sample Manager user: manager / manager123');
+    }
+  } catch (uErr) {
+    console.warn('User table migration note:', uErr);
+  }
+
   // Check if users seeded
   const res = db.exec("SELECT COUNT(*) as cnt FROM users");
   const userCount = res[0]?.values[0]?.[0] as number || 0;
@@ -877,11 +911,12 @@ function initTablesAndSeed(db: Database) {
   if (userCount === 0) {
     // Seed Users
     db.run(`
-      INSERT INTO users (nama_lengkap, username, password, hak_akses) VALUES
-      ('Farid Hadi', 'admin', 'admin123', 'Admin'),
-      ('Budi Santoso', 'budi.santoso', 'budi123', 'Pengawas'),
-      ('Agus Wijaya', 'agus.wijaya', 'agus123', 'Pengawas'),
-      ('Rudi Hermawan', 'rudi.h', 'rudi123', 'Pengawas');
+      INSERT INTO users (nama_lengkap, username, password, hak_akses, role, status_aktif) VALUES
+      ('Farid Hadi', 'admin', 'admin123', 'Admin', 'SUPER_ADMIN', 1),
+      ('Ir. Hendra Kusuma', 'manager', 'manager123', 'Manager', 'MANAGER', 1),
+      ('Budi Santoso', 'budi.santoso', 'budi123', 'Pengawas', 'SUPERVISOR', 1),
+      ('Agus Wijaya', 'agus.wijaya', 'agus123', 'Pengawas', 'SUPERVISOR', 1),
+      ('Rudi Hermawan', 'rudi.h', 'rudi123', 'Pengawas', 'SUPERVISOR', 1);
     `);
 
     // Seed Units

@@ -9,16 +9,7 @@ import {
   ShieldCheck,
   HardHat
 } from 'lucide-react';
-import { User } from '../types';
-
-interface AuthUser {
-  id: number;
-  nama_lengkap: string;
-  username: string;
-  hak_akses: string;
-  email: string;
-  token?: string;
-}
+import { User, AuthUser } from '../types';
 
 interface LoginPageProps {
   onLoginSuccess: (user: AuthUser) => void;
@@ -56,15 +47,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         throw new Error(data.error || 'Username atau kata sandi tidak valid.');
       }
 
-      onLoginSuccess(data.user);
+      const userPayload: AuthUser = {
+        ...data.user,
+        role: data.role || data.user?.role || (data.user?.username === 'manager' ? 'MANAGER' : 'ADMIN'),
+        token: data.token || `rkce_token_${data.user?.id}_${Date.now()}`
+      };
+      onLoginSuccess(userPayload);
     } catch (err: unknown) {
-      // Fallback for default admin if network or custom
-      if (trimmedUser === 'admin' && password === 'admin123') {
+      if (trimmedUser === 'manager' && password === 'manager123') {
+        onLoginSuccess({
+          id: 2,
+          nama_lengkap: 'Ir. Hendra Kusuma',
+          username: 'manager',
+          hak_akses: 'Manager',
+          role: 'MANAGER',
+          email: 'manager@rkce.co.id',
+          token: 'rkce_token_2_manager'
+        });
+      } else if (trimmedUser === 'admin' && password === 'admin123') {
         onLoginSuccess({
           id: 1,
           nama_lengkap: 'Farid Hadi',
           username: 'admin',
           hak_akses: 'Admin',
+          role: 'SUPER_ADMIN',
           email: 'tiaprima8@gmail.com',
           token: 'rkce_fallback_token'
         });
@@ -207,10 +213,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
+              onClick={() => handleUseDemo('manager', 'manager123')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-[11px] font-mono font-medium transition-all cursor-pointer shadow-2xs"
+            >
+              <span className="font-bold">manager</span> / <span className="text-emerald-700">manager123</span>
+              <span className="text-[10px] bg-emerald-200 text-emerald-900 font-sans px-1.5 py-0.2 rounded font-bold">Manager</span>
+            </button>
+            <button
+              type="button"
               onClick={() => handleUseDemo('admin', 'admin123')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200 text-slate-700 hover:text-emerald-800 text-[11px] font-mono font-medium transition-all cursor-pointer"
             >
               <span className="font-bold">admin</span> / <span className="text-slate-500">admin123</span>
+              <span className="text-[10px] bg-slate-200 text-slate-700 font-sans px-1.5 py-0.2 rounded font-bold">Admin</span>
             </button>
             <button
               type="button"
@@ -218,6 +233,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200 text-slate-700 hover:text-emerald-800 text-[11px] font-mono font-medium transition-all cursor-pointer"
             >
               <span className="font-bold">budi.santoso</span> / <span className="text-slate-500">budi123</span>
+              <span className="text-[10px] bg-slate-200 text-slate-700 font-sans px-1.5 py-0.2 rounded font-bold">Pengawas</span>
             </button>
           </div>
         </div>

@@ -47,6 +47,7 @@ interface SidebarProps {
   onCloseMobile: () => void;
   onOpenSettings?: () => void;
   hmStandar?: { min: number; max: number };
+  userRole?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -58,8 +59,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen,
   onCloseMobile,
   onOpenSettings,
-  hmStandar
+  hmStandar,
+  userRole
 }) => {
+  const isManager = userRole === 'MANAGER';
   // Ordered navigation items according to specifications:
   // 1. BERANDA
   // 2. RENCANA KERJA & SPK
@@ -200,19 +203,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
+        {/* Manager Executive Badge */}
+        {!isCollapsed && isManager && (
+          <div className="mx-3 mt-2.5 px-3 py-2 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-900">
+              <ShieldAlert className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Akses Manager</span>
+            </div>
+            <p className="text-[10px] text-slate-600 mt-0.5">
+              Executive View: Monitoring, Rencana, Realisasi & Analitik
+            </p>
+          </div>
+        )}
+
         {/* Sidebar Navigation Menu */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5 scrollbar-thin">
           {!isCollapsed && (
-            <div className="px-3 mb-2">
+            <div className="px-3 mb-2 flex items-center justify-between">
               <span className="text-[10px] font-extrabold tracking-wider text-slate-400 uppercase">
-                Menu Utama Navigasi
+                {isManager ? 'Navigasi Eksekutif' : 'Menu Utama Navigasi'}
               </span>
+              {isManager && (
+                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 uppercase">
+                  Read-Only Master
+                </span>
+              )}
             </div>
           )}
 
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
+            const isMasterItem = ['lokasi', 'units', 'aktivitas', 'kendala', 'operators', 'users'].includes(item.id);
 
             return (
               <button
@@ -242,6 +264,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </span>
 
                     <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                      {/* Master Item Read-Only Tag for Manager */}
+                      {isManager && isMasterItem && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-400 font-medium">
+                          View
+                        </span>
+                      )}
+
                       {/* Pending SPK Warning Pill */}
                       {item.pendingBadge !== undefined && item.pendingBadge > 0 && (
                         <span 
