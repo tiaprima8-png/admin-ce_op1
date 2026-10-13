@@ -170,7 +170,7 @@ export default function App() {
   const supervisors = Array.from(new Set(
     users.filter(u => u.hak_akses === 'Kasie' || u.hak_akses === 'Pengawas' || u.role === 'SUPERVISOR').map(u => u.nama_lengkap)
       .concat(units.map(u => u.nama_pengawas))
-      .concat(['Budi Santoso', 'Agus Wijaya', 'Rudi Hermawan'])
+      .concat(['Agung', 'Zainudin', 'Jaidi', 'Hisar', 'Yono', 'Nyoman', 'Saipul', 'Galung'])
   ));
 
   // --- Auth Handlers ---

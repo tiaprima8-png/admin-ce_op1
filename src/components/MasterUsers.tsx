@@ -539,7 +539,19 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                 </label>
                 <select
                   value={hakAkses}
-                  onChange={(e) => setHakAkses(e.target.value as 'Admin' | 'Kasie' | 'Manager')}
+                  onChange={(e) => {
+                    const nextAkses = e.target.value as 'Admin' | 'Kasie' | 'Manager';
+                    setHakAkses(nextAkses);
+                    if (nextAkses === 'Admin' || nextAkses === 'Manager') {
+                      if (!wilayah || DAFTAR_WILAYAH.includes(wilayah as any)) {
+                        setWilayah('Semua Wilayah');
+                      }
+                    } else if (nextAkses === 'Kasie') {
+                      if (wilayah === 'Semua Wilayah') {
+                        setWilayah('Geodesi PG1');
+                      }
+                    }
+                  }}
                   className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
                   required
                 >

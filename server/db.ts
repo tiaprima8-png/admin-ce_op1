@@ -953,10 +953,22 @@ function initTablesAndSeed(db: Database) {
     db.run("UPDATE users SET wilayah = 'LEBUNG PG12' WHERE LOWER(nama_lengkap) = 'saipul' OR LOWER(username) = 'saipul';");
     db.run("UPDATE users SET wilayah = 'LEBUNG PG3' WHERE LOWER(nama_lengkap) = 'galung' OR LOWER(username) = 'galung';");
 
+    // Pemetaan nama-nama Kasie tambahan bila ada
+    db.run("UPDATE users SET wilayah = 'Geodesi PG1' WHERE LOWER(nama_lengkap) LIKE '%budi%' OR LOWER(username) LIKE '%budi%';");
+    db.run("UPDATE users SET wilayah = 'RC PG1' WHERE LOWER(nama_lengkap) LIKE '%agus%' OR LOWER(username) LIKE '%agus%';");
+    db.run("UPDATE users SET wilayah = 'LEBUNG PG12' WHERE LOWER(nama_lengkap) LIKE '%rudi%' OR LOWER(username) LIKE '%rudi%';");
+
     // Konversi sisa nilai PG1, PG2, PG3 pada users
     db.run("UPDATE users SET wilayah = 'Geodesi PG1' WHERE wilayah = 'PG1' OR wilayah IS NULL OR wilayah = '';");
     db.run("UPDATE users SET wilayah = 'RC PG1' WHERE wilayah = 'PG2';");
     db.run("UPDATE users SET wilayah = 'LEBUNG PG3' WHERE wilayah = 'PG3';");
+
+    // Normalisasi final untuk memastikan seluruh user non-admin/manager berada di salah satu 8 wilayah kerja
+    db.run(`
+      UPDATE users SET wilayah = 'Geodesi PG1' 
+      WHERE (role NOT IN ('SUPER_ADMIN', 'ADMIN', 'MANAGER') AND hak_akses NOT IN ('Super Admin', 'Admin', 'Manager')) 
+        AND (wilayah NOT IN ('Geodesi PG1', 'Geodesi PG2', 'Geodesi PG3', 'RC PG1', 'RC PG2', 'RC PG3', 'LEBUNG PG12', 'LEBUNG PG3') OR wilayah IS NULL OR wilayah = '');
+    `);
 
     // 3. Update Units sesuai relasi Kasie
     db.run("UPDATE units SET wilayah = 'Geodesi PG1' WHERE LOWER(kasie) = 'agung' OR LOWER(nama_pengawas) = 'agung';");
@@ -1011,6 +1023,12 @@ function initTablesAndSeed(db: Database) {
 
     // Normalisasi jenis_unit pada master aktivitas jika kosong
     db.run("UPDATE aktivitas_unit SET jenis_unit = 'Excavator Standar' WHERE jenis_unit IS NULL OR jenis_unit = '';");
+
+    // Pembersihan Master Aktivitas: Hapus total Dump Truck, Bulldozer, Water Truck, Wheel Loader
+    db.run("DELETE FROM aktivitas_unit WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer', 'water truck', 'wheel loader');");
+    try {
+      db.run("DELETE FROM master_aktivitas WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer', 'water truck', 'wheel loader');");
+    } catch {}
 
     // Buat Views transparan master_user, master_unit, master_operator beserta INSTEAD OF triggers
     try {
@@ -1625,44 +1643,7 @@ export async function seedMasterAktivitas(): Promise<number> {
     { jenis_unit: 'Excavator Standar', nama_aktivitas: 'Off Time', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Off' },
     { jenis_unit: 'Excavator Standar', nama_aktivitas: 'Perawatan Unit', kategori_status: 'BREAKDOWN', satuan: 'H', kode_sap: 'OP/Divisi' },
     { jenis_unit: 'Excavator Standar', nama_aktivitas: 'Perbaikan unit', kategori_status: 'BREAKDOWN', satuan: 'H', kode_sap: 'Maint.' },
-    { jenis_unit: 'Excavator Standar', nama_aktivitas: 'Tunggu Operator', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-
-    // ====================================================================
-    // 6. Bulldozer (Operasi, Standby, Breakdown)
-    // ====================================================================
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Dozer Kupas Tanah / Stacking', kategori_status: 'OPERASI', satuan: 'Ha', kode_sap: '6111111112' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Dozer Dorong Tanah / Spreading', kategori_status: 'OPERASI', satuan: 'M3', kode_sap: '6111211122' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Dozer Ripping / Buka Jalur', kategori_status: 'OPERASI', satuan: 'M', kode_sap: '6111131111' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Clearing & Grubbing Lahan', kategori_status: 'OPERASI', satuan: 'M2', kode_sap: '6111121104' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Perawatan Disposal Area', kategori_status: 'OPERASI', satuan: 'H', kode_sap: '6111121106' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Tunggu Lokasi', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Tunggu Trailer', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Tunggu Cuaca', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Tunggu Solar', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Tunggu Sparepart', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Maint.' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Tunggu Mekanik', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Down' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Off Time', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Off' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Perawatan Unit', kategori_status: 'BREAKDOWN', satuan: 'H', kode_sap: 'OP/Divisi' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Perbaikan unit', kategori_status: 'BREAKDOWN', satuan: 'H', kode_sap: 'Maint.' },
-    { jenis_unit: 'Bulldozer', nama_aktivitas: 'Tunggu Operator', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-
-    // ====================================================================
-    // 7. Dump Truck (Operasi, Standby, Breakdown)
-    // ====================================================================
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Dump Truck Angkut Tanah / Hauling', kategori_status: 'OPERASI', satuan: 'M3', kode_sap: '6111211123' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Dump Truck Angkut Sirtu / Material', kategori_status: 'OPERASI', satuan: 'M3', kode_sap: '6111211124' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Hauling Overburden ke Disposal', kategori_status: 'OPERASI', satuan: 'Rit', kode_sap: '6111151107' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Hauling Tanah / Timbunan', kategori_status: 'OPERASI', satuan: 'Rit', kode_sap: '6111151108' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Tunggu Muatan / Antri', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Tunggu Lokasi', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Tunggu Cuaca / Jalan Licin', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Tunggu Solar', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Tunggu Sparepart', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Maint.' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Tunggu Mekanik', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Down' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Off Time', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Off' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Perawatan Unit', kategori_status: 'BREAKDOWN', satuan: 'H', kode_sap: 'OP/Divisi' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Perbaikan unit', kategori_status: 'BREAKDOWN', satuan: 'H', kode_sap: 'Maint.' },
-    { jenis_unit: 'Dump Truck', nama_aktivitas: 'Tunggu Operator', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' }
+    { jenis_unit: 'Excavator Standar', nama_aktivitas: 'Tunggu Operator', kategori_status: 'STANDBY', satuan: 'H', kode_sap: 'Standby' }
   ];
 
   for (const act of aktivitasList) {

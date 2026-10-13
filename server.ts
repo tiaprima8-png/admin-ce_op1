@@ -755,7 +755,7 @@ async function startServer() {
     try {
       const pengawas = (req.query.pengawas as string | undefined)?.trim();
       const rawWilayah = (req.query.wilayah as string | undefined)?.trim();
-      const filterWilayah = rawWilayah && rawWilayah !== 'Semua' && rawWilayah !== 'Semua Wilayah' ? rawWilayah : null;
+      const filterWilayah = rawWilayah && rawWilayah.toUpperCase() !== 'SEMUA' && rawWilayah.toUpperCase() !== 'SEMUA WILAYAH' ? rawWilayah : null;
 
       let units: UnitRow[];
       let operators: OperatorRow[];
@@ -842,9 +842,9 @@ async function startServer() {
         params.push(s, s, s, s, s);
       }
 
-      if (wilayah && typeof wilayah === 'string' && wilayah.toUpperCase() !== 'SEMUA' && wilayah !== 'Semua Wilayah') {
+      if (wilayah && typeof wilayah === 'string' && wilayah.trim().toUpperCase() !== 'SEMUA' && wilayah.trim().toUpperCase() !== 'SEMUA WILAYAH') {
         sql += ' AND (r.wilayah = ? OR u.wilayah = ? OR l.wilayah = ? OR r.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ? OR username = ?))';
-        params.push(wilayah, wilayah, wilayah, wilayah, wilayah);
+        params.push(wilayah.trim(), wilayah.trim(), wilayah.trim(), wilayah.trim(), wilayah.trim());
       }
 
       const rawPengawasFilter = (pengawas_id || pengawas) as string | undefined;
@@ -2595,9 +2595,10 @@ async function startServer() {
         params.push(s, s, s, s, s, s, s);
       }
 
-      if (wilayah && typeof wilayah === 'string' && wilayah.toUpperCase() !== 'SEMUA' && wilayah !== 'Semua Wilayah') {
+      if (wilayah && typeof wilayah === 'string' && wilayah.trim().toUpperCase() !== 'SEMUA' && wilayah.trim().toUpperCase() !== 'SEMUA WILAYAH') {
+        const wVal = wilayah.trim();
         baseSql += ' AND (wilayah = ? OR lokasi = ? OR nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ? OR username = ?) OR kode_unit IN (SELECT kode_unit FROM units WHERE wilayah = ? OR nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ? OR username = ?)))';
-        params.push(wilayah, wilayah, wilayah, wilayah, wilayah, wilayah, wilayah);
+        params.push(wVal, wVal, wVal, wVal, wVal, wVal, wVal);
       }
 
       if (pengawas && typeof pengawas === 'string' && pengawas !== 'Semua') {
@@ -3294,9 +3295,10 @@ async function startServer() {
       const { wilayah } = req.query;
       let sql = 'SELECT h.* FROM hasil_input_aktivitas h LEFT JOIN units u ON h.kode_unit = u.kode_unit WHERE 1=1';
       const params: (string | number)[] = [];
-      if (wilayah && typeof wilayah === 'string' && wilayah !== 'Semua' && wilayah !== 'Semua Wilayah') {
+      if (wilayah && typeof wilayah === 'string' && wilayah.trim().toUpperCase() !== 'SEMUA' && wilayah.trim().toUpperCase() !== 'SEMUA WILAYAH') {
+        const wVal = wilayah.trim();
         sql += ' AND (h.wilayah = ? OR u.wilayah = ? OR h.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ? OR username = ?))';
-        params.push(wilayah, wilayah, wilayah, wilayah);
+        params.push(wVal, wVal, wVal, wVal);
       }
       const rows = queryAll<HasilInputAktivitasRow>(sql, params);
       
@@ -3346,9 +3348,10 @@ async function startServer() {
         whereClause += ' AND h.tanggal <= ?';
         params.push(endDate);
       }
-      if (wilayah && typeof wilayah === 'string' && wilayah.toUpperCase() !== 'SEMUA' && wilayah !== 'Semua Wilayah') {
+      if (wilayah && typeof wilayah === 'string' && wilayah.trim().toUpperCase() !== 'SEMUA' && wilayah.trim().toUpperCase() !== 'SEMUA WILAYAH') {
+        const wVal = wilayah.trim();
         whereClause += ' AND (h.wilayah = ? OR u.wilayah = ? OR h.nama_pengawas IN (SELECT nama_lengkap FROM users WHERE wilayah = ? OR username = ?))';
-        params.push(wilayah, wilayah, wilayah, wilayah);
+        params.push(wVal, wVal, wVal, wVal);
       }
       if (pengawas && typeof pengawas === 'string' && pengawas !== 'Semua') {
         whereClause += ' AND h.nama_pengawas = ?';
@@ -3527,7 +3530,7 @@ async function startServer() {
   app.get('/api/units', (req: Request, res: Response) => {
     try {
       const { status } = req.query;
-      let sql = 'SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'PG1\') as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE 1=1';
+      let sql = 'SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'Geodesi PG1\') as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE 1=1';
       const params: (string | number)[] = [];
 
       if (status !== undefined && status !== 'Semua' && status !== '') {
@@ -3692,11 +3695,12 @@ async function startServer() {
       const kategori_status = rawKategoriStatus && validKategori.includes(String(rawKategoriStatus).toUpperCase())
         ? String(rawKategoriStatus).toUpperCase()
         : 'OPERASI';
+      const cleanSatuan = (satuan !== undefined && satuan !== null ? String(satuan).trim() : '') || 'M3';
 
       const resDb = execute(`
         INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, kategori_status, status_unit)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [jenis_unit, nama_aktivitas, satuan, kode_sap, activeStatus, kategori_status, kategori_status]);
+      `, [String(jenis_unit).trim(), String(nama_aktivitas).trim(), cleanSatuan, String(kode_sap).trim(), activeStatus, kategori_status, kategori_status]);
 
       const inserted = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE id = ?', [resDb.lastInsertRowId]);
       res.status(201).json(inserted);
@@ -3722,6 +3726,7 @@ async function startServer() {
       const kategori_status = rawKategoriStatus && validKategori.includes(String(rawKategoriStatus).toUpperCase())
         ? String(rawKategoriStatus).toUpperCase()
         : (existing?.kategori_status || 'OPERASI');
+      const cleanSatuan = satuan !== undefined && satuan !== null ? String(satuan).trim() : (existing?.satuan || 'M3');
 
       execute(`
         UPDATE aktivitas_unit SET 
@@ -3733,7 +3738,7 @@ async function startServer() {
           kategori_status = ?,
           status_unit = ?
         WHERE id = ?
-      `, [jenis_unit, nama_aktivitas, satuan, kode_sap, activeStatus, kategori_status, kategori_status, id]);
+      `, [String(jenis_unit || existing.jenis_unit).trim(), String(nama_aktivitas || existing.nama_aktivitas).trim(), cleanSatuan, String(kode_sap || existing.kode_sap).trim(), activeStatus, kategori_status, kategori_status, id]);
 
       const updated = queryOne<AktivitasUnitRow>('SELECT * FROM aktivitas_unit WHERE id = ?', [id]);
       res.json(updated);
@@ -3777,7 +3782,7 @@ async function startServer() {
   app.get('/api/operators', (req: Request, res: Response) => {
     try {
       const { status } = req.query;
-      let sql = 'SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'PG1\') as wilayah, status_aktif FROM operators WHERE 1=1';
+      let sql = 'SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'Geodesi PG1\') as wilayah, status_aktif FROM operators WHERE 1=1';
       const params: (string | number)[] = [];
 
       if (status !== undefined && status !== 'Semua' && status !== '') {

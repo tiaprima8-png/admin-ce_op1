@@ -440,6 +440,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     return map;
   }, [units]);
 
+  const unitWilayahMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of units) {
+      if (u.kode_unit && u.wilayah) {
+        map.set(u.kode_unit.toLowerCase().trim(), u.wilayah.trim().toUpperCase());
+      }
+    }
+    return map;
+  }, [units]);
+
   // Date Range State (Default: 7 Hari Terakhir WIB)
   const [startDate, setStartDate] = useState<string>(() => getWibDaysAgo(6));
   const [endDate, setEndDate] = useState<string>(() => getWibToday());
@@ -511,12 +521,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         const kasieWilayah = userWilayahMap.get(kasieName);
         const unitKasie = unitSupervisorMap.get((item.kode_unit || '').toLowerCase().trim());
         const unitWilayah = unitKasie ? userWilayahMap.get(unitKasie) : undefined;
+        const directUnitWilayah = unitWilayahMap.get((item.kode_unit || '').toLowerCase().trim());
         const targetW = selectedWilayah.toUpperCase();
 
         const matchWilayah = 
           itemWilayah === targetW || 
           kasieWilayah === targetW || 
           unitWilayah === targetW ||
+          directUnitWilayah === targetW ||
           (item.lokasi && item.lokasi.toUpperCase().includes(targetW)) ||
           (item.kode_lokasi && item.kode_lokasi.toUpperCase().includes(targetW));
 
@@ -558,7 +570,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
       return true;
     });
-  }, [dataList, searchTerm, selectedWilayah, selectedUnit, selectedShift, selectedStatus, highlightIds, newActivityIds, startDate, endDate, userWilayahMap, unitSupervisorMap]);
+  }, [dataList, searchTerm, selectedWilayah, selectedUnit, selectedShift, selectedStatus, highlightIds, newActivityIds, startDate, endDate, userWilayahMap, unitSupervisorMap, unitWilayahMap]);
 
   const totalPages = Math.ceil(filteredActivities.length / pageSize) || 1;
   const paginatedActivities = filteredActivities.slice(

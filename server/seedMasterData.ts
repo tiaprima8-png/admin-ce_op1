@@ -92,14 +92,14 @@ export interface SeedOperatorItem {
 }
 
 export const SEED_OPERATORS: SeedOperatorItem[] = [
-  // Di bawah Kasie Agung (PG1)
+  // Di bawah Kasie Agung (Geodesi PG1)
   { nama_operator: 'Sudarwin', nik: '123456', kasie: 'Agung' },
   { nama_operator: 'Suyadi', nik: '123457', kasie: 'Agung' },
   { nama_operator: 'Farid', nik: '123458', kasie: 'Agung' },
   { nama_operator: 'Aldo', nik: '123459', kasie: 'Agung' },
   { nama_operator: 'Sofyan Bagus', nik: '123460', kasie: 'Agung' },
 
-  // Di bawah Kasie Zainudin (PG1)
+  // Di bawah Kasie Zainudin (Geodesi PG2)
   { nama_operator: 'Rendi', nik: '123461', kasie: 'Zainudin' },
   { nama_operator: 'Syaifurohman', nik: '123462', kasie: 'Zainudin' },
   { nama_operator: 'Tugiman', nik: '123463', kasie: 'Zainudin' },
@@ -109,7 +109,7 @@ export const SEED_OPERATORS: SeedOperatorItem[] = [
   { nama_operator: 'S. Bejo', nik: '123467', kasie: 'Zainudin' },
   { nama_operator: 'Ronald', nik: '123468', kasie: 'Zainudin' },
 
-  // Di bawah Kasie Jaidi (PG1)
+  // Di bawah Kasie Jaidi (Geodesi PG3)
   { nama_operator: 'Somat', nik: '123469', kasie: 'Jaidi' },
   { nama_operator: 'Andri l.w', nik: '123470', kasie: 'Jaidi' },
   { nama_operator: 'Gunawan', nik: '123471', kasie: 'Jaidi' },
@@ -118,7 +118,7 @@ export const SEED_OPERATORS: SeedOperatorItem[] = [
   { nama_operator: 'Asraf', nik: '123474', kasie: 'Jaidi' },
   { nama_operator: 'Rendi', nik: '123475', kasie: 'Jaidi' },
 
-  // Di bawah Kasie Hisar (PG2)
+  // Di bawah Kasie Hisar (RC PG1)
   { nama_operator: 'Iwan S', nik: '123476', kasie: 'Hisar' },
   { nama_operator: 'Habibi', nik: '123477', kasie: 'Hisar' },
   { nama_operator: 'Dwi', nik: '123478', kasie: 'Hisar' },
@@ -128,25 +128,25 @@ export const SEED_OPERATORS: SeedOperatorItem[] = [
   { nama_operator: 'Fajar', nik: '123482', kasie: 'Hisar' },
   { nama_operator: 'Bayu (2)', nik: '123483', kasie: 'Hisar' },
 
-  // Di bawah Kasie Yono (PG2)
+  // Di bawah Kasie Yono (RC PG2)
   { nama_operator: 'Aziz I.', nik: '123484', kasie: 'Yono' },
   { nama_operator: 'Gus Hamid', nik: '123485', kasie: 'Yono' },
   { nama_operator: 'Rio', nik: '123486', kasie: 'Yono' },
   { nama_operator: 'Suhardi', nik: '123487', kasie: 'Yono' },
   { nama_operator: 'A. Taufiq', nik: '123488', kasie: 'Yono' },
 
-  // Di bawah Kasie Nyoman (PG3)
+  // Di bawah Kasie Nyoman (RC PG3)
   { nama_operator: 'Simon', nik: '123489', kasie: 'Nyoman' },
   { nama_operator: 'Alex S.', nik: '123490', kasie: 'Nyoman' },
   { nama_operator: 'Subandi', nik: '123491', kasie: 'Nyoman' },
   { nama_operator: 'Ferdiyanto', nik: '123492', kasie: 'Nyoman' },
 
-  // Di bawah Kasie Saipul (PG3)
+  // Di bawah Kasie Saipul (LEBUNG PG12)
   { nama_operator: 'Tridiyanto', nik: '123493', kasie: 'Saipul' },
   { nama_operator: 'Simon P.', nik: '123494', kasie: 'Saipul' },
   { nama_operator: 'Suranto', nik: '123495', kasie: 'Saipul' },
 
-  // Di bawah Kasie Galung (PG3)
+  // Di bawah Kasie Galung (LEBUNG PG3)
   { nama_operator: 'Sahroji', nik: '123496', kasie: 'Galung' },
   { nama_operator: 'Andi S.', nik: '123497', kasie: 'Galung' },
   { nama_operator: 'Sutriyono', nik: '123498', kasie: 'Galung' },

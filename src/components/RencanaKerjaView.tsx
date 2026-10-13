@@ -95,6 +95,16 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
     return map;
   }, [units]);
 
+  const unitWilayahMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of units) {
+      if (u.kode_unit && u.wilayah) {
+        map.set(u.kode_unit.toLowerCase().trim(), u.wilayah.trim().toUpperCase());
+      }
+    }
+    return map;
+  }, [units]);
+
   const lokasiWilayahMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const l of lokasiList) {
@@ -213,7 +223,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
         if (!match) return false;
       }
 
-      // Filter Wilayah (PG1, PG2, PG3)
+      // Filter Wilayah (8 Wilayah Kerja Baru)
       if (filterWilayah !== 'Semua') {
         const targetW = filterWilayah.toUpperCase();
         const itemWilayah = (item.wilayah || '').trim().toUpperCase();
@@ -221,12 +231,14 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
         const kasieWilayah = userWilayahMap.get(kasieName);
         const unitKasie = unitSupervisorMap.get((item.kode_unit || '').toLowerCase().trim());
         const unitWilayah = unitKasie ? userWilayahMap.get(unitKasie) : undefined;
+        const directUnitWil = unitWilayahMap.get((item.kode_unit || '').toLowerCase().trim());
         const lokWilayah = item.kode_lokasi ? lokasiWilayahMap.get(item.kode_lokasi.toLowerCase().trim()) : undefined;
 
         const matchWilayah = 
           itemWilayah === targetW ||
           kasieWilayah === targetW ||
           unitWilayah === targetW ||
+          directUnitWil === targetW ||
           lokWilayah === targetW;
 
         if (!matchWilayah) return false;
@@ -260,7 +272,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
       return true;
     });
-  }, [rencanaList, searchTerm, filterWilayah, filterStatusSpk, filterShift, filterStatusOperasi, filterTanggal, filterTanggalAkhir, userWilayahMap, unitSupervisorMap, lokasiWilayahMap]);
+  }, [rencanaList, searchTerm, filterWilayah, filterStatusSpk, filterShift, filterStatusOperasi, filterTanggal, filterTanggalAkhir, userWilayahMap, unitSupervisorMap, unitWilayahMap, lokasiWilayahMap]);
 
   const resetFilters = () => {
     setSearchTerm('');

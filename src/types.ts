@@ -11,7 +11,30 @@ export const DAFTAR_WILAYAH = [
   'LEBUNG PG3'
 ] as const;
 
+export const DAFTAR_WILAYAH_FILTER = [
+  'Semua Wilayah',
+  'Geodesi PG1',
+  'Geodesi PG2',
+  'Geodesi PG3',
+  'RC PG1',
+  'RC PG2',
+  'RC PG3',
+  'LEBUNG PG12',
+  'LEBUNG PG3'
+] as const;
+
 export type WilayahKerja = typeof DAFTAR_WILAYAH[number];
+export type WilayahFilterOption = typeof DAFTAR_WILAYAH_FILTER[number];
+
+export const DAFTAR_JENIS_UNIT_AKTIF = [
+  'Excavator Long Arm',
+  'Excavator Mini',
+  'Excavator Standar',
+  'Motor Grader',
+  'Compactor'
+] as const;
+
+export type JenisUnitAktif = typeof DAFTAR_JENIS_UNIT_AKTIF[number];
 
 export function getWilayahBadgeClass(wilayah?: string | null): string {
   const w = (wilayah || '').trim().toUpperCase();

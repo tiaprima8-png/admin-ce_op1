@@ -15,7 +15,7 @@ export const AndroidIntegrationModal: React.FC<AndroidIntegrationModalProps> = (
   isSimulating
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [testPengawas, setTestPengawas] = useState('Budi Santoso');
+  const [testPengawas, setTestPengawas] = useState('Agung');
   const [testTanggal, setTestTanggal] = useState('2026-10-11');
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [isLoadingSync, setIsLoadingSync] = useState(false);
@@ -202,9 +202,14 @@ interface RkceApiService {
                   onChange={e => setTestPengawas(e.target.value)}
                   className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium"
                 >
-                  <option value="Budi Santoso">Budi Santoso (PG1)</option>
-                  <option value="Agus Wijaya">Agus Wijaya (PG2)</option>
-                  <option value="Rudi Hermawan">Rudi Hermawan (PG3)</option>
+                  <option value="Agung">Agung (Geodesi PG1)</option>
+                  <option value="Zainudin">Zainudin (Geodesi PG2)</option>
+                  <option value="Jaidi">Jaidi (Geodesi PG3)</option>
+                  <option value="Hisar">Hisar (RC PG1)</option>
+                  <option value="Yono">Yono (RC PG2)</option>
+                  <option value="Nyoman">Nyoman (RC PG3)</option>
+                  <option value="Saipul">Saipul (LEBUNG PG12)</option>
+                  <option value="Galung">Galung (LEBUNG PG3)</option>
                   <option value="Semua">Semua Kasie</option>
                 </select>
               </div>
@@ -275,9 +280,14 @@ interface RkceApiService {
                   onChange={e => setTestPengawas(e.target.value)}
                   className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium"
                 >
-                  <option value="Budi Santoso">Budi Santoso (PG1)</option>
-                  <option value="Agus Wijaya">Agus Wijaya (PG2)</option>
-                  <option value="Rudi Hermawan">Rudi Hermawan (PG3)</option>
+                  <option value="Agung">Agung (Geodesi PG1)</option>
+                  <option value="Zainudin">Zainudin (Geodesi PG2)</option>
+                  <option value="Jaidi">Jaidi (Geodesi PG3)</option>
+                  <option value="Hisar">Hisar (RC PG1)</option>
+                  <option value="Yono">Yono (RC PG2)</option>
+                  <option value="Nyoman">Nyoman (RC PG3)</option>
+                  <option value="Saipul">Saipul (LEBUNG PG12)</option>
+                  <option value="Galung">Galung (LEBUNG PG3)</option>
                   <option value="Semua">Semua Kasie</option>
                 </select>
               </div>
@@ -335,9 +345,14 @@ interface RkceApiService {
                 onChange={e => setTestPengawas(e.target.value)}
                 className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white"
               >
-                <option value="Budi Santoso">Budi Santoso (PG1)</option>
-                <option value="Agus Wijaya">Agus Wijaya (PG2)</option>
-                <option value="Rudi Hermawan">Rudi Hermawan (PG3)</option>
+                <option value="Agung">Agung (Geodesi PG1)</option>
+                <option value="Zainudin">Zainudin (Geodesi PG2)</option>
+                <option value="Jaidi">Jaidi (Geodesi PG3)</option>
+                <option value="Hisar">Hisar (RC PG1)</option>
+                <option value="Yono">Yono (RC PG2)</option>
+                <option value="Nyoman">Nyoman (RC PG3)</option>
+                <option value="Saipul">Saipul (LEBUNG PG12)</option>
+                <option value="Galung">Galung (LEBUNG PG3)</option>
                 <option value="Semua">Semua Kasie</option>
               </select>
               <button
