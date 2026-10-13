@@ -967,6 +967,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   }
                 }
                 const isMalam = (row.shift_kerja || '').toUpperCase() === 'MALAM';
+                const kasieWilayah = row.wilayah || userWilayahMap.get((row.nama_pengawas || '').toLowerCase().trim());
 
                 return (
                   <tr
@@ -1022,21 +1023,34 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     </td>
 
-                    {/* Kolom 2 [PENGAWAS & TANGGAL & SHIFT]: 
-                        Baris 1: Nama Pengawas (teks tebal)
+                    {/* Kolom 2 [KASIE & TANGGAL & SHIFT]: 
+                        Baris 1: Nama Kasie (teks tebal) + Badge Wilayah
                         Baris 2: Tanggal laporan + Badge Shift kecil (SIANG amber / MALAM indigo) */}
                     <td className="py-2.5 px-2.5 align-top">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {isGlowing && (
                             <span className="flex h-1.5 w-1.5 relative shrink-0">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-600"></span>
                             </span>
                           )}
-                          <span className="font-bold text-slate-900 text-xs truncate block" title={row.nama_pengawas}>
+                          <span className="font-bold text-slate-900 text-xs truncate" title={row.nama_pengawas}>
                             {row.nama_pengawas}
                           </span>
+                          {kasieWilayah && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shadow-2xs ${
+                              kasieWilayah.toUpperCase() === 'PG1'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                : kasieWilayah.toUpperCase() === 'PG2'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-300'
+                                  : kasieWilayah.toUpperCase() === 'PG3'
+                                    ? 'bg-purple-50 text-purple-800 border-purple-300'
+                                    : 'bg-slate-100 text-slate-800 border-slate-300'
+                            }`}>
+                              {kasieWilayah}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 font-mono flex-wrap">
                           <span className="font-semibold text-slate-700">{row.tanggal_kerja || row.tanggal}</span>

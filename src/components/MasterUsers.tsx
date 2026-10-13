@@ -318,9 +318,18 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                   return (
                     <tr key={u.id} className={`hover:bg-slate-50/80 transition-colors ${!isAktif ? 'bg-slate-50/50 opacity-65' : ''}`}>
                       <td className="py-3 px-4 font-semibold text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <span>{u.nama_lengkap}</span>
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900">{u.nama_lengkap}</span>
+                          <span className="text-slate-400 font-bold">•</span>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border shadow-2xs ${
+                            (u.wilayah || 'PG1').toUpperCase() === 'PG1'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                              : (u.wilayah || 'PG1').toUpperCase() === 'PG2'
+                                ? 'bg-blue-50 text-blue-800 border-blue-300'
+                                : (u.wilayah || 'PG1').toUpperCase() === 'PG3'
+                                  ? 'bg-purple-50 text-purple-800 border-purple-300'
+                                  : 'bg-slate-100 text-slate-800 border-slate-300'
+                          }`}>
                             {u.wilayah || 'PG1'}
                           </span>
                         </div>
@@ -349,7 +358,15 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                         )}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border shadow-2xs ${
+                          (u.wilayah || 'PG1').toUpperCase() === 'PG1'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : (u.wilayah || 'PG1').toUpperCase() === 'PG2'
+                              ? 'bg-blue-50 text-blue-800 border-blue-300'
+                              : (u.wilayah || 'PG1').toUpperCase() === 'PG3'
+                                ? 'bg-purple-50 text-purple-800 border-purple-300'
+                                : 'bg-slate-100 text-slate-800 border-slate-300'
+                        }`}>
                           {u.wilayah || 'PG1'}
                         </span>
                       </td>

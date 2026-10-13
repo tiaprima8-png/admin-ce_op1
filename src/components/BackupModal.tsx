@@ -66,7 +66,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({ isOpen, onClose }) => 
               <span>Cakupan Data yang Dicadangkan:</span>
             </div>
             <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
-              <li>Tabel <code className="text-emerald-700 font-mono">users</code> (Akun & Hak Akses Pengawas)</li>
+              <li>Tabel <code className="text-emerald-700 font-mono">users</code> (Akun & Hak Akses Kasie & Admin)</li>
               <li>Tabel <code className="text-emerald-700 font-mono">units</code> (Fleet Alat Berat & HM Terakhir)</li>
               <li>Tabel <code className="text-emerald-700 font-mono">aktivitas_unit</code> (Master Aktivitas & Kode SAP)</li>
               <li>Tabel <code className="text-emerald-700 font-mono">operators</code> (Nama & NIK Operator)</li>

@@ -158,9 +158,9 @@ export default function App() {
 
   const isManager = currentUser?.role === 'MANAGER' || currentUser?.hak_akses?.toLowerCase() === 'manager';
 
-  // Extract unique supervisors
+  // Extract unique supervisors (Kasie)
   const supervisors = Array.from(new Set(
-    users.filter(u => u.hak_akses === 'Pengawas').map(u => u.nama_lengkap)
+    users.filter(u => u.hak_akses === 'Kasie' || u.hak_akses === 'Pengawas' || u.role === 'SUPERVISOR').map(u => u.nama_lengkap)
       .concat(units.map(u => u.nama_pengawas))
       .concat(['Budi Santoso', 'Agus Wijaya', 'Rudi Hermawan'])
   ));
@@ -803,7 +803,7 @@ export default function App() {
       case 'rencana':
         return {
           title: 'Rencana Kerja & Penerbitan SPK',
-          subtitle: 'Daftar penugasan pengawas harian dan penerbitan nomor Surat Perintah Kerja (SPK)'
+          subtitle: 'Daftar penugasan Kasie harian dan penerbitan nomor Surat Perintah Kerja (SPK)'
         };
       case 'lokasi':
         return {
@@ -823,17 +823,17 @@ export default function App() {
       case 'kendala':
         return {
           title: 'Data Master Kendala Operasional',
-          subtitle: 'Katalog 15 kendala standar operasional civil engineering untuk sinkronisasi ke aplikasi mobile pengawas'
+          subtitle: 'Katalog 15 kendala standar operasional civil engineering untuk sinkronisasi ke aplikasi mobile Kasie'
         };
       case 'operators':
         return {
           title: 'Data Master Operator',
-          subtitle: 'Database operator alat berat lapangan dan pemetaan pengawas penanggung jawab'
+          subtitle: 'Database operator alat berat lapangan dan pemetaan Kasie penanggung jawab'
         };
       case 'users':
         return {
           title: 'Data Master Pengguna',
-          subtitle: 'Manajemen akun login portal admin dan akun pengawas aplikasi mobile'
+          subtitle: 'Manajemen akun login portal admin dan akun Kasie aplikasi mobile'
         };
       case 'analytics':
         return {
@@ -919,6 +919,7 @@ export default function App() {
                 aktivitasList={aktivitasList}
                 operators={operators}
                 supervisors={supervisors}
+                users={users}
                 newActivityIds={newActivityIds}
                 onOpenManualModal={() => {
                   if (!isManager) setIsManualModalOpen(true);
@@ -943,6 +944,7 @@ export default function App() {
               lokasiList={lokasiList}
               supervisors={supervisors}
               aktivitasList={aktivitasList}
+              users={users}
               onRefresh={fetchRencanaList}
               onTerbitkanSpk={handleTerbitkanSpk}
               onCreateRencana={handleCreateRencana}
@@ -1019,6 +1021,7 @@ export default function App() {
             <AnalyticsView
               units={units}
               supervisors={supervisors}
+              users={users}
             />
           )}
 
@@ -1050,6 +1053,7 @@ export default function App() {
         aktivitasList={aktivitasList}
         operators={operators}
         supervisors={supervisors}
+        users={users}
         onSubmitSuccess={() => {
           fetchActivities();
           fetchStats();
@@ -1069,6 +1073,7 @@ export default function App() {
         aktivitasList={aktivitasList}
         operators={operators}
         supervisors={supervisors}
+        users={users}
       />
 
       {/* 3. Modal Lightbox Foto Bukti Lapangan */}

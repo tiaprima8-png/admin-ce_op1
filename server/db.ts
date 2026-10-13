@@ -541,10 +541,18 @@ function initTablesAndSeed(db: Database) {
       db.run("UPDATE hasil_input_aktivitas SET ada_kendala = CASE WHEN kendala_list IS NOT NULL AND TRIM(kendala_list) != '' AND TRIM(kendala_list) != '[]' THEN 1 ELSE 0 END;");
       console.log('Added ada_kendala column to hasil_input_aktivitas');
     }
+    if (cols && !cols.includes('wilayah')) {
+      db.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log('Added wilayah column to hasil_input_aktivitas');
+    }
 
     // Migration for aktivitas_unit table
     const actInfo = db.exec("PRAGMA table_info(aktivitas_unit)");
     const actCols = actInfo[0]?.values.map(v => v[1]);
+    if (actCols && !actCols.includes('wilayah')) {
+      db.run("ALTER TABLE aktivitas_unit ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log('Added wilayah column to aktivitas_unit');
+    }
     if (actCols && !actCols.includes('is_hm_awal_corrected')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN is_hm_awal_corrected INTEGER DEFAULT 0;");
       console.log('Added is_hm_awal_corrected column to aktivitas_unit');
@@ -568,27 +576,21 @@ function initTablesAndSeed(db: Database) {
     }
     if (actCols && !actCols.includes('stik_solar_awal')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN stik_solar_awal REAL DEFAULT 0;");
-      console.log('Added stik_solar_awal column to aktivitas_unit');
     }
     if (actCols && !actCols.includes('stik_solar_akhir')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN stik_solar_akhir REAL DEFAULT 0;");
-      console.log('Added stik_solar_akhir column to aktivitas_unit');
     }
     if (actCols && !actCols.includes('estimasi_konsumsi_solar')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN estimasi_konsumsi_solar REAL DEFAULT 0;");
-      console.log('Added estimasi_konsumsi_solar column to aktivitas_unit');
     }
     if (actCols && !actCols.includes('kendala_list')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_list TEXT;");
-      console.log('Added kendala_list column to aktivitas_unit');
     }
     if (actCols && !actCols.includes('kendala_data')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_data TEXT;");
-      console.log('Added kendala_data column to aktivitas_unit');
     }
     if (actCols && !actCols.includes('ada_kendala')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN ada_kendala INTEGER DEFAULT 0;");
-      console.log('Added ada_kendala column to aktivitas_unit');
     }
 
     // Migration for rencana_kerja table (updated_at & tanggal_kerja columns)
@@ -625,6 +627,10 @@ function initTablesAndSeed(db: Database) {
     if (rkCols && !rkCols.includes('id_aktivitas')) {
       db.run("ALTER TABLE rencana_kerja ADD COLUMN id_aktivitas INTEGER DEFAULT NULL;");
       console.log('Added id_aktivitas column to rencana_kerja');
+    }
+    if (rkCols && !rkCols.includes('wilayah')) {
+      db.run("ALTER TABLE rencana_kerja ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log('Added wilayah column to rencana_kerja');
     }
 
     // Ensure kategori_status and status_unit columns exist in aktivitas_unit
@@ -708,6 +714,14 @@ function initTablesAndSeed(db: Database) {
       db.run("UPDATE units SET status_aktif = 1 WHERE status_aktif IS NULL;");
       console.log('Added status_aktif column to units');
     }
+    if (unitsCols && !unitsCols.includes('wilayah')) {
+      db.run("ALTER TABLE units ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log('Added wilayah column to units');
+    }
+    if (unitsCols && !unitsCols.includes('kasie')) {
+      db.run("ALTER TABLE units ADD COLUMN kasie TEXT DEFAULT NULL;");
+      console.log('Added kasie column to units');
+    }
 
     if (actCols && !actCols.includes('status_aktif')) {
       db.run("ALTER TABLE aktivitas_unit ADD COLUMN status_aktif INTEGER DEFAULT 1;");
@@ -721,6 +735,14 @@ function initTablesAndSeed(db: Database) {
       db.run("ALTER TABLE operators ADD COLUMN status_aktif INTEGER DEFAULT 1;");
       db.run("UPDATE operators SET status_aktif = 1 WHERE status_aktif IS NULL;");
       console.log('Added status_aktif column to operators');
+    }
+    if (opsCols && !opsCols.includes('wilayah')) {
+      db.run("ALTER TABLE operators ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log('Added wilayah column to operators');
+    }
+    if (opsCols && !opsCols.includes('kasie')) {
+      db.run("ALTER TABLE operators ADD COLUMN kasie TEXT DEFAULT NULL;");
+      console.log('Added kasie column to operators');
     }
 
     const lokInfo = db.exec("PRAGMA table_info(lokasi)");
@@ -903,6 +925,45 @@ function initTablesAndSeed(db: Database) {
     db.run("UPDATE users SET wilayah = 'PG3' WHERE LOWER(username) LIKE '%rudi%' OR LOWER(nama_lengkap) LIKE '%rudi%';");
     db.run("UPDATE users SET wilayah = 'Semua Wilayah' WHERE (LOWER(username) = 'admin' OR LOWER(username) = 'manager') AND (wilayah IS NULL OR wilayah = '' OR wilayah = 'PG1');");
     db.run("UPDATE users SET hak_akses = 'Kasie' WHERE hak_akses = 'Pengawas' OR LOWER(hak_akses) = 'pengawas';");
+
+    // Backfill Wilayah & Penanggung Jawab Kasie untuk Units & Operators
+    db.run("UPDATE units SET kasie = nama_pengawas WHERE kasie IS NULL OR kasie = '';");
+    db.run("UPDATE units SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
+    db.run("UPDATE units SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
+    db.run("UPDATE units SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
+    db.run("UPDATE units SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
+
+    db.run("UPDATE operators SET kasie = nama_pengawas WHERE kasie IS NULL OR kasie = '';");
+    db.run("UPDATE operators SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
+    db.run("UPDATE operators SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
+    db.run("UPDATE operators SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
+    db.run("UPDATE operators SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
+
+    // Backfill Wilayah untuk Rencana Kerja & Hasil Input Aktivitas
+    db.run("UPDATE rencana_kerja SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%';");
+    db.run("UPDATE rencana_kerja SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%';");
+    db.run("UPDATE rencana_kerja SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%';");
+    db.run("UPDATE rencana_kerja SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = rencana_kerja.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '';");
+    db.run("UPDATE rencana_kerja SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
+
+    db.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%';");
+    db.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%';");
+    db.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%';");
+    db.run("UPDATE hasil_input_aktivitas SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = hasil_input_aktivitas.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '';");
+    db.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
+
+    // Pastikan seluruh data master_aktivitas memiliki jenis_unit terisi rapi & valid
+    db.run("UPDATE aktivitas_unit SET jenis_unit = UPPER(TRIM(jenis_unit)) WHERE jenis_unit IS NOT NULL;");
+    db.run("UPDATE aktivitas_unit SET jenis_unit = 'EXCAVATOR' WHERE jenis_unit IS NULL OR jenis_unit = '';");
+
+    // Buat Views transparan master_user, master_unit, master_operator
+    try {
+      db.run("CREATE VIEW IF NOT EXISTS master_user AS SELECT * FROM users;");
+      db.run("CREATE VIEW IF NOT EXISTS master_unit AS SELECT * FROM units;");
+      db.run("CREATE VIEW IF NOT EXISTS master_operator AS SELECT * FROM operators;");
+    } catch (vErr) {
+      console.warn('View alias notice:', vErr);
+    }
 
     // Ensure sample Manager user exists
     const managerCheck = db.exec("SELECT id FROM users WHERE LOWER(username) = 'manager' LIMIT 1;");

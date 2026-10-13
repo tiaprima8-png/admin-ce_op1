@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Plus, AlertCircle, Upload, Trash2, Camera, Calculator, Eye, Fuel } from 'lucide-react';
-import { Unit, AktivitasUnit, Operator, UnitStatus } from '../types';
+import { Unit, AktivitasUnit, Operator, UnitStatus, User } from '../types';
 import { SearchableSelect } from './SearchableSelect';
 
 interface ManualActivityModalProps {
@@ -10,6 +10,7 @@ interface ManualActivityModalProps {
   aktivitasList: AktivitasUnit[];
   operators: Operator[];
   supervisors: string[];
+  users?: User[];
   onSubmitSuccess: () => void;
 }
 
@@ -38,6 +39,7 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
   aktivitasList,
   operators,
   supervisors,
+  users,
   onSubmitSuccess
 }) => {
   const [namaPengawas, setNamaPengawas] = useState(supervisors[0] || 'Budi Santoso');
@@ -73,26 +75,76 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize or re-sync defaults when modal opens
+  // 1. Cascading Filter Unit & Operator per Kasie
+  const filteredUnits = useMemo(() => {
+    if (!namaPengawas) return units;
+    const selectedUser = users?.find(u => u.nama_lengkap === namaPengawas || u.username === namaPengawas);
+    const targetWilayah = selectedUser?.wilayah?.trim().toUpperCase();
+    const list = units.filter(u => {
+      const matchSpv = u.nama_pengawas === namaPengawas || u.kasie === namaPengawas;
+      const matchWil = targetWilayah && u.wilayah?.trim().toUpperCase() === targetWilayah;
+      return matchSpv || matchWil;
+    });
+    return list.length > 0 ? list : units;
+  }, [units, namaPengawas, users]);
+
+  const filteredOperators = useMemo(() => {
+    if (!namaPengawas) return operators;
+    const selectedUser = users?.find(u => u.nama_lengkap === namaPengawas || u.username === namaPengawas);
+    const targetWilayah = selectedUser?.wilayah?.trim().toUpperCase();
+    const list = operators.filter(op => {
+      const matchSpv = op.nama_pengawas === namaPengawas || op.kasie === namaPengawas;
+      const matchWil = targetWilayah && op.wilayah?.trim().toUpperCase() === targetWilayah;
+      return matchSpv || matchWil;
+    });
+    return list.length > 0 ? list : operators;
+  }, [operators, namaPengawas, users]);
+
+  // Selected Unit Object
+  const selectedUnitObj = useMemo(() => {
+    return units.find(u => u.kode_unit === kodeUnit);
+  }, [units, kodeUnit]);
+
+  // 2. Cascading Filter Aktivitas per Jenis Unit
+  const filteredAktivitas = useMemo(() => {
+    if (!selectedUnitObj || !selectedUnitObj.jenis_unit) {
+      return [];
+    }
+    const targetJenis = selectedUnitObj.jenis_unit.trim().toUpperCase();
+    return aktivitasList.filter(a => {
+      const aJenis = (a.jenis_unit || '').trim().toUpperCase();
+      return aJenis === targetJenis || aJenis.includes(targetJenis) || targetJenis.includes(aJenis);
+    });
+  }, [aktivitasList, selectedUnitObj]);
+
+  // Initialize defaults when modal opens
   useEffect(() => {
     if (isOpen) {
-      const initialUnit = units[0];
+      const initialSpv = supervisors[0] || 'Budi Santoso';
+      setNamaPengawas(initialSpv);
+      
+      const spvUnits = units.filter(u => u.nama_pengawas === initialSpv || u.kasie === initialSpv);
+      const initialUnit = spvUnits[0] || units[0];
       if (initialUnit) {
         setKodeUnit(initialUnit.kode_unit);
         setHmAwal(initialUnit.hm_unit_terakhir_diinputkan);
         setHmAkhir(Math.round((initialUnit.hm_unit_terakhir_diinputkan + 9.5) * 10) / 10);
+        
+        // Filter initial activity for this unit
+        const matchingActs = aktivitasList.filter(a => a.jenis_unit?.toUpperCase() === initialUnit.jenis_unit?.toUpperCase());
+        const initAct = matchingActs[0] || aktivitasList[0];
+        if (initAct) {
+          setNamaAktivitas(initAct.nama_aktivitas);
+          setKodeSap(initAct.kode_sap);
+          setSatuan(initAct.satuan);
+        }
       }
-      if (aktivitasList[0]) {
-        setNamaAktivitas(aktivitasList[0].nama_aktivitas);
-        setKodeSap(aktivitasList[0].kode_sap);
-        setSatuan(aktivitasList[0].satuan);
-      }
-      if (operators[0]) {
-        setOperatorName(operators[0].nama_operator);
-        setNikOperator(operators[0].nik);
-      }
-      if (supervisors[0]) {
-        setNamaPengawas(supervisors[0]);
+
+      const spvOps = operators.filter(o => o.nama_pengawas === initialSpv || o.kasie === initialSpv);
+      const initialOp = spvOps[0] || operators[0];
+      if (initialOp) {
+        setOperatorName(initialOp.nama_operator);
+        setNikOperator(initialOp.nik);
       }
       setErrorMessage(null);
     }
@@ -100,15 +152,29 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Auto-fill HM Awal when selected Unit changes
+  // Kasie Change Handler: Reset Unit, Aktivitas, Operator
+  const handleKasieChange = (newKasie: string) => {
+    setNamaPengawas(newKasie);
+    setKodeUnit('');
+    setNamaAktivitas('');
+    setKodeSap('');
+    setSatuan('');
+    setOperatorName('');
+    setNikOperator('');
+  };
+
+  // Unit Change Handler: Reset Aktivitas otomatis
   const handleUnitSelect = (newKodeUnit: string, unitObj?: Unit) => {
     setKodeUnit(newKodeUnit);
-    if (unitObj) {
-      setHmAwal(unitObj.hm_unit_terakhir_diinputkan);
-      setHmAkhir(Math.round((unitObj.hm_unit_terakhir_diinputkan + 9.5) * 10) / 10);
-      if (unitObj.nama_pengawas) {
-        setNamaPengawas(unitObj.nama_pengawas);
-      }
+    // Reset otomatis pilihan aktivitas jika pilihan unit diubah oleh pengguna
+    setNamaAktivitas('');
+    setKodeSap('');
+    setSatuan('');
+
+    const targetObj = unitObj || units.find(u => u.kode_unit === newKodeUnit);
+    if (targetObj) {
+      setHmAwal(targetObj.hm_unit_terakhir_diinputkan);
+      setHmAkhir(Math.round((targetObj.hm_unit_terakhir_diinputkan + 9.5) * 10) / 10);
     }
   };
 
@@ -276,14 +342,14 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
-            {/* Pengawas */}
+            {/* Kasie */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Pengawas Penanggung Jawab <span className="text-rose-500">*</span>
+                Kasie Penanggung Jawab <span className="text-rose-500">*</span>
               </label>
               <select
                 value={namaPengawas}
-                onChange={(e) => setNamaPengawas(e.target.value)}
+                onChange={(e) => handleKasieChange(e.target.value)}
                 className="w-full text-xs rounded-lg border border-slate-300 p-2.5 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white"
                 required
               >
@@ -311,12 +377,12 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
             <div className="sm:col-span-2">
               <SearchableSelect<Unit>
                 label="Unit Alat Berat"
-                placeholder="Cari berdasarkan kode unit atau jenis alat..."
+                placeholder={filteredUnits.length === 0 ? "Tidak ada unit untuk Kasie ini" : "Cari berdasarkan kode unit atau jenis alat..."}
                 searchPlaceholder="Ketik kode (DT-101) atau jenis (EXCAVATOR, DUMP TRUCK)..."
                 required
                 value={kodeUnit}
                 onChange={handleUnitSelect}
-                options={units}
+                options={filteredUnits}
                 getOptionValue={(u) => u.kode_unit}
                 getOptionLabel={(u) => `${u.kode_unit} - ${u.jenis_unit} (${u.model_unit})`}
                 filterOption={(u, q) =>
@@ -475,16 +541,17 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
               </div>
             </div>
 
-            {/* Aktivitas Unit Kerja (Searchable Selector) */}
+            {/* Aktivitas Unit Kerja (Searchable Selector dengan Cascading Filter jenis_unit) */}
             <div className="sm:col-span-2">
               <SearchableSelect<AktivitasUnit>
-                label="Aktivitas Unit Kerja"
-                placeholder="Cari aktivitas atau kode SAP..."
+                label={selectedUnitObj ? `Aktivitas Unit Kerja (Khusus ${selectedUnitObj.jenis_unit})` : "Aktivitas Unit Kerja"}
+                placeholder={!kodeUnit ? "Pilih unit terlebih dahulu" : (filteredAktivitas.length === 0 ? "Tidak ada aktivitas untuk jenis unit ini" : "Cari aktivitas atau kode SAP...")}
                 searchPlaceholder="Ketik nama aktivitas atau kode SAP (ACT-SAP)..."
                 required
+                disabled={!kodeUnit}
                 value={namaAktivitas}
                 onChange={handleAktivitasSelect}
-                options={aktivitasList}
+                options={filteredAktivitas}
                 getOptionValue={(a) => a.nama_aktivitas}
                 getOptionLabel={(a) => `${a.nama_aktivitas} [${a.kode_sap}]`}
                 filterOption={(a, q) =>
@@ -538,16 +605,16 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
               />
             </div>
 
-            {/* Operator Pelaksana (Searchable Selector) */}
+            {/* Operator Pelaksana (Searchable Selector tersaring per Kasie) */}
             <div className="sm:col-span-2">
               <SearchableSelect<Operator>
                 label="Operator Pelaksana"
-                placeholder="Cari berdasarkan nama operator atau NIK..."
+                placeholder={filteredOperators.length === 0 ? "Tidak ada operator untuk Kasie ini" : "Cari berdasarkan nama operator atau NIK..."}
                 searchPlaceholder="Ketik nama operator atau NIK..."
                 required
                 value={operatorName}
                 onChange={handleOperatorSelect}
-                options={operators}
+                options={filteredOperators}
                 getOptionValue={(op) => op.nama_operator}
                 getOptionLabel={(op) => `${op.nama_operator} (${op.nik})`}
                 filterOption={(op, q) =>

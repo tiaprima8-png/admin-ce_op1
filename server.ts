@@ -615,22 +615,28 @@ async function startServer() {
       });
 
       // ------------------------------------------------------------------
-      // 5. LOGIKA 3: MASTER DATA PENDUKUNG (Unit, Lokasi, Aktivitas, Operator, Kendala)
+      // 5. LOGIKA 3: MASTER DATA PENDUKUNG (Unit, Lokasi, Aktivitas, Operator, Kendala, Kasie)
       // ------------------------------------------------------------------
       const masterUnits = queryAll<UnitRow>(
-        `SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan as hm_terakhir, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC`
+        `SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, 'PG1') as wilayah, hm_unit_terakhir_diinputkan as hm_terakhir, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC`
       );
       const masterLokasi = queryAll<LokasiRow>(
         `SELECT kode_lokasi, wilayah, luas_bruto, luas_netto, status_aktif, created_at FROM lokasi WHERE status_aktif = 1 ORDER BY kode_lokasi ASC`
       );
       const masterAktivitas = queryAll<AktivitasUnitRow>(
-        `SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, 'OPERASI') as kategori_status, COALESCE(status_unit, kategori_status, 'OPERASI') as status_unit, status_aktif FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC`
+        `SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, 'OPERASI') as kategori_status, COALESCE(status_unit, kategori_status, 'OPERASI') as status_unit, status_aktif, wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC`
       );
       const masterOperator = queryAll<OperatorRow>(
-        `SELECT id, nama_operator, nik, nama_pengawas, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC`
+        `SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, 'PG1') as wilayah, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC`
       );
       const masterKendala = queryAll<MasterKendalaRow>(
         `SELECT id, nama_kendala, status_aktif, created_at FROM master_kendala WHERE status_aktif = 1 ORDER BY id ASC`
+      );
+      const masterKasie = queryAll<UserRow>(
+        `SELECT id, nama_lengkap, username, hak_akses, role, wilayah, status_aktif FROM users WHERE (hak_akses = 'Kasie' OR hak_akses = 'Pengawas' OR role = 'SUPERVISOR') AND status_aktif = 1 ORDER BY nama_lengkap ASC`
+      );
+      const masterUsers = queryAll<UserRow>(
+        `SELECT id, nama_lengkap, username, hak_akses, role, wilayah, status_aktif FROM users WHERE status_aktif = 1 ORDER BY id ASC`
       );
 
       const minSetting = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_min_standar'");
@@ -723,6 +729,8 @@ async function startServer() {
           aktivitas: masterAktivitas,
           operator: masterOperator,
           kendala: masterKendala,
+          kasie: masterKasie,
+          users: masterUsers,
           hm_standar: hmStandar
         },
         ringkasan_analitik
@@ -750,6 +758,8 @@ async function startServer() {
       let aktivitas: AktivitasUnitRow[];
       const lokasi: LokasiRow[] = queryAll<LokasiRow>('SELECT * FROM lokasi WHERE status_aktif = 1 ORDER BY kode_lokasi ASC');
       const kendala: MasterKendalaRow[] = queryAll<MasterKendalaRow>('SELECT * FROM master_kendala WHERE status_aktif = 1 ORDER BY id ASC');
+      const usersList: UserRow[] = queryAll<UserRow>('SELECT id, nama_lengkap, username, hak_akses, role, wilayah, status_aktif FROM users WHERE status_aktif = 1 ORDER BY id ASC');
+      const kasieList: UserRow[] = queryAll<UserRow>("SELECT id, nama_lengkap, username, hak_akses, role, wilayah, status_aktif FROM users WHERE (hak_akses = 'Kasie' OR hak_akses = 'Pengawas' OR role = 'SUPERVISOR') AND status_aktif = 1 ORDER BY nama_lengkap ASC");
 
       const minSetting = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_min_standar'");
       const maxSetting = queryOne<AppSettingRow>("SELECT value FROM app_settings WHERE key = 'hm_max_standar'");
@@ -758,13 +768,13 @@ async function startServer() {
       const hm_standar = { min: hm_min, max: hm_max };
 
       if (pengawas && pengawas !== 'Semua') {
-        units = queryAll<UnitRow>('SELECT * FROM units WHERE nama_pengawas = ? AND status_aktif = 1 ORDER BY kode_unit ASC', [pengawas]);
-        operators = queryAll<OperatorRow>('SELECT * FROM operators WHERE nama_pengawas = ? AND status_aktif = 1 ORDER BY nama_operator ASC', [pengawas]);
-        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
+        units = queryAll<UnitRow>('SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, "PG1") as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE (nama_pengawas = ? OR kasie = ?) AND status_aktif = 1 ORDER BY kode_unit ASC', [pengawas, pengawas]);
+        operators = queryAll<OperatorRow>('SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, "PG1") as wilayah, status_aktif FROM operators WHERE (nama_pengawas = ? OR kasie = ?) AND status_aktif = 1 ORDER BY nama_operator ASC', [pengawas, pengawas]);
+        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif, wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
       } else {
-        units = queryAll<UnitRow>('SELECT * FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC');
-        operators = queryAll<OperatorRow>('SELECT * FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC');
-        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
+        units = queryAll<UnitRow>('SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, "PG1") as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE status_aktif = 1 ORDER BY kode_unit ASC');
+        operators = queryAll<OperatorRow>('SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, "PG1") as wilayah, status_aktif FROM operators WHERE status_aktif = 1 ORDER BY nama_operator ASC');
+        aktivitas = queryAll<AktivitasUnitRow>('SELECT id, uuid, jenis_unit, nama_aktivitas, satuan, kode_sap, COALESCE(kategori_status, \'OPERASI\') as kategori_status, COALESCE(status_unit, kategori_status, \'OPERASI\') as status_unit, status_aktif, wilayah FROM aktivitas_unit WHERE status_aktif = 1 ORDER BY jenis_unit ASC, nama_aktivitas ASC');
       }
 
       res.json({
@@ -776,6 +786,7 @@ async function startServer() {
         total_aktivitas: aktivitas.length,
         total_lokasi: lokasi.length,
         total_kendala: kendala.length,
+        total_kasie: kasieList.length,
         hm_standar,
         data: {
           units,
@@ -783,6 +794,8 @@ async function startServer() {
           operators,
           lokasi,
           kendala,
+          kasie: kasieList,
+          users: usersList,
           hm_standar
         }
       });
@@ -904,6 +917,21 @@ async function startServer() {
       const shift_kerja = (rawShift || 'SIANG').toUpperCase();
       const status_spk = rawStatusSpk || (nomor_spk ? 'SPK_TERBIT' : 'MENUNGGU_SPK');
 
+      // Ambil nilai wilayah dari payload, ATAU cari otomatis dari tabel users berdasarkan Kasie penanggung jawab yang dipilih
+      let resolvedWilayah = (req.body.wilayah || '').toString().trim();
+      if (!resolvedWilayah) {
+        const userRow = queryOne<{ wilayah: string }>(
+          'SELECT wilayah FROM users WHERE LOWER(nama_lengkap) = LOWER(?) OR LOWER(username) = LOWER(?) LIMIT 1',
+          [nama_pengawas, nama_pengawas]
+        );
+        if (userRow?.wilayah) {
+          resolvedWilayah = userRow.wilayah;
+        } else {
+          const lokRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM lokasi WHERE kode_lokasi = ? LIMIT 1', [kode_lokasi]);
+          resolvedWilayah = lokRow?.wilayah || 'PG1';
+        }
+      }
+
       let resolvedNamaAktivitas = (rawNamaAktivitas || rawAktivitas || keterangan_rencana || '').trim();
       let resolvedKodeSap = (rawKodeSap || '').trim();
       let resolvedSatuan = (rawSatuan || 'm3').trim();
@@ -944,8 +972,8 @@ async function startServer() {
           id, nama_pengawas, tanggal, status_unit, kode_unit,
           operator, kode_lokasi, shift_kerja, nomor_spk, status_spk,
           keterangan_rencana, nama_aktivitas, aktivitas, kode_sap, satuan,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          wilayah, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       execute(insertSql, [
@@ -964,6 +992,7 @@ async function startServer() {
         resolvedNamaAktivitas || keterangan_rencana || '',
         resolvedKodeSap,
         resolvedSatuan,
+        resolvedWilayah,
         createdAt,
         createdAt
       ]);
@@ -2051,6 +2080,21 @@ async function startServer() {
         );
       }
 
+      // Ambil nilai wilayah dari payload, ATAU cari otomatis dari tabel users / linked plan / unit
+      let resolvedWilayah = (req.body.wilayah || linkedPlan?.wilayah || '').toString().trim();
+      if (!resolvedWilayah) {
+        const userRow = queryOne<{ wilayah: string }>(
+          'SELECT wilayah FROM users WHERE LOWER(nama_lengkap) = LOWER(?) OR LOWER(username) = LOWER(?) LIMIT 1',
+          [nama_pengawas, nama_pengawas]
+        );
+        if (userRow?.wilayah) {
+          resolvedWilayah = userRow.wilayah;
+        } else {
+          const unitRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM units WHERE kode_unit = ? LIMIT 1', [kode_unit]);
+          resolvedWilayah = unitRow?.wilayah || 'PG1';
+        }
+      }
+
       let activeRowId: number | string;
       let isUpdateOperation = false;
 
@@ -2095,7 +2139,8 @@ async function startServer() {
             kendala_list = ?,
             ada_kendala = ?,
             is_hm_awal_corrected = ?,
-            alasan_koreksi_hm = ?
+            alasan_koreksi_hm = ?,
+            wilayah = COALESCE(?, wilayah)
           WHERE id = ?
         `;
 
@@ -2135,18 +2180,19 @@ async function startServer() {
           adaKendala,
           is_hm_awal_corrected,
           alasan_koreksi_hm,
+          resolvedWilayah,
           existingHia.id
         ]);
 
         if (existingAu) {
           execute(
-            'UPDATE aktivitas_unit SET uuid = COALESCE(?, uuid), nama_aktivitas = ?, satuan = ?, kode_sap = ?, stik_solar_awal = ?, stik_solar_akhir = ?, estimasi_konsumsi_solar = ?, kendala_list = ?, ada_kendala = ? WHERE id = ?',
-            [uuid, nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101', stikAwal, stikAkhir, estimasiKonsumsi, kendalaListStr, adaKendala, existingAu.id]
+            'UPDATE aktivitas_unit SET uuid = COALESCE(?, uuid), nama_aktivitas = ?, satuan = ?, kode_sap = ?, stik_solar_awal = ?, stik_solar_akhir = ?, estimasi_konsumsi_solar = ?, kendala_list = ?, ada_kendala = ?, wilayah = COALESCE(?, wilayah) WHERE id = ?',
+            [uuid, nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101', stikAwal, stikAkhir, estimasiKonsumsi, kendalaListStr, adaKendala, resolvedWilayah, existingAu.id]
           );
         } else if (uuid) {
           execute(
-            'INSERT OR IGNORE INTO aktivitas_unit (uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, stik_solar_awal, stik_solar_akhir, estimasi_konsumsi_solar, kendala_list, ada_kendala) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)',
-            [uuid, uuid, status_unit || 'Excavator', nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101', stikAwal, stikAkhir, estimasiKonsumsi, kendalaListStr, adaKendala]
+            'INSERT OR IGNORE INTO aktivitas_unit (uuid, client_transaction_id, jenis_unit, nama_aktivitas, satuan, kode_sap, status_aktif, stik_solar_awal, stik_solar_akhir, estimasi_konsumsi_solar, kendala_list, ada_kendala, wilayah) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)',
+            [uuid, uuid, status_unit || 'Excavator', nama_aktivitas, satuan || 'm3', kode_sap || 'ACT-SAP-101', stikAwal, stikAkhir, estimasiKonsumsi, kendalaListStr, adaKendala, resolvedWilayah]
           );
         }
 
@@ -2159,8 +2205,8 @@ async function startServer() {
             operator, nik_operator, kode_lokasi, lokasi, nomor_spk, shift_kerja, jam_kerja, hm_awal, hm_akhir,
             hm_harian_berjalan, hasil_kerja, keterangan, foto_bukti,
             status_unit, is_isi_solar, jumlah_liter_solar, stik_awal, stik_akhir, stik_solar_awal, stik_solar_akhir, estimasi_konsumsi_solar, kendala_list, ada_kendala,
-            is_hm_awal_corrected, alasan_koreksi_hm, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            is_hm_awal_corrected, alasan_koreksi_hm, wilayah, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const insertResult = execute(insertSql, [
@@ -2199,6 +2245,7 @@ async function startServer() {
           adaKendala,
           is_hm_awal_corrected,
           alasan_koreksi_hm,
+          resolvedWilayah,
           createdAt
         ]);
 
@@ -3381,7 +3428,7 @@ async function startServer() {
   app.get('/api/units', (req: Request, res: Response) => {
     try {
       const { status } = req.query;
-      let sql = 'SELECT * FROM units WHERE 1=1';
+      let sql = 'SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'PG1\') as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE 1=1';
       const params: (string | number)[] = [];
 
       if (status !== undefined && status !== 'Semua' && status !== '') {
@@ -3404,6 +3451,8 @@ async function startServer() {
         jenis_unit, 
         model_unit, 
         nama_pengawas, 
+        kasie: rawKasie,
+        wilayah: rawWilayah,
         hm_unit_terakhir_diinputkan,
         hm_min_standar,
         hm_max_standar,
@@ -3413,13 +3462,19 @@ async function startServer() {
       const minVal = (hm_min_standar !== undefined && hm_min_standar !== null && hm_min_standar !== '') ? parseFloat(hm_min_standar) : null;
       const maxVal = (hm_max_standar !== undefined && hm_max_standar !== null && hm_max_standar !== '') ? parseFloat(hm_max_standar) : null;
       const activeStatus = status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1;
+      const kasie = rawKasie || nama_pengawas;
+      let wilayah = (rawWilayah || '').toString().trim();
+      if (!wilayah) {
+        const uRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM users WHERE nama_lengkap = ? OR username = ?', [nama_pengawas, nama_pengawas]);
+        wilayah = uRow?.wilayah || 'PG1';
+      }
 
       const resDb = execute(`
-        INSERT INTO units (kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [kode_unit, jenis_unit, model_unit, nama_pengawas, parseFloat(hm_unit_terakhir_diinputkan) || 0, minVal, maxVal, activeStatus, now]);
+        INSERT INTO units (kode_unit, jenis_unit, model_unit, nama_pengawas, kasie, wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [kode_unit, jenis_unit, model_unit, nama_pengawas, kasie, wilayah, parseFloat(hm_unit_terakhir_diinputkan) || 0, minVal, maxVal, activeStatus, now]);
 
-      const inserted = queryOne<UnitRow>('SELECT * FROM units WHERE id = ?', [resDb.lastInsertRowId]);
+      const inserted = queryOne<UnitRow>('SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'PG1\') as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE id = ?', [resDb.lastInsertRowId]);
       res.status(201).json(inserted);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
@@ -3434,6 +3489,8 @@ async function startServer() {
         jenis_unit, 
         model_unit, 
         nama_pengawas, 
+        kasie: rawKasie,
+        wilayah: rawWilayah,
         hm_unit_terakhir_diinputkan,
         hm_min_standar,
         hm_max_standar,
@@ -3446,6 +3503,12 @@ async function startServer() {
       const activeStatus = status_aktif !== undefined
         ? (status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1)
         : (existing?.status_aktif ?? 1);
+      const kasie = rawKasie || nama_pengawas;
+      let wilayah = (rawWilayah || '').toString().trim();
+      if (!wilayah) {
+        const uRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM users WHERE nama_lengkap = ? OR username = ?', [nama_pengawas, nama_pengawas]);
+        wilayah = uRow?.wilayah || existing?.wilayah || 'PG1';
+      }
 
       execute(`
         UPDATE units SET 
@@ -3453,15 +3516,17 @@ async function startServer() {
           jenis_unit = ?, 
           model_unit = ?, 
           nama_pengawas = ?, 
+          kasie = ?,
+          wilayah = ?,
           hm_unit_terakhir_diinputkan = ?, 
           hm_min_standar = ?,
           hm_max_standar = ?,
           status_aktif = ?,
           updated_at = ?
         WHERE id = ?
-      `, [kode_unit, jenis_unit, model_unit, nama_pengawas, parseFloat(hm_unit_terakhir_diinputkan) || 0, minVal, maxVal, activeStatus, now, id]);
+      `, [kode_unit, jenis_unit, model_unit, nama_pengawas, kasie, wilayah, parseFloat(hm_unit_terakhir_diinputkan) || 0, minVal, maxVal, activeStatus, now, id]);
 
-      const updated = queryOne<UnitRow>('SELECT * FROM units WHERE id = ?', [id]);
+      const updated = queryOne<UnitRow>('SELECT id, kode_unit, jenis_unit, model_unit, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'PG1\') as wilayah, hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at FROM units WHERE id = ?', [id]);
       res.json(updated);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
@@ -3613,7 +3678,7 @@ async function startServer() {
   app.get('/api/operators', (req: Request, res: Response) => {
     try {
       const { status } = req.query;
-      let sql = 'SELECT * FROM operators WHERE 1=1';
+      let sql = 'SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'PG1\') as wilayah, status_aktif FROM operators WHERE 1=1';
       const params: (string | number)[] = [];
 
       if (status !== undefined && status !== 'Semua' && status !== '') {
@@ -3631,14 +3696,21 @@ async function startServer() {
 
   app.post('/api/operators', (req: Request, res: Response) => {
     try {
-      const { nama_operator, nik, nama_pengawas, status_aktif } = req.body;
+      const { nama_operator, nik, nama_pengawas, kasie: rawKasie, wilayah: rawWilayah, status_aktif } = req.body;
       const activeStatus = status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1;
-      const resDb = execute(`
-        INSERT INTO operators (nama_operator, nik, nama_pengawas, status_aktif)
-        VALUES (?, ?, ?, ?)
-      `, [nama_operator, nik, nama_pengawas, activeStatus]);
+      const kasie = rawKasie || nama_pengawas;
+      let wilayah = (rawWilayah || '').toString().trim();
+      if (!wilayah) {
+        const uRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM users WHERE nama_lengkap = ? OR username = ?', [nama_pengawas, nama_pengawas]);
+        wilayah = uRow?.wilayah || 'PG1';
+      }
 
-      const inserted = queryOne<OperatorRow>('SELECT * FROM operators WHERE id = ?', [resDb.lastInsertRowId]);
+      const resDb = execute(`
+        INSERT INTO operators (nama_operator, nik, nama_pengawas, kasie, wilayah, status_aktif)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [nama_operator, nik, nama_pengawas, kasie, wilayah, activeStatus]);
+
+      const inserted = queryOne<OperatorRow>('SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'PG1\') as wilayah, status_aktif FROM operators WHERE id = ?', [resDb.lastInsertRowId]);
       res.status(201).json(inserted);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
@@ -3648,18 +3720,24 @@ async function startServer() {
   app.put('/api/operators/:id', (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const { nama_operator, nik, nama_pengawas, status_aktif } = req.body;
+      const { nama_operator, nik, nama_pengawas, kasie: rawKasie, wilayah: rawWilayah, status_aktif } = req.body;
       const existing = queryOne<OperatorRow>('SELECT * FROM operators WHERE id = ?', [id]);
       const activeStatus = status_aktif !== undefined
         ? (status_aktif === 0 || status_aktif === '0' || status_aktif === false ? 0 : 1)
         : (existing?.status_aktif ?? 1);
+      const kasie = rawKasie || nama_pengawas;
+      let wilayah = (rawWilayah || '').toString().trim();
+      if (!wilayah) {
+        const uRow = queryOne<{ wilayah: string }>('SELECT wilayah FROM users WHERE nama_lengkap = ? OR username = ?', [nama_pengawas, nama_pengawas]);
+        wilayah = uRow?.wilayah || existing?.wilayah || 'PG1';
+      }
 
       execute(`
-        UPDATE operators SET nama_operator = ?, nik = ?, nama_pengawas = ?, status_aktif = ?
+        UPDATE operators SET nama_operator = ?, nik = ?, nama_pengawas = ?, kasie = ?, wilayah = ?, status_aktif = ?
         WHERE id = ?
-      `, [nama_operator, nik, nama_pengawas, activeStatus, id]);
+      `, [nama_operator, nik, nama_pengawas, kasie, wilayah, activeStatus, id]);
 
-      const updated = queryOne<OperatorRow>('SELECT * FROM operators WHERE id = ?', [id]);
+      const updated = queryOne<OperatorRow>('SELECT id, nama_operator, nik, nama_pengawas, COALESCE(kasie, nama_pengawas) as kasie, COALESCE(wilayah, \'PG1\') as wilayah, status_aktif FROM operators WHERE id = ?', [id]);
       res.json(updated);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });

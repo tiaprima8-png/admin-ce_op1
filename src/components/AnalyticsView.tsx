@@ -17,19 +17,20 @@ import {
   Wrench,
   CheckCircle
 } from 'lucide-react';
-import { Unit, UnitAnalyticsRow, AktivitasAnalyticsRow, AnalyticsSummary } from '../types';
+import { Unit, UnitAnalyticsRow, AktivitasAnalyticsRow, AnalyticsSummary, User } from '../types';
 import { exportAnalyticsToExcel } from '../utils/export';
 
 interface AnalyticsViewProps {
   units: Unit[];
   supervisors: string[];
+  users?: User[];
 }
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors, users }) => {
   // Filter States
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedPengawas, setSelectedPengawas] = useState('Semua');
+  const [selectedWilayah, setSelectedWilayah] = useState('Semua');
   const [selectedUnit, setSelectedUnit] = useState('Semua');
   const [selectedShift, setSelectedShift] = useState('Semua');
   const [selectedStatus, setSelectedStatus] = useState('Semua');
@@ -48,7 +49,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      if (selectedPengawas !== 'Semua') params.append('pengawas', selectedPengawas);
+      if (selectedWilayah !== 'Semua') params.append('wilayah', selectedWilayah);
       if (selectedUnit !== 'Semua') params.append('unit', selectedUnit);
       if (selectedShift !== 'Semua') params.append('shift', selectedShift);
       if (selectedStatus !== 'Semua') params.append('status', selectedStatus);
@@ -64,7 +65,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
     } finally {
       setIsLoading(false);
     }
-  }, [startDate, endDate, selectedPengawas, selectedUnit, selectedShift, selectedStatus]);
+  }, [startDate, endDate, selectedWilayah, selectedUnit, selectedShift, selectedStatus]);
 
   useEffect(() => {
     fetchAnalytics();
@@ -74,7 +75,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
   const handlePresetAll = () => {
     setStartDate('');
     setEndDate('');
-    setSelectedPengawas('Semua');
+    setSelectedWilayah('Semua');
     setSelectedUnit('Semua');
     setSelectedShift('Semua');
     setSelectedStatus('Semua');
@@ -254,17 +255,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
             </button>
           </div>
 
-          {/* Filter Pengawas */}
+          {/* Filter Wilayah */}
           <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
             <select
-              value={selectedPengawas}
-              onChange={(e) => setSelectedPengawas(e.target.value)}
+              value={selectedWilayah}
+              onChange={(e) => setSelectedWilayah(e.target.value)}
               className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
+              title="Filter Wilayah Operasional (PG1, PG2, PG3)"
             >
-              <option value="Semua">Pengawas: Semua</option>
-              {supervisors.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
+              <option value="Semua">Semua Wilayah</option>
+              <option value="PG1">Wilayah PG1</option>
+              <option value="PG2">Wilayah PG2</option>
+              <option value="PG3">Wilayah PG3</option>
             </select>
           </div>
 
@@ -310,7 +312,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
           </div>
 
           {/* Reset Filter Button */}
-          {(startDate || endDate || selectedPengawas !== 'Semua' || selectedUnit !== 'Semua' || selectedShift !== 'Semua' || selectedStatus !== 'Semua') && (
+          {(startDate || endDate || selectedWilayah !== 'Semua' || selectedUnit !== 'Semua' || selectedShift !== 'Semua' || selectedStatus !== 'Semua') && (
             <button
               type="button"
               onClick={handlePresetAll}
@@ -594,7 +596,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
             <thead>
               <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <th className="py-3 px-3.5">Kode Unit & Model Alat</th>
-                <th className="py-3 px-3">Pengawas Penanggung Jawab</th>
+                <th className="py-3 px-3">Kasie Penanggung Jawab</th>
                 <th className="py-3 px-3 text-right">Total Jam Kerja</th>
                 <th className="py-3 px-3 text-right font-extrabold text-emerald-800">Total HM Berjalan</th>
                 <th className="py-3 px-3 text-right font-extrabold text-slate-900">Pengisian Solar (Liter)</th>
@@ -632,7 +634,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
                       </div>
                     </td>
 
-                    {/* Pengawas */}
+                    {/* Kasie */}
                     <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-800">
                       {row.nama_pengawas}
                     </td>

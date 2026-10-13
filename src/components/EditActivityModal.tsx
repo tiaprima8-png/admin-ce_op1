@@ -302,10 +302,10 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
-            {/* Pengawas */}
+            {/* Kasie */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Pengawas Penanggung Jawab <span className="text-rose-500">*</span>
+                Kasie Penanggung Jawab <span className="text-rose-500">*</span>
               </label>
               <select
                 value={namaPengawas}

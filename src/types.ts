@@ -28,6 +28,8 @@ export interface Unit {
   jenis_unit: string;
   model_unit: string;
   nama_pengawas: string;
+  kasie?: string;
+  wilayah?: string;
   hm_unit_terakhir_diinputkan: number;
   hm_min_standar?: number | null;
   hm_max_standar?: number | null;
@@ -53,6 +55,7 @@ export interface AktivitasUnit {
   nama_aktivitas: string;
   satuan: string;
   kode_sap: string;
+  wilayah?: string;
   kategori_status?: UnitStatus;
   status_unit?: UnitStatus;
   status_aktif?: number;
@@ -68,6 +71,8 @@ export interface Operator {
   nama_operator: string;
   nik: string;
   nama_pengawas: string;
+  kasie?: string;
+  wilayah?: string;
   status_aktif?: number;
 }
 

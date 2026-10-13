@@ -208,7 +208,7 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Cari nama operator, NIK, atau pengawas..."
+              placeholder="Cari nama operator, NIK, atau Kasie..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -266,7 +266,7 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <th className="py-3 px-4">Nama Operator</th>
                 <th className="py-3 px-4">Nomor Induk Karyawan (NIK)</th>
-                <th className="py-3 px-4">Pengawas Penanggung Jawab</th>
+                <th className="py-3 px-4">Kasie Penanggung Jawab</th>
                 <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-center">Aksi</th>
               </tr>
@@ -417,7 +417,7 @@ export const MasterOperators: React.FC<MasterOperatorsProps> = ({ operators, sup
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Pengawas Penanggung Jawab <span className="text-rose-500">*</span>
+                  Kasie Penanggung Jawab <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={namaPengawas}

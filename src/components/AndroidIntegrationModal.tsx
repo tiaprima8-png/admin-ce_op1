@@ -196,16 +196,16 @@ interface RkceApiService {
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1">
-                <span className="text-[11px] text-slate-500 font-medium">Pengawas:</span>
+                <span className="text-[11px] text-slate-500 font-medium">Kasie:</span>
                 <select
                   value={testPengawas}
                   onChange={e => setTestPengawas(e.target.value)}
                   className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium"
                 >
-                  <option value="Budi Santoso">Budi Santoso</option>
-                  <option value="Agus Wijaya">Agus Wijaya</option>
-                  <option value="Rudi Hermawan">Rudi Hermawan</option>
-                  <option value="Semua">Semua Pengawas</option>
+                  <option value="Budi Santoso">Budi Santoso (PG1)</option>
+                  <option value="Agus Wijaya">Agus Wijaya (PG2)</option>
+                  <option value="Rudi Hermawan">Rudi Hermawan (PG3)</option>
+                  <option value="Semua">Semua Kasie</option>
                 </select>
               </div>
 
@@ -269,16 +269,16 @@ interface RkceApiService {
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1">
-                <span className="text-[11px] text-slate-500 font-medium">Pengawas:</span>
+                <span className="text-[11px] text-slate-500 font-medium">Kasie:</span>
                 <select
                   value={testPengawas}
                   onChange={e => setTestPengawas(e.target.value)}
                   className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium"
                 >
-                  <option value="Budi Santoso">Budi Santoso</option>
-                  <option value="Agus Wijaya">Agus Wijaya</option>
-                  <option value="Rudi Hermawan">Rudi Hermawan</option>
-                  <option value="Semua">Semua Pengawas</option>
+                  <option value="Budi Santoso">Budi Santoso (PG1)</option>
+                  <option value="Agus Wijaya">Agus Wijaya (PG2)</option>
+                  <option value="Rudi Hermawan">Rudi Hermawan (PG3)</option>
+                  <option value="Semua">Semua Kasie</option>
                 </select>
               </div>
 
@@ -335,10 +335,10 @@ interface RkceApiService {
                 onChange={e => setTestPengawas(e.target.value)}
                 className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white"
               >
-                <option value="Budi Santoso">Budi Santoso</option>
-                <option value="Agus Wijaya">Agus Wijaya</option>
-                <option value="Rudi Hermawan">Rudi Hermawan</option>
-                <option value="Semua">Semua Pengawas</option>
+                <option value="Budi Santoso">Budi Santoso (PG1)</option>
+                <option value="Agus Wijaya">Agus Wijaya (PG2)</option>
+                <option value="Rudi Hermawan">Rudi Hermawan (PG3)</option>
+                <option value="Semua">Semua Kasie</option>
               </select>
               <button
                 onClick={handleTestMasterSync}

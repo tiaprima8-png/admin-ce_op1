@@ -19,7 +19,7 @@ import {
   Truck,
   UserCheck
 } from 'lucide-react';
-import { RencanaKerja, Unit, Operator, Lokasi, AktivitasUnit } from '../types';
+import { RencanaKerja, Unit, Operator, Lokasi, AktivitasUnit, User } from '../types';
 
 interface RencanaKerjaViewProps {
   rencanaList: RencanaKerja[];
@@ -28,6 +28,7 @@ interface RencanaKerjaViewProps {
   lokasiList: Lokasi[];
   supervisors: string[];
   aktivitasList?: AktivitasUnit[];
+  users?: User[];
   onRefresh: () => void;
   onTerbitkanSpk: (id: string, nomorSpk: string) => Promise<void>;
   onCreateRencana: (data: Partial<RencanaKerja>) => Promise<void>;
@@ -42,6 +43,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   lokasiList,
   supervisors,
   aktivitasList = [],
+  users,
   onRefresh,
   onTerbitkanSpk,
   onCreateRencana,
@@ -52,12 +54,48 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterPengawas, setFilterPengawas] = useState('Semua');
+  const [filterWilayah, setFilterWilayah] = useState('Semua');
   const [filterStatusSpk, setFilterStatusSpk] = useState('Semua');
   const [filterShift, setFilterShift] = useState('Semua');
   const [filterStatusOperasi, setFilterStatusOperasi] = useState('Semua');
   const [filterTanggal, setFilterTanggal] = useState('');
   const [filterTanggalAkhir, setFilterTanggalAkhir] = useState('');
+
+  // Lookup maps for Wilayah matching
+  const userWilayahMap = useMemo(() => {
+    const map = new Map<string, string>();
+    map.set('budi santoso', 'PG1');
+    map.set('agus wijaya', 'PG2');
+    map.set('rudi hermawan', 'PG3');
+    if (users) {
+      for (const u of users) {
+        if (u.nama_lengkap && u.wilayah) {
+          map.set(u.nama_lengkap.toLowerCase().trim(), u.wilayah.trim().toUpperCase());
+        }
+      }
+    }
+    return map;
+  }, [users]);
+
+  const unitSupervisorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of units) {
+      if (u.kode_unit && u.nama_pengawas) {
+        map.set(u.kode_unit.toLowerCase().trim(), u.nama_pengawas.toLowerCase().trim());
+      }
+    }
+    return map;
+  }, [units]);
+
+  const lokasiWilayahMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const l of lokasiList) {
+      if (l.kode_lokasi && l.wilayah) {
+        map.set(l.kode_lokasi.toLowerCase().trim(), l.wilayah.trim().toUpperCase());
+      }
+    }
+    return map;
+  }, [lokasiList]);
 
   // Modals state
   const [spkModalTarget, setSpkModalTarget] = useState<RencanaKerja | null>(null);
@@ -101,8 +139,23 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
         if (!match) return false;
       }
 
-      if (filterPengawas !== 'Semua' && item.nama_pengawas !== filterPengawas) {
-        return false;
+      // Filter Wilayah (PG1, PG2, PG3)
+      if (filterWilayah !== 'Semua') {
+        const targetW = filterWilayah.toUpperCase();
+        const itemWilayah = (item.wilayah || '').trim().toUpperCase();
+        const kasieName = (item.nama_pengawas || '').toLowerCase().trim();
+        const kasieWilayah = userWilayahMap.get(kasieName);
+        const unitKasie = unitSupervisorMap.get((item.kode_unit || '').toLowerCase().trim());
+        const unitWilayah = unitKasie ? userWilayahMap.get(unitKasie) : undefined;
+        const lokWilayah = item.kode_lokasi ? lokasiWilayahMap.get(item.kode_lokasi.toLowerCase().trim()) : undefined;
+
+        const matchWilayah = 
+          itemWilayah === targetW ||
+          kasieWilayah === targetW ||
+          unitWilayah === targetW ||
+          lokWilayah === targetW;
+
+        if (!matchWilayah) return false;
       }
 
       if (filterStatusSpk !== 'Semua') {
@@ -133,11 +186,11 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
 
       return true;
     });
-  }, [rencanaList, searchTerm, filterPengawas, filterStatusSpk, filterShift, filterStatusOperasi, filterTanggal, filterTanggalAkhir]);
+  }, [rencanaList, searchTerm, filterWilayah, filterStatusSpk, filterShift, filterStatusOperasi, filterTanggal, filterTanggalAkhir, userWilayahMap, unitSupervisorMap, lokasiWilayahMap]);
 
   const resetFilters = () => {
     setSearchTerm('');
-    setFilterPengawas('Semua');
+    setFilterWilayah('Semua');
     setFilterStatusSpk('Semua');
     setFilterShift('Semua');
     setFilterStatusOperasi('Semua');
@@ -172,7 +225,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
     setIsSubmittingSpk(true);
     try {
       await onTerbitkanSpk(spkModalTarget.id, spkInputValue.trim());
-      setFeedbackNotice(`Nomor SPK ${spkInputValue.trim()} berhasil diterbitkan dan disinkronkan ke Android pengawas.`);
+      setFeedbackNotice(`Nomor SPK ${spkInputValue.trim()} berhasil diterbitkan dan disinkronkan ke Android Kasie.`);
       setSpkModalTarget(null);
       setTimeout(() => setFeedbackNotice(null), 4000);
     } catch (err: unknown) {
@@ -186,7 +239,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formPengawas || !formKodeUnit || !formOperator || !formKodeLokasi) {
-      alert('Lengkapi seluruh field wajib: Pengawas, Unit, Operator, dan Lokasi.');
+      alert('Lengkapi seluruh field wajib: Kasie, Unit, Operator, dan Lokasi.');
       return;
     }
 
@@ -378,16 +431,17 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
             />
           </div>
 
-          {/* Filter Pengawas */}
+          {/* Filter Wilayah */}
           <select
-            value={filterPengawas}
-            onChange={(e) => setFilterPengawas(e.target.value)}
+            value={filterWilayah}
+            onChange={(e) => setFilterWilayah(e.target.value)}
             className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
+            title="Filter Wilayah Operasional (PG1, PG2, PG3)"
           >
-            <option value="Semua">Pengawas: Semua</option>
-            {supervisors.map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
+            <option value="Semua">Semua Wilayah</option>
+            <option value="PG1">Wilayah PG1</option>
+            <option value="PG2">Wilayah PG2</option>
+            <option value="PG3">Wilayah PG3</option>
           </select>
 
           {/* Filter Shift */}
@@ -445,7 +499,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
             />
           </div>
 
-          {(searchTerm || filterPengawas !== 'Semua' || filterShift !== 'Semua' || filterStatusOperasi !== 'Semua' || filterStatusSpk !== 'Semua' || filterTanggal || filterTanggalAkhir) && (
+          {(searchTerm || filterWilayah !== 'Semua' || filterShift !== 'Semua' || filterStatusOperasi !== 'Semua' || filterStatusSpk !== 'Semua' || filterTanggal || filterTanggalAkhir) && (
             <button
               onClick={resetFilters}
               className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 hover:underline px-2 py-1 rounded cursor-pointer"
@@ -469,7 +523,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                 <th className="py-3 px-3.5">Tanggal</th>
-                <th className="py-3 px-3">Pengawas</th>
+                <th className="py-3 px-3">Kasie (Penanggung Jawab)</th>
                 <th className="py-3 px-3 text-center">Status Unit</th>
                 <th className="py-3 px-3">Unit & Model</th>
                 <th className="py-3 px-3">Operator</th>
@@ -486,7 +540,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                   <td colSpan={10} className="text-center py-12 text-slate-400">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="font-medium text-slate-600">Tidak ada rencana kerja yang ditemukan.</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Gunakan tombol "+ Buat Rencana Kerja" atau tunggu sinkronisasi dari pengawas Android.</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Gunakan tombol "+ Buat Rencana Kerja" atau tunggu sinkronisasi dari Kasie Android.</p>
                   </td>
                 </tr>
               ) : (
@@ -495,6 +549,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                   const isMenungguSpk = statusNormalized === 'MENUNGGU' || statusNormalized === 'MENUNGGU_SPK';
                   const isSpkTerbit = statusNormalized === 'SPK_TERBIT' || statusNormalized === 'SPK TERBIT';
                   const isSelesai = statusNormalized === 'TEREALISASI' || statusNormalized === 'REALISASI_SELESAI' || statusNormalized === 'SELESAI';
+                  const kasieWilayah = row.wilayah || userWilayahMap.get((row.nama_pengawas || '').toLowerCase().trim());
 
                   return (
                     <tr key={`${row.id || 'rk'}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
@@ -508,9 +563,24 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                         )}
                       </td>
 
-                      {/* Pengawas */}
+                      {/* Kasie */}
                       <td className="py-3 px-3 font-semibold text-slate-900 whitespace-nowrap">
-                        {row.nama_pengawas}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{row.nama_pengawas}</span>
+                          {kasieWilayah && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shadow-2xs ${
+                              kasieWilayah.toUpperCase() === 'PG1'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                : kasieWilayah.toUpperCase() === 'PG2'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-300'
+                                  : kasieWilayah.toUpperCase() === 'PG3'
+                                    ? 'bg-purple-50 text-purple-800 border-purple-300'
+                                    : 'bg-slate-100 text-slate-800 border-slate-300'
+                            }`}>
+                              {kasieWilayah}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Status Unit Badge */}
@@ -764,7 +834,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                     Tambah Rencana Kerja Fleet
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Jadwalkan unit, operator, dan lokasi operasional untuk pengawas
+                    Jadwalkan unit, operator, dan lokasi operasional untuk Kasie
                   </p>
                 </div>
               </div>
@@ -805,16 +875,16 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                 </div>
               </div>
 
-              {/* Pengawas */}
+              {/* Kasie */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nama Pengawas</label>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Kasie (Penanggung Jawab)</label>
                 <select
                   required
                   value={formPengawas}
                   onChange={(e) => setFormPengawas(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500"
                 >
-                  <option value="">-- Pilih Pengawas --</option>
+                  <option value="">-- Pilih Kasie --</option>
                   {supervisors.map(p => (
                     <option key={p} value={p}>{p}</option>
                   ))}
