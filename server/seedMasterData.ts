@@ -65,23 +65,10 @@ export const SEED_UNITS: SeedUnitItem[] = [
   { kode_unit: 'HEH0039', jenis_unit: 'EXCAVATOR', model_unit: 'Excavator Standar', penanggung_jawab: 'Saipul', hm_terakhir: 35, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
   { kode_unit: 'HEH0040', jenis_unit: 'EXCAVATOR', model_unit: 'Excavator Standar', penanggung_jawab: 'Galung', hm_terakhir: 36, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
 
-  // Bulldozer (8 Unit)
-  { kode_unit: 'BDC0001', jenis_unit: 'BULLDOZER', model_unit: 'Bulldozer', penanggung_jawab: 'Agung', hm_terakhir: 37, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'BDC0002', jenis_unit: 'BULLDOZER', model_unit: 'Bulldozer', penanggung_jawab: 'Zainudin', hm_terakhir: 38, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'BDC0003', jenis_unit: 'BULLDOZER', model_unit: 'Bulldozer', penanggung_jawab: 'Jaidi', hm_terakhir: 39, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'BDC0004', jenis_unit: 'BULLDOZER', model_unit: 'Bulldozer', penanggung_jawab: 'Hisar', hm_terakhir: 40, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'BDC0005', jenis_unit: 'BULLDOZER', model_unit: 'Bulldozer', penanggung_jawab: 'Yono', hm_terakhir: 41, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'BDC0006', jenis_unit: 'BULLDOZER', model_unit: 'Bulldozer', penanggung_jawab: 'Nyoman', hm_terakhir: 42, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'BDC0007', jenis_unit: 'BULLDOZER', model_unit: 'Bulldozer', penanggung_jawab: 'Saipul', hm_terakhir: 43, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'BDC0008', jenis_unit: 'BULLDOZER', model_unit: 'Bulldozer', penanggung_jawab: 'Galung', hm_terakhir: 44, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-
-  // Compactor & Dump Truck Tambahan
+  // Compactor (3 Unit Tambahan: SCC0002, SCC0003, SCC0004)
   { kode_unit: 'SCC0002', jenis_unit: 'COMPACTOR', model_unit: 'Compactor', penanggung_jawab: 'Jaidi', hm_terakhir: 45, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
   { kode_unit: 'SCC0003', jenis_unit: 'COMPACTOR', model_unit: 'Compactor', penanggung_jawab: 'Hisar', hm_terakhir: 46, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'SCC0004', jenis_unit: 'COMPACTOR', model_unit: 'Compactor', penanggung_jawab: 'Nyoman', hm_terakhir: 47, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'DTC0001', jenis_unit: 'DUMP TRUCK', model_unit: 'Dump Truck', penanggung_jawab: 'Agung', hm_terakhir: 48, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'DTC0002', jenis_unit: 'DUMP TRUCK', model_unit: 'Dump Truck', penanggung_jawab: 'Zainudin', hm_terakhir: 49, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' },
-  { kode_unit: 'DTC0003', jenis_unit: 'DUMP TRUCK', model_unit: 'Dump Truck', penanggung_jawab: 'Yono', hm_terakhir: 50, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' }
+  { kode_unit: 'SCC0004', jenis_unit: 'COMPACTOR', model_unit: 'Compactor', penanggung_jawab: 'Nyoman', hm_terakhir: 47, standar_hm_min: 6.0, standar_hm_max: 10.0, standar_hm_display: '6.0 - 10.0 HM' }
 ];
 
 // 3. Daftar 44 Operator Lengkap dari Spesifikasi

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, X, Search, AlertCircle, CheckCircle, Clock, Sliders, Power, Truck, RotateCcw } from 'lucide-react';
-import { Unit, HmStandarConfig } from '../types';
+import { Unit, HmStandarConfig, DAFTAR_JENIS_UNIT_AKTIF } from '../types';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface MasterUnitsProps {
@@ -21,12 +21,13 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
   const isManager = userRole === 'MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
+  const [selectedJenisUnitFilter, setSelectedJenisUnitFilter] = useState('Semua');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
 
   // Form State
   const [kodeUnit, setKodeUnit] = useState('');
-  const [jenisUnit, setJenisUnit] = useState('DUMP TRUCK');
+  const [jenisUnit, setJenisUnit] = useState<string>('Excavator Standar');
   const [modelUnit, setModelUnit] = useState('');
   const [namaPengawas, setNamaPengawas] = useState(supervisors[0] || 'Budi Santoso');
   const [hmTerakhir, setHmTerakhir] = useState<number>(0);
@@ -43,7 +44,7 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
   const openAddModal = () => {
     setEditingUnit(null);
     setKodeUnit('');
-    setJenisUnit('DUMP TRUCK');
+    setJenisUnit('Excavator Standar');
     setModelUnit('');
     setNamaPengawas(supervisors[0] || 'Budi Santoso');
     setHmTerakhir(0);
@@ -178,6 +179,13 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
       if (isAktif !== selectedStatus) return false;
     }
 
+    if (selectedJenisUnitFilter !== 'Semua') {
+      const uJenis = (u.jenis_unit || '').trim().toLowerCase();
+      const fJenis = selectedJenisUnitFilter.trim().toLowerCase();
+      const isMatch = uJenis === fJenis || uJenis.includes(fJenis) || fJenis.includes(uJenis);
+      if (!isMatch) return false;
+    }
+
     return true;
   });
 
@@ -248,6 +256,19 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
             />
           </div>
 
+          {/* Filter Jenis Unit */}
+          <select
+            value={selectedJenisUnitFilter}
+            onChange={(e) => setSelectedJenisUnitFilter(e.target.value)}
+            className="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-white text-slate-700 font-medium cursor-pointer"
+            title="Filter Jenis Unit Alat Berat"
+          >
+            <option value="Semua">Semua Jenis Unit</option>
+            {DAFTAR_JENIS_UNIT_AKTIF.map((ju) => (
+              <option key={ju} value={ju}>{ju}</option>
+            ))}
+          </select>
+
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value as 'Semua' | '1' | '0')}
@@ -258,11 +279,12 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
             <option value="0">Hanya Nonaktif</option>
           </select>
 
-          {(searchTerm || selectedStatus !== 'Semua') && (
+          {(searchTerm || selectedStatus !== 'Semua' || selectedJenisUnitFilter !== 'Semua') && (
             <button
               onClick={() => {
                 setSearchTerm('');
                 setSelectedStatus('Semua');
+                setSelectedJenisUnitFilter('Semua');
               }}
               className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 hover:underline px-2 py-1 rounded cursor-pointer"
             >
@@ -458,7 +480,7 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: DT-101, EX-201"
+                  placeholder="Contoh: HEH0001, MGC0001, SCC0002"
                   value={kodeUnit}
                   onChange={(e) => setKodeUnit(e.target.value.toUpperCase())}
                   className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono font-bold bg-white"
@@ -472,16 +494,12 @@ export const MasterUnits: React.FC<MasterUnitsProps> = ({
                 <select
                   value={jenisUnit}
                   onChange={(e) => setJenisUnit(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer font-medium"
                   required
                 >
-                  <option value="DUMP TRUCK">DUMP TRUCK</option>
-                  <option value="EXCAVATOR">EXCAVATOR</option>
-                  <option value="BULLDOZER">BULLDOZER</option>
-                  <option value="MOTOR GRADER">MOTOR GRADER</option>
-                  <option value="WATER TRUCK">WATER TRUCK</option>
-                  <option value="COMPACTOR">COMPACTOR</option>
-                  <option value="WHEEL LOADER">WHEEL LOADER</option>
+                  {DAFTAR_JENIS_UNIT_AKTIF.map((ju) => (
+                    <option key={ju} value={ju}>{ju}</option>
+                  ))}
                 </select>
               </div>
 

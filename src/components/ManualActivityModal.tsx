@@ -399,7 +399,7 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
               <SearchableSelect<Unit>
                 label="Unit Alat Berat"
                 placeholder={filteredUnits.length === 0 ? "Tidak ada unit untuk Kasie ini" : "Cari berdasarkan kode unit atau jenis alat..."}
-                searchPlaceholder="Ketik kode (DT-101) atau jenis (EXCAVATOR, DUMP TRUCK)..."
+                searchPlaceholder="Ketik kode (HEH0001) atau jenis (EXCAVATOR, MOTOR GRADER)..."
                 required
                 value={kodeUnit}
                 onChange={handleUnitSelect}

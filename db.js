@@ -4,6 +4,8 @@ import db, {
   queryOne,
   execute,
   saveDb,
+  resetAndSeedDatabase,
+  seedMasterAktivitas,
   generateSampleFieldPhoto
 } from "./server/db.ts";
 var db_default = db;
@@ -15,5 +17,7 @@ export {
   getDb,
   queryAll,
   queryOne,
-  saveDb
+  resetAndSeedDatabase,
+  saveDb,
+  seedMasterAktivitas
 };

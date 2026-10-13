@@ -20,7 +20,7 @@ import {
   Pencil,
   Calendar
 } from 'lucide-react';
-import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, User, DAFTAR_WILAYAH, getWilayahBadgeClass } from '../types';
+import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, User, DAFTAR_WILAYAH, DAFTAR_JENIS_UNIT_AKTIF, getWilayahBadgeClass } from '../types';
 import { exportToExcel } from '../utils/export';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { KpiCards } from './KpiCards';
@@ -402,6 +402,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWilayah, setSelectedWilayah] = useState('Semua');
+  const [selectedJenisUnit, setSelectedJenisUnit] = useState('Semua');
   const [selectedUnit, setSelectedUnit] = useState('Semua');
   const [selectedShift, setSelectedShift] = useState('Semua');
   const [selectedStatus, setSelectedStatus] = useState('Semua');
@@ -537,6 +538,20 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         }
       }
 
+      // Filter Jenis Unit (Hanya 5 jenis unit aktif)
+      if (selectedJenisUnit !== 'Semua') {
+        const itemJenis = (item.jenis_unit || '').trim().toLowerCase();
+        const fJenis = selectedJenisUnit.trim().toLowerCase();
+        const unitObj = units.find(u => u.kode_unit.toLowerCase() === (item.kode_unit || '').toLowerCase());
+        const unitJenis = (unitObj?.jenis_unit || '').trim().toLowerCase();
+        const matches = 
+          itemJenis === fJenis || 
+          unitJenis === fJenis ||
+          (itemJenis && (fJenis.includes(itemJenis) || itemJenis.includes(fJenis))) ||
+          (unitJenis && (fJenis.includes(unitJenis) || unitJenis.includes(fJenis)));
+        if (!matches) return false;
+      }
+
       if (selectedUnit !== 'Semua' && item.kode_unit !== selectedUnit) {
         return false;
       }
@@ -570,7 +585,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
       return true;
     });
-  }, [dataList, searchTerm, selectedWilayah, selectedUnit, selectedShift, selectedStatus, highlightIds, newActivityIds, startDate, endDate, userWilayahMap, unitSupervisorMap, unitWilayahMap]);
+  }, [dataList, searchTerm, selectedWilayah, selectedJenisUnit, selectedUnit, selectedShift, selectedStatus, highlightIds, newActivityIds, startDate, endDate, userWilayahMap, unitSupervisorMap, unitWilayahMap, units]);
 
   const totalPages = Math.ceil(filteredActivities.length / pageSize) || 1;
   const paginatedActivities = filteredActivities.slice(
@@ -581,6 +596,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedWilayah('Semua');
+    setSelectedJenisUnit('Semua');
     setSelectedUnit('Semua');
     setSelectedShift('Semua');
     setSelectedStatus('Semua');
@@ -593,6 +609,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const isFilterActive = 
     searchTerm.trim() !== '' ||
     selectedWilayah !== 'Semua' ||
+    selectedJenisUnit !== 'Semua' ||
     selectedUnit !== 'Semua' ||
     selectedShift !== 'Semua' ||
     selectedStatus !== 'Semua' ||
@@ -820,6 +837,22 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               ))}
             </select>
 
+            {/* Dropdown Jenis Unit (Hanya 5 unit aktif: Long Arm, Mini, Standar, Grader, Compactor) */}
+            <select
+              value={selectedJenisUnit}
+              onChange={(e) => {
+                setSelectedJenisUnit(e.target.value);
+                setCurrentPage(1);
+              }}
+              title="Filter Jenis Unit Alat Berat"
+              className="w-full lg:w-auto h-9.5 px-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs sm:text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer font-medium"
+            >
+              <option value="Semua">Semua Jenis Unit</option>
+              {DAFTAR_JENIS_UNIT_AKTIF.map((ju) => (
+                <option key={ju} value={ju}>{ju}</option>
+              ))}
+            </select>
+
             {/* Dropdown Unit */}
             <select
               value={selectedUnit}
@@ -830,9 +863,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               className="w-full lg:w-auto h-9.5 px-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs sm:text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
             >
               <option value="Semua">Semua Unit</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.kode_unit}>{u.kode_unit} ({u.jenis_unit})</option>
-              ))}
+              {units
+                .filter((u) => {
+                  if (selectedJenisUnit === 'Semua') return true;
+                  const uj = (u.jenis_unit || '').trim().toLowerCase();
+                  const fj = selectedJenisUnit.trim().toLowerCase();
+                  return uj === fj || uj.includes(fj) || fj.includes(uj);
+                })
+                .map((u) => (
+                  <option key={u.id} value={u.kode_unit}>{u.kode_unit} ({u.jenis_unit})</option>
+                ))}
             </select>
 
             {/* Dropdown Shift */}

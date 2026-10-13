@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Smartphone, Copy, Check, Terminal, Play, CheckCircle2 } from 'lucide-react';
+import { X, Smartphone, Copy, Check, Terminal, Play, CheckCircle2, Database } from 'lucide-react';
 
 interface AndroidIntegrationModalProps {
   isOpen: boolean;
@@ -515,15 +515,64 @@ interface RkceApiService {
             </div>
           </div>
 
-          {/* Section 3: Android Retrofit Code */}
+          {/* Section 5: Android Retrofit Code */}
           <div>
             <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 mb-2">
               <Terminal className="w-4 h-4 text-slate-500" />
-              Kode Snippet Android Kotlin (Retrofit)
+              Kode Snippet Android Kotlin (Retrofit Interface)
             </h4>
             <pre className="p-3 bg-slate-800 text-emerald-400 rounded-lg text-[11px] font-mono overflow-x-auto">
               {retrofitCode}
             </pre>
+          </div>
+
+          {/* Section 6: Android Room Database Local Sync (Pembersihan Cache Dump Truck & Bulldozer) */}
+          <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2.5">
+            <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <Database className="w-4 h-4 text-amber-700" />
+              <span>Sinkronisasi SQLite Lokal Android (Room Database Repository)</span>
+            </h4>
+            <p className="text-xs text-slate-700">
+              Saat fungsi <code>syncBootstrapData</code> dieksekusi di HP Kasie/Manager, jalankan <code>masterUnitDao.deleteAll()</code> sebelum <code>insertAll(...)</code>. Ini memastikan seluruh unit lama (seperti Dump Truck dan Bulldozer) dihapus bersih dari SQLite internal HP, sehingga dropdown pemilihan unit Kasie dan filter mode Manager hanya menampilkan unit operasional aktif:
+            </p>
+            <pre className="p-3 bg-slate-900 text-amber-300 rounded-lg text-[11px] font-mono overflow-x-auto">{`// Android Room Repository: Sync Bootstrap Data Bersih
+class MasterDataRepository(
+    private val api: HeavyTrackApiService,
+    private val db: AppDatabase
+) {
+    suspend fun syncBootstrapData(pengawas: String, tanggal: String): Result<Boolean> {
+        return try {
+            val response = api.getBootstrapData(pengawas, tanggal)
+            if (response.isSuccessful && response.body() != null) {
+                val data = response.body()!!
+
+                // Transaksi Atomik Room: Bersihkan cache unit lama, masukkan unit aktif server
+                db.runInTransaction {
+                    // 1. Bersihkan tabel master_unit lokal (Dump Truck & Bulldozer terhapus total)
+                    db.masterUnitDao().deleteAll()
+                    db.masterUnitDao().insertAll(data.master_data.units) // Hanya unit aktif terdaftar
+
+                    // 2. Sinkronkan master pendukung lainnya
+                    db.masterAktivitasDao().deleteAll()
+                    db.masterAktivitasDao().insertAll(data.master_data.aktivitas)
+
+                    db.masterOperatorDao().deleteAll()
+                    db.masterOperatorDao().insertAll(data.master_data.operators)
+
+                    // 3. Perbarui rencana kerja aktif hari ini
+                    db.rencanaKerjaDao().deleteAll()
+                    db.rencanaKerjaDao().insertAll(data.rencana_kerja_aktif)
+                }
+
+                Result.success(true)
+            } else {
+                Result.failure(Exception("Gagal sinkron bootstrap: \${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}`}</pre>
           </div>
 
         </div>

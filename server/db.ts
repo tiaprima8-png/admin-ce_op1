@@ -1024,7 +1024,12 @@ function initTablesAndSeed(db: Database) {
     // Normalisasi jenis_unit pada master aktivitas jika kosong
     db.run("UPDATE aktivitas_unit SET jenis_unit = 'Excavator Standar' WHERE jenis_unit IS NULL OR jenis_unit = '';");
 
-    // Pembersihan Master Aktivitas: Hapus total Dump Truck, Bulldozer, Water Truck, Wheel Loader
+    // Pembersihan Master Unit & Master Aktivitas: Hapus total Dump Truck, Bulldozer, Water Truck, Wheel Loader
+    db.run("DELETE FROM units WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer');");
+    try {
+      db.run("DELETE FROM master_unit WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer');");
+    } catch {}
+    db.run("DELETE FROM rencana_kerja WHERE kode_unit NOT IN (SELECT kode_unit FROM units);");
     db.run("DELETE FROM aktivitas_unit WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer', 'water truck', 'wheel loader');");
     try {
       db.run("DELETE FROM master_aktivitas WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer', 'water truck', 'wheel loader');");
@@ -1168,14 +1173,9 @@ function initTablesAndSeed(db: Database) {
     // Seed Units
     db.run(`
       INSERT INTO units (kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan, updated_at) VALUES
-      ('DT-101', 'DUMP TRUCK', 'Hino FM 260 Ti', 'Budi Santoso', 4280.5, '2026-10-08 17:30:00'),
-      ('DT-102', 'DUMP TRUCK', 'Scania P360 CB', 'Agus Wijaya', 3890.0, '2026-10-08 16:45:00'),
-      ('DZ-01', 'BULLDOZER', 'Komatsu D85ESS-2', 'Budi Santoso', 7120.2, '2026-10-08 18:00:00'),
-      ('DZ-02', 'BULLDOZER', 'Caterpillar D6R', 'Rudi Hermawan', 5430.8, '2026-10-08 17:15:00'),
       ('HEH1', 'EXCAVATOR', 'Komatsu PC200-8', 'Budi Santoso', 8920.4, '2026-10-08 17:50:00'),
       ('EX-301', 'EXCAVATOR', 'Hitachi ZX330-5G', 'Agus Wijaya', 6450.0, '2026-10-08 17:00:00'),
-      ('GD-01', 'MOTOR GRADER', 'Komatsu GD511A', 'Rudi Hermawan', 3110.6, '2026-10-08 16:20:00'),
-      ('WT-05', 'WATER TRUCK', 'Hino Ranger 500', 'Budi Santoso', 2490.1, '2026-10-08 15:10:00');
+      ('GD-01', 'MOTOR GRADER', 'Komatsu GD511A', 'Rudi Hermawan', 3110.6, '2026-10-08 16:20:00');
     `);
 
     // Seed Aktivitas (Dengan Kategori Status Otomatis)
@@ -1184,15 +1184,8 @@ function initTablesAndSeed(db: Database) {
       ('EXCAVATOR', 'Galian Tanah Lunak', 'm3', 'ACT-SAP-101', 'OPERASI', 'OPERASI'),
       ('EXCAVATOR', 'Loading Overburden (OB)', 'BCM', 'ACT-SAP-102', 'OPERASI', 'OPERASI'),
       ('EXCAVATOR', 'Pembuatan Saluran Air (Ditch)', 'm', 'ACT-SAP-103', 'OPERASI', 'OPERASI'),
-      ('BULLDOZER', 'Clearing & Grubbing Lahan', 'm2', 'ACT-SAP-104', 'OPERASI', 'OPERASI'),
-      ('BULLDOZER', 'Dozing & Ripping OB', 'm3', 'ACT-SAP-105', 'OPERASI', 'OPERASI'),
-      ('BULLDOZER', 'Perawatan Disposal Area', 'jam', 'ACT-SAP-106', 'OPERASI', 'OPERASI'),
-      ('DUMP TRUCK', 'Hauling Overburden ke Disposal', 'rit', 'ACT-SAP-107', 'OPERASI', 'OPERASI'),
-      ('DUMP TRUCK', 'Hauling Ore / Batubara ke Stockpile', 'ton', 'ACT-SAP-108', 'OPERASI', 'OPERASI'),
       ('MOTOR GRADER', 'Perawatan Jalan Tambang (Grading)', 'km', 'ACT-SAP-109', 'OPERASI', 'OPERASI'),
-      ('WATER TRUCK', 'Penyiraman Jalan Berdebu', 'tangki', 'ACT-SAP-110', 'OPERASI', 'OPERASI'),
-      ('EXCAVATOR', 'Standby Hujan & Kondisi Licin', 'jam', 'ACT-SAP-111', 'STANDBY', 'STANDBY'),
-      ('DUMP TRUCK', 'Breakdown Engine / Sistem Hidrolik', 'jam', 'ACT-SAP-112', 'BREAKDOWN', 'BREAKDOWN');
+      ('EXCAVATOR', 'Standby Hujan & Kondisi Licin', 'jam', 'ACT-SAP-111', 'STANDBY', 'STANDBY');
     `);
 
     // Seed Operators (Tanpa Jabatan)
@@ -1334,9 +1327,9 @@ export function execute(sql: string, params: SqlValue[] = []): { lastInsertRowId
 
 /**
  * Mengosongkan (reset) seluruh data transaksi dan master lama di database SQLite
- * tanpa merusak struktur tabel, lalu menyemai kembali master user, 50 unit, dan 44 operator:
+ * tanpa merusak struktur tabel, lalu menyemai kembali master user, 39 unit operasional, dan 44 operator:
  * - Master User (12 User: Farid, Deni, Agung, Zainudin, Jaidi, Hisar, Yono, Nyoman, Saipul, Galung, Lutfi, Putut)
- * - Master Unit (50 Unit: Long Arm, Mini, Motor Grader, Compactor, Excavator Standar, Bulldozer, Dump Truck)
+ * - Master Unit (39 Unit: Long Arm, Mini, Motor Grader, Compactor, Excavator Standar)
  * - Master Operator (44 Operator dengan NIK dan relasi penanggung jawab Kasie)
  */
 export async function resetAndSeedDatabase(): Promise<{ success: boolean; message: string; userCount: number; unitCount: number; operatorCount: number; aktivitasCount?: number }> {
@@ -1412,23 +1405,10 @@ export async function resetAndSeedDatabase(): Promise<{ success: boolean; messag
     { kode: 'HEH0039', jenis: 'EXCAVATOR', model: 'Excavator Standar', kasie: 'Saipul', wilayah: 'LEBUNG PG12', hm: 35, min: 6.0, max: 10.0 },
     { kode: 'HEH0040', jenis: 'EXCAVATOR', model: 'Excavator Standar', kasie: 'Galung', wilayah: 'LEBUNG PG3', hm: 36, min: 6.0, max: 10.0 },
 
-    // Bulldozer (8 Unit)
-    { kode: 'BDC0001', jenis: 'BULLDOZER', model: 'Bulldozer', kasie: 'Agung', wilayah: 'Geodesi PG1', hm: 37, min: 6.0, max: 10.0 },
-    { kode: 'BDC0002', jenis: 'BULLDOZER', model: 'Bulldozer', kasie: 'Zainudin', wilayah: 'Geodesi PG2', hm: 38, min: 6.0, max: 10.0 },
-    { kode: 'BDC0003', jenis: 'BULLDOZER', model: 'Bulldozer', kasie: 'Jaidi', wilayah: 'Geodesi PG3', hm: 39, min: 6.0, max: 10.0 },
-    { kode: 'BDC0004', jenis: 'BULLDOZER', model: 'Bulldozer', kasie: 'Hisar', wilayah: 'RC PG1', hm: 40, min: 6.0, max: 10.0 },
-    { kode: 'BDC0005', jenis: 'BULLDOZER', model: 'Bulldozer', kasie: 'Yono', wilayah: 'RC PG2', hm: 41, min: 6.0, max: 10.0 },
-    { kode: 'BDC0006', jenis: 'BULLDOZER', model: 'Bulldozer', kasie: 'Nyoman', wilayah: 'RC PG3', hm: 42, min: 6.0, max: 10.0 },
-    { kode: 'BDC0007', jenis: 'BULLDOZER', model: 'Bulldozer', kasie: 'Saipul', wilayah: 'LEBUNG PG12', hm: 43, min: 6.0, max: 10.0 },
-    { kode: 'BDC0008', jenis: 'BULLDOZER', model: 'Bulldozer', kasie: 'Galung', wilayah: 'LEBUNG PG3', hm: 44, min: 6.0, max: 10.0 },
-
-    // Compactor & Dump Truck (6 Unit)
+    // Compactor (3 Unit Tambahan: SCC0002, SCC0003, SCC0004)
     { kode: 'SCC0002', jenis: 'COMPACTOR', model: 'Compactor', kasie: 'Jaidi', wilayah: 'Geodesi PG3', hm: 45, min: 6.0, max: 10.0 },
     { kode: 'SCC0003', jenis: 'COMPACTOR', model: 'Compactor', kasie: 'Hisar', wilayah: 'RC PG1', hm: 46, min: 6.0, max: 10.0 },
-    { kode: 'SCC0004', jenis: 'COMPACTOR', model: 'Compactor', kasie: 'Nyoman', wilayah: 'RC PG3', hm: 47, min: 6.0, max: 10.0 },
-    { kode: 'DTC0001', jenis: 'DUMP TRUCK', model: 'Dump Truck', kasie: 'Agung', wilayah: 'Geodesi PG1', hm: 48, min: 6.0, max: 10.0 },
-    { kode: 'DTC0002', jenis: 'DUMP TRUCK', model: 'Dump Truck', kasie: 'Zainudin', wilayah: 'Geodesi PG2', hm: 49, min: 6.0, max: 10.0 },
-    { kode: 'DTC0003', jenis: 'DUMP TRUCK', model: 'Dump Truck', kasie: 'Yono', wilayah: 'RC PG2', hm: 50, min: 6.0, max: 10.0 }
+    { kode: 'SCC0004', jenis: 'COMPACTOR', model: 'Compactor', kasie: 'Nyoman', wilayah: 'RC PG3', hm: 47, min: 6.0, max: 10.0 }
   ];
 
   for (const u of unitsData) {

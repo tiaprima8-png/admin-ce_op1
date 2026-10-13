@@ -202,6 +202,7 @@ export interface HasilInputAktivitas {
   tanggal: string;
   tanggal_kerja?: string;
   kode_unit: string;
+  jenis_unit?: string | null;
   nama_aktivitas: string;
   aktivitas?: string | null;
   aktivitas_aktual?: string | null;

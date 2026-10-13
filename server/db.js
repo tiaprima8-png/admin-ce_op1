@@ -3,6 +3,16 @@ import fs from "fs";
 import path from "path";
 let dbInstance = null;
 const DB_FILE_PATH = path.resolve(process.cwd(), "data", "heavytrack.sqlite");
+const DAFTAR_WILAYAH = [
+  "Geodesi PG1",
+  "Geodesi PG2",
+  "Geodesi PG3",
+  "RC PG1",
+  "RC PG2",
+  "RC PG3",
+  "LEBUNG PG12",
+  "LEBUNG PG3"
+];
 async function getDb() {
   if (dbInstance) return dbInstance;
   const SQL = await initSqlJs();
@@ -123,7 +133,7 @@ function initTablesAndSeed(db2) {
       password TEXT NOT NULL,
       hak_akses TEXT NOT NULL,
       role TEXT DEFAULT 'ADMIN',
-      wilayah TEXT DEFAULT 'PG1',
+      wilayah TEXT DEFAULT 'Geodesi PG1',
       status_aktif INTEGER DEFAULT 1
     );
 
@@ -706,62 +716,193 @@ function initTablesAndSeed(db2) {
       console.log("Added role column to users");
     }
     if (userCols && !userCols.includes("wilayah")) {
-      db2.run("ALTER TABLE users ADD COLUMN wilayah TEXT DEFAULT 'PG1';");
+      db2.run("ALTER TABLE users ADD COLUMN wilayah TEXT DEFAULT 'Geodesi PG1';");
       console.log("Added wilayah column to users");
     }
     if (userCols && !userCols.includes("status_aktif")) {
       db2.run("ALTER TABLE users ADD COLUMN status_aktif INTEGER DEFAULT 1;");
     }
-    db2.run("UPDATE users SET role = 'SUPER_ADMIN' WHERE LOWER(username) = 'admin';");
+    db2.run("UPDATE users SET role = 'SUPER_ADMIN' WHERE LOWER(username) IN ('admin', 'farid', 'deni');");
     db2.run("UPDATE users SET role = 'SUPERVISOR' WHERE LOWER(hak_akses) = 'pengawas' OR LOWER(hak_akses) = 'kasie' OR LOWER(hak_akses) = 'supervisor';");
-    db2.run("UPDATE users SET role = 'MANAGER' WHERE LOWER(hak_akses) = 'manager' OR LOWER(username) = 'manager';");
+    db2.run("UPDATE users SET role = 'MANAGER' WHERE LOWER(hak_akses) = 'manager' OR LOWER(username) IN ('manager', 'lutfi', 'putut');");
     db2.run("UPDATE users SET role = 'ADMIN' WHERE role IS NULL OR role = '';");
-    db2.run("UPDATE users SET wilayah = 'PG1' WHERE LOWER(username) LIKE '%budi%' OR LOWER(nama_lengkap) LIKE '%budi%';");
-    db2.run("UPDATE users SET wilayah = 'PG2' WHERE LOWER(username) LIKE '%agus%' OR LOWER(nama_lengkap) LIKE '%agus%';");
-    db2.run("UPDATE users SET wilayah = 'PG3' WHERE LOWER(username) LIKE '%rudi%' OR LOWER(nama_lengkap) LIKE '%rudi%';");
-    db2.run("UPDATE users SET wilayah = 'Semua Wilayah' WHERE (LOWER(username) = 'admin' OR LOWER(username) = 'manager') AND (wilayah IS NULL OR wilayah = '' OR wilayah = 'PG1');");
     db2.run("UPDATE users SET hak_akses = 'Kasie' WHERE hak_akses = 'Pengawas' OR LOWER(hak_akses) = 'pengawas';");
-    db2.run("UPDATE units SET kasie = 'Budi Santoso', wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
-    db2.run("UPDATE units SET kasie = 'Agus Wijaya', wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
-    db2.run("UPDATE units SET kasie = 'Rudi Hermawan', wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
-    db2.run("UPDATE units SET kasie = nama_pengawas WHERE kasie IS NULL OR kasie = '';");
-    db2.run("UPDATE units SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
-    db2.run("UPDATE operators SET kasie = 'Budi Santoso', wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
-    db2.run("UPDATE operators SET kasie = 'Agus Wijaya', wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
-    db2.run("UPDATE operators SET kasie = 'Rudi Hermawan', wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
-    db2.run("UPDATE operators SET kasie = nama_pengawas WHERE kasie IS NULL OR kasie = '';");
-    db2.run("UPDATE operators SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
-    db2.run("UPDATE rencana_kerja SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%';");
-    db2.run("UPDATE rencana_kerja SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%';");
-    db2.run("UPDATE rencana_kerja SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%';");
-    db2.run("UPDATE rencana_kerja SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = rencana_kerja.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '';");
-    db2.run("UPDATE rencana_kerja SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
-    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%';");
-    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%';");
-    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%';");
-    db2.run("UPDATE hasil_input_aktivitas SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = hasil_input_aktivitas.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '';");
-    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
-    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'EXCAVATOR' WHERE LOWER(nama_aktivitas) LIKE '%galian%' OR LOWER(nama_aktivitas) LIKE '%loading%' OR LOWER(nama_aktivitas) LIKE '%saluran%' OR LOWER(nama_aktivitas) LIKE '%trenching%';");
-    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'BULLDOZER' WHERE LOWER(nama_aktivitas) LIKE '%clearing%' OR LOWER(nama_aktivitas) LIKE '%dozing%' OR LOWER(nama_aktivitas) LIKE '%ripping%' OR LOWER(nama_aktivitas) LIKE '%disposal area%';");
-    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'DUMP TRUCK' WHERE LOWER(nama_aktivitas) LIKE '%hauling%' OR LOWER(nama_aktivitas) LIKE '%breakdown%' OR LOWER(nama_aktivitas) LIKE '%angkut%' OR LOWER(nama_aktivitas) LIKE '%dumping%';");
-    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'MOTOR GRADER' WHERE LOWER(nama_aktivitas) LIKE '%grading%' OR LOWER(nama_aktivitas) LIKE '%perawatan jalan%';");
-    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'WATER TRUCK' WHERE LOWER(nama_aktivitas) LIKE '%penyiraman%' OR LOWER(nama_aktivitas) LIKE '%water%' OR LOWER(nama_aktivitas) LIKE '%siram%';");
-    db2.run("UPDATE aktivitas_unit SET jenis_unit = UPPER(TRIM(jenis_unit)) WHERE jenis_unit IS NOT NULL;");
-    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'EXCAVATOR' WHERE jenis_unit IS NULL OR jenis_unit = '';");
+    db2.run("UPDATE users SET wilayah = 'Semua Wilayah' WHERE role IN ('SUPER_ADMIN', 'ADMIN', 'MANAGER') OR hak_akses IN ('Super Admin', 'Admin', 'Manager') OR LOWER(username) IN ('admin', 'manager', 'farid', 'deni', 'lutfi', 'putut');");
+    db2.run("UPDATE users SET wilayah = 'Geodesi PG1' WHERE LOWER(nama_lengkap) = 'agung' OR LOWER(username) = 'agung';");
+    db2.run("UPDATE users SET wilayah = 'Geodesi PG2' WHERE LOWER(nama_lengkap) = 'zainudin' OR LOWER(username) = 'zainudin';");
+    db2.run("UPDATE users SET wilayah = 'Geodesi PG3' WHERE LOWER(nama_lengkap) = 'jaidi' OR LOWER(username) = 'jaidi';");
+    db2.run("UPDATE users SET wilayah = 'RC PG1' WHERE LOWER(nama_lengkap) = 'hisar' OR LOWER(username) = 'hisar';");
+    db2.run("UPDATE users SET wilayah = 'RC PG2' WHERE LOWER(nama_lengkap) = 'yono' OR LOWER(username) = 'yono';");
+    db2.run("UPDATE users SET wilayah = 'RC PG3' WHERE LOWER(nama_lengkap) = 'nyoman' OR LOWER(username) = 'nyoman';");
+    db2.run("UPDATE users SET wilayah = 'LEBUNG PG12' WHERE LOWER(nama_lengkap) = 'saipul' OR LOWER(username) = 'saipul';");
+    db2.run("UPDATE users SET wilayah = 'LEBUNG PG3' WHERE LOWER(nama_lengkap) = 'galung' OR LOWER(username) = 'galung';");
+    db2.run("UPDATE users SET wilayah = 'Geodesi PG1' WHERE LOWER(nama_lengkap) LIKE '%budi%' OR LOWER(username) LIKE '%budi%';");
+    db2.run("UPDATE users SET wilayah = 'RC PG1' WHERE LOWER(nama_lengkap) LIKE '%agus%' OR LOWER(username) LIKE '%agus%';");
+    db2.run("UPDATE users SET wilayah = 'LEBUNG PG12' WHERE LOWER(nama_lengkap) LIKE '%rudi%' OR LOWER(username) LIKE '%rudi%';");
+    db2.run("UPDATE users SET wilayah = 'Geodesi PG1' WHERE wilayah = 'PG1' OR wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE users SET wilayah = 'RC PG1' WHERE wilayah = 'PG2';");
+    db2.run("UPDATE users SET wilayah = 'LEBUNG PG3' WHERE wilayah = 'PG3';");
+    db2.run(`
+      UPDATE users SET wilayah = 'Geodesi PG1' 
+      WHERE (role NOT IN ('SUPER_ADMIN', 'ADMIN', 'MANAGER') AND hak_akses NOT IN ('Super Admin', 'Admin', 'Manager')) 
+        AND (wilayah NOT IN ('Geodesi PG1', 'Geodesi PG2', 'Geodesi PG3', 'RC PG1', 'RC PG2', 'RC PG3', 'LEBUNG PG12', 'LEBUNG PG3') OR wilayah IS NULL OR wilayah = '');
+    `);
+    db2.run("UPDATE units SET wilayah = 'Geodesi PG1' WHERE LOWER(kasie) = 'agung' OR LOWER(nama_pengawas) = 'agung';");
+    db2.run("UPDATE units SET wilayah = 'Geodesi PG2' WHERE LOWER(kasie) = 'zainudin' OR LOWER(nama_pengawas) = 'zainudin';");
+    db2.run("UPDATE units SET wilayah = 'Geodesi PG3' WHERE LOWER(kasie) = 'jaidi' OR LOWER(nama_pengawas) = 'jaidi';");
+    db2.run("UPDATE units SET wilayah = 'RC PG1' WHERE LOWER(kasie) = 'hisar' OR LOWER(nama_pengawas) = 'hisar';");
+    db2.run("UPDATE units SET wilayah = 'RC PG2' WHERE LOWER(kasie) = 'yono' OR LOWER(nama_pengawas) = 'yono';");
+    db2.run("UPDATE units SET wilayah = 'RC PG3' WHERE LOWER(kasie) = 'nyoman' OR LOWER(nama_pengawas) = 'nyoman';");
+    db2.run("UPDATE units SET wilayah = 'LEBUNG PG12' WHERE LOWER(kasie) = 'saipul' OR LOWER(nama_pengawas) = 'saipul';");
+    db2.run("UPDATE units SET wilayah = 'LEBUNG PG3' WHERE LOWER(kasie) = 'galung' OR LOWER(nama_pengawas) = 'galung';");
+    db2.run("UPDATE units SET wilayah = 'Geodesi PG1' WHERE wilayah = 'PG1' OR wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE units SET wilayah = 'RC PG1' WHERE wilayah = 'PG2';");
+    db2.run("UPDATE units SET wilayah = 'LEBUNG PG3' WHERE wilayah = 'PG3';");
+    db2.run("UPDATE operators SET wilayah = 'Geodesi PG1' WHERE LOWER(kasie) = 'agung' OR LOWER(nama_pengawas) = 'agung';");
+    db2.run("UPDATE operators SET wilayah = 'Geodesi PG2' WHERE LOWER(kasie) = 'zainudin' OR LOWER(nama_pengawas) = 'zainudin';");
+    db2.run("UPDATE operators SET wilayah = 'Geodesi PG3' WHERE LOWER(kasie) = 'jaidi' OR LOWER(nama_pengawas) = 'jaidi';");
+    db2.run("UPDATE operators SET wilayah = 'RC PG1' WHERE LOWER(kasie) = 'hisar' OR LOWER(nama_pengawas) = 'hisar';");
+    db2.run("UPDATE operators SET wilayah = 'RC PG2' WHERE LOWER(kasie) = 'yono' OR LOWER(nama_pengawas) = 'yono';");
+    db2.run("UPDATE operators SET wilayah = 'RC PG3' WHERE LOWER(kasie) = 'nyoman' OR LOWER(nama_pengawas) = 'nyoman';");
+    db2.run("UPDATE operators SET wilayah = 'LEBUNG PG12' WHERE LOWER(kasie) = 'saipul' OR LOWER(nama_pengawas) = 'saipul';");
+    db2.run("UPDATE operators SET wilayah = 'LEBUNG PG3' WHERE LOWER(kasie) = 'galung' OR LOWER(nama_pengawas) = 'galung';");
+    db2.run("UPDATE operators SET wilayah = 'Geodesi PG1' WHERE wilayah = 'PG1' OR wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE operators SET wilayah = 'RC PG1' WHERE wilayah = 'PG2';");
+    db2.run("UPDATE operators SET wilayah = 'LEBUNG PG3' WHERE wilayah = 'PG3';");
+    db2.run("UPDATE lokasi SET wilayah = 'Geodesi PG1' WHERE kode_lokasi IN ('001A', '002B') OR wilayah = 'PG1';");
+    db2.run("UPDATE lokasi SET wilayah = 'RC PG1' WHERE kode_lokasi = '003A';");
+    db2.run("UPDATE lokasi SET wilayah = 'RC PG2' WHERE kode_lokasi = '004C' OR wilayah = 'PG2';");
+    db2.run("UPDATE lokasi SET wilayah = 'RC PG3' WHERE kode_lokasi = '100A';");
+    db2.run("UPDATE lokasi SET wilayah = 'LEBUNG PG12' WHERE kode_lokasi = '101B';");
+    db2.run("UPDATE lokasi SET wilayah = 'LEBUNG PG3' WHERE kode_lokasi = '888A' OR wilayah = 'PG3';");
+    db2.run("UPDATE rencana_kerja SET wilayah = (SELECT wilayah FROM users WHERE LOWER(nama_lengkap) = LOWER(rencana_kerja.nama_pengawas) OR LOWER(username) = LOWER(rencana_kerja.nama_pengawas)) WHERE wilayah IS NULL OR wilayah = '' OR wilayah IN ('PG1', 'PG2', 'PG3');");
+    db2.run("UPDATE rencana_kerja SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = rencana_kerja.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '' OR wilayah IN ('PG1', 'PG2', 'PG3');");
+    db2.run("UPDATE rencana_kerja SET wilayah = 'Geodesi PG1' WHERE wilayah = 'PG1' OR wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE rencana_kerja SET wilayah = 'RC PG1' WHERE wilayah = 'PG2';");
+    db2.run("UPDATE rencana_kerja SET wilayah = 'LEBUNG PG3' WHERE wilayah = 'PG3';");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = (SELECT wilayah FROM users WHERE LOWER(nama_lengkap) = LOWER(hasil_input_aktivitas.nama_pengawas) OR LOWER(username) = LOWER(hasil_input_aktivitas.nama_pengawas)) WHERE wilayah IS NULL OR wilayah = '' OR wilayah IN ('PG1', 'PG2', 'PG3');");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = hasil_input_aktivitas.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '' OR wilayah IN ('PG1', 'PG2', 'PG3');");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'Geodesi PG1' WHERE wilayah = 'PG1' OR wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'RC PG1' WHERE wilayah = 'PG2';");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'LEBUNG PG3' WHERE wilayah = 'PG3';");
+    db2.run("UPDATE aktivitas_unit SET wilayah = 'Geodesi PG1' WHERE wilayah = 'PG1' OR wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE aktivitas_unit SET wilayah = 'RC PG1' WHERE wilayah = 'PG2';");
+    db2.run("UPDATE aktivitas_unit SET wilayah = 'LEBUNG PG3' WHERE wilayah = 'PG3';");
+    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'Excavator Standar' WHERE jenis_unit IS NULL OR jenis_unit = '';");
+    db2.run("DELETE FROM units WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer');");
     try {
-      db2.run("CREATE VIEW IF NOT EXISTS master_user AS SELECT * FROM users;");
-      db2.run("CREATE VIEW IF NOT EXISTS master_unit AS SELECT * FROM units;");
-      db2.run("CREATE VIEW IF NOT EXISTS master_operator AS SELECT * FROM operators;");
+      db2.run("DELETE FROM master_unit WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer');");
+    } catch {
+    }
+    db2.run("DELETE FROM rencana_kerja WHERE kode_unit NOT IN (SELECT kode_unit FROM units);");
+    db2.run("DELETE FROM aktivitas_unit WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer', 'water truck', 'wheel loader');");
+    try {
+      db2.run("DELETE FROM master_aktivitas WHERE LOWER(jenis_unit) IN ('dump truck', 'bulldozer', 'water truck', 'wheel loader');");
+    } catch {
+    }
+    try {
+      db2.run("DROP TRIGGER IF EXISTS trg_master_unit_del;");
+      db2.run("DROP TRIGGER IF EXISTS trg_master_unit_ins;");
+      db2.run("DROP TRIGGER IF EXISTS trg_master_unit_upd;");
+      db2.run("DROP VIEW IF EXISTS master_unit;");
+      db2.run("CREATE VIEW master_unit AS SELECT * FROM units;");
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_unit_del INSTEAD OF DELETE ON master_unit
+        BEGIN
+          DELETE FROM units WHERE id = OLD.id;
+        END;
+      `);
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_unit_ins INSTEAD OF INSERT ON master_unit
+        BEGIN
+          INSERT INTO units (
+            kode_unit, jenis_unit, model_unit, nama_pengawas, kasie, wilayah, 
+            hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at
+          ) VALUES (
+            NEW.kode_unit, 
+            COALESCE(NEW.jenis_unit, 'EXCAVATOR'), 
+            COALESCE(NEW.model_unit, NEW.jenis_unit, 'Unit Operasional'), 
+            COALESCE(NEW.nama_pengawas, NEW.kasie, 'Agung'), 
+            COALESCE(NEW.kasie, NEW.nama_pengawas, 'Agung'), 
+            COALESCE(NEW.wilayah, (SELECT wilayah FROM users WHERE nama_lengkap = COALESCE(NEW.kasie, NEW.nama_pengawas) LIMIT 1), 'Geodesi PG1'), 
+            COALESCE(NEW.hm_unit_terakhir_diinputkan, 0), 
+            COALESCE(NEW.hm_min_standar, 6.0), 
+            COALESCE(NEW.hm_max_standar, 10.0), 
+            COALESCE(NEW.status_aktif, 1), 
+            COALESCE(NEW.updated_at, datetime('now'))
+          );
+        END;
+      `);
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_unit_upd INSTEAD OF UPDATE ON master_unit
+        BEGIN
+          UPDATE units SET
+            kode_unit = COALESCE(NEW.kode_unit, OLD.kode_unit),
+            jenis_unit = COALESCE(NEW.jenis_unit, OLD.jenis_unit),
+            model_unit = COALESCE(NEW.model_unit, OLD.model_unit),
+            nama_pengawas = COALESCE(NEW.nama_pengawas, OLD.nama_pengawas),
+            kasie = COALESCE(NEW.kasie, NEW.nama_pengawas, OLD.kasie),
+            wilayah = COALESCE(NEW.wilayah, OLD.wilayah),
+            hm_unit_terakhir_diinputkan = COALESCE(NEW.hm_unit_terakhir_diinputkan, OLD.hm_unit_terakhir_diinputkan),
+            hm_min_standar = COALESCE(NEW.hm_min_standar, OLD.hm_min_standar),
+            hm_max_standar = COALESCE(NEW.hm_max_standar, OLD.hm_max_standar),
+            status_aktif = COALESCE(NEW.status_aktif, OLD.status_aktif),
+            updated_at = COALESCE(NEW.updated_at, datetime('now'))
+          WHERE id = OLD.id;
+        END;
+      `);
+      db2.run("DROP TRIGGER IF EXISTS trg_master_op_del;");
+      db2.run("DROP TRIGGER IF EXISTS trg_master_op_ins;");
+      db2.run("DROP TRIGGER IF EXISTS trg_master_op_upd;");
+      db2.run("DROP VIEW IF EXISTS master_operator;");
+      db2.run("CREATE VIEW master_operator AS SELECT * FROM operators;");
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_op_del INSTEAD OF DELETE ON master_operator
+        BEGIN
+          DELETE FROM operators WHERE id = OLD.id;
+        END;
+      `);
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_op_ins INSTEAD OF INSERT ON master_operator
+        BEGIN
+          INSERT INTO operators (
+            nama_operator, nik, nama_pengawas, kasie, wilayah, status_aktif
+          ) VALUES (
+            NEW.nama_operator,
+            NEW.nik,
+            COALESCE(NEW.nama_pengawas, NEW.kasie, 'Agung'),
+            COALESCE(NEW.kasie, NEW.nama_pengawas, 'Agung'),
+            COALESCE(NEW.wilayah, (SELECT wilayah FROM users WHERE nama_lengkap = COALESCE(NEW.kasie, NEW.nama_pengawas) LIMIT 1), 'Geodesi PG1'),
+            COALESCE(NEW.status_aktif, 1)
+          );
+        END;
+      `);
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_op_upd INSTEAD OF UPDATE ON master_operator
+        BEGIN
+          UPDATE operators SET
+            nama_operator = COALESCE(NEW.nama_operator, OLD.nama_operator),
+            nik = COALESCE(NEW.nik, OLD.nik),
+            nama_pengawas = COALESCE(NEW.nama_pengawas, OLD.nama_pengawas),
+            kasie = COALESCE(NEW.kasie, NEW.nama_pengawas, OLD.kasie),
+            wilayah = COALESCE(NEW.wilayah, OLD.wilayah),
+            status_aktif = COALESCE(NEW.status_aktif, OLD.status_aktif)
+          WHERE id = OLD.id;
+        END;
+      `);
+      db2.run("DROP TRIGGER IF EXISTS trg_master_user_del;");
+      db2.run("DROP TRIGGER IF EXISTS trg_master_user_ins;");
+      db2.run("DROP TRIGGER IF EXISTS trg_master_user_upd;");
+      db2.run("DROP VIEW IF EXISTS master_user;");
+      db2.run("CREATE VIEW master_user AS SELECT * FROM users;");
+      db2.run(`
+        CREATE TRIGGER IF NOT EXISTS trg_master_user_del INSTEAD OF DELETE ON master_user
+        BEGIN
+          DELETE FROM users WHERE id = OLD.id;
+        END;
+      `);
     } catch (vErr) {
       console.warn("View alias notice:", vErr);
-    }
-    const managerCheck = db2.exec("SELECT id FROM users WHERE LOWER(username) = 'manager' LIMIT 1;");
-    if (!managerCheck || !managerCheck[0] || managerCheck[0].values.length === 0) {
-      db2.run(`
-        INSERT INTO users (nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif)
-        VALUES ('Ir. Hendra Kusuma', 'manager', 'manager123', 'Manager', 'MANAGER', 'Semua Wilayah', 1);
-      `);
-      console.log("Seeded sample Manager user: manager / manager123");
     }
   } catch (uErr) {
     console.warn("User table migration note:", uErr);
@@ -771,37 +912,33 @@ function initTablesAndSeed(db2) {
   if (userCount === 0) {
     db2.run(`
       INSERT INTO users (nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif) VALUES
-      ('Farid Hadi', 'admin', 'admin123', 'Admin', 'SUPER_ADMIN', 'Semua Wilayah', 1),
-      ('Ir. Hendra Kusuma', 'manager', 'manager123', 'Manager', 'MANAGER', 'Semua Wilayah', 1),
-      ('Budi Santoso', 'budi.santoso', 'budi123', 'Kasie', 'SUPERVISOR', 'PG1', 1),
-      ('Agus Wijaya', 'agus.wijaya', 'agus123', 'Kasie', 'SUPERVISOR', 'PG2', 1),
-      ('Rudi Hermawan', 'rudi.h', 'rudi123', 'Kasie', 'SUPERVISOR', 'PG3', 1);
+      ('Farid', 'farid', '123', 'Super Admin', 'SUPER_ADMIN', 'Semua Wilayah', 1),
+      ('Deni', 'deni', '123', 'Super Admin', 'SUPER_ADMIN', 'Semua Wilayah', 1),
+      ('Agung', 'agung', '123', 'Kasie', 'SUPERVISOR', 'Geodesi PG1', 1),
+      ('Zainudin', 'zainudin', '123', 'Kasie', 'SUPERVISOR', 'Geodesi PG2', 1),
+      ('Jaidi', 'jaidi', '123', 'Kasie', 'SUPERVISOR', 'Geodesi PG3', 1),
+      ('Hisar', 'hisar', '123', 'Kasie', 'SUPERVISOR', 'RC PG1', 1),
+      ('Yono', 'yono', '123', 'Kasie', 'SUPERVISOR', 'RC PG2', 1),
+      ('Nyoman', 'nyoman', '123', 'Kasie', 'SUPERVISOR', 'RC PG3', 1),
+      ('Saipul', 'saipul', '123', 'Kasie', 'SUPERVISOR', 'LEBUNG PG12', 1),
+      ('Galung', 'galung', '123', 'Kasie', 'SUPERVISOR', 'LEBUNG PG3', 1),
+      ('Lutfi', 'lutfi', '123', 'Manager', 'MANAGER', 'Semua Wilayah', 1),
+      ('Putut', 'putut', '123', 'Manager', 'MANAGER', 'Semua Wilayah', 1);
     `);
+    console.log("Seeded 12 standard users (SUPER_ADMIN, KASIE 8 Wilayah Baru, MANAGER).");
     db2.run(`
       INSERT INTO units (kode_unit, jenis_unit, model_unit, nama_pengawas, hm_unit_terakhir_diinputkan, updated_at) VALUES
-      ('DT-101', 'DUMP TRUCK', 'Hino FM 260 Ti', 'Budi Santoso', 4280.5, '2026-10-08 17:30:00'),
-      ('DT-102', 'DUMP TRUCK', 'Scania P360 CB', 'Agus Wijaya', 3890.0, '2026-10-08 16:45:00'),
-      ('DZ-01', 'BULLDOZER', 'Komatsu D85ESS-2', 'Budi Santoso', 7120.2, '2026-10-08 18:00:00'),
-      ('DZ-02', 'BULLDOZER', 'Caterpillar D6R', 'Rudi Hermawan', 5430.8, '2026-10-08 17:15:00'),
       ('HEH1', 'EXCAVATOR', 'Komatsu PC200-8', 'Budi Santoso', 8920.4, '2026-10-08 17:50:00'),
       ('EX-301', 'EXCAVATOR', 'Hitachi ZX330-5G', 'Agus Wijaya', 6450.0, '2026-10-08 17:00:00'),
-      ('GD-01', 'MOTOR GRADER', 'Komatsu GD511A', 'Rudi Hermawan', 3110.6, '2026-10-08 16:20:00'),
-      ('WT-05', 'WATER TRUCK', 'Hino Ranger 500', 'Budi Santoso', 2490.1, '2026-10-08 15:10:00');
+      ('GD-01', 'MOTOR GRADER', 'Komatsu GD511A', 'Rudi Hermawan', 3110.6, '2026-10-08 16:20:00');
     `);
     db2.run(`
       INSERT INTO aktivitas_unit (jenis_unit, nama_aktivitas, satuan, kode_sap, kategori_status, status_unit) VALUES
       ('EXCAVATOR', 'Galian Tanah Lunak', 'm3', 'ACT-SAP-101', 'OPERASI', 'OPERASI'),
       ('EXCAVATOR', 'Loading Overburden (OB)', 'BCM', 'ACT-SAP-102', 'OPERASI', 'OPERASI'),
       ('EXCAVATOR', 'Pembuatan Saluran Air (Ditch)', 'm', 'ACT-SAP-103', 'OPERASI', 'OPERASI'),
-      ('BULLDOZER', 'Clearing & Grubbing Lahan', 'm2', 'ACT-SAP-104', 'OPERASI', 'OPERASI'),
-      ('BULLDOZER', 'Dozing & Ripping OB', 'm3', 'ACT-SAP-105', 'OPERASI', 'OPERASI'),
-      ('BULLDOZER', 'Perawatan Disposal Area', 'jam', 'ACT-SAP-106', 'OPERASI', 'OPERASI'),
-      ('DUMP TRUCK', 'Hauling Overburden ke Disposal', 'rit', 'ACT-SAP-107', 'OPERASI', 'OPERASI'),
-      ('DUMP TRUCK', 'Hauling Ore / Batubara ke Stockpile', 'ton', 'ACT-SAP-108', 'OPERASI', 'OPERASI'),
       ('MOTOR GRADER', 'Perawatan Jalan Tambang (Grading)', 'km', 'ACT-SAP-109', 'OPERASI', 'OPERASI'),
-      ('WATER TRUCK', 'Penyiraman Jalan Berdebu', 'tangki', 'ACT-SAP-110', 'OPERASI', 'OPERASI'),
-      ('EXCAVATOR', 'Standby Hujan & Kondisi Licin', 'jam', 'ACT-SAP-111', 'STANDBY', 'STANDBY'),
-      ('DUMP TRUCK', 'Breakdown Engine / Sistem Hidrolik', 'jam', 'ACT-SAP-112', 'BREAKDOWN', 'BREAKDOWN');
+      ('EXCAVATOR', 'Standby Hujan & Kondisi Licin', 'jam', 'ACT-SAP-111', 'STANDBY', 'STANDBY');
     `);
     db2.run(`
       INSERT INTO operators (nama_operator, nik, nama_pengawas) VALUES
@@ -831,54 +968,6 @@ function initTablesAndSeed(db2) {
       ('Rudi Hermawan', '${today}', 'GD-01', 'Perawatan Jalan Tambang (Grading)', 'ACT-SAP-109', 'km', 'Ahmad Zaki', 'NIK-94852', 'Main Haul Road KM 2-6', 'Siang', 7.0, 3103.8, 3110.6, 6.8, 12, 'Perataan jalan pasca hujan pagi', NULL, 'STANDBY', 0, 0.0, '2026-10-08 16:20:00'),
       ('Budi Santoso', '${today}', 'DT-101', 'Hauling Overburden ke Disposal', 'ACT-SAP-107', 'rit', 'Joko Susilo', 'NIK-94821', 'Disposal Timur', 'Malam', 10.0, 4271.0, 4280.5, 9.5, 42, 'Kondisi haul road mulus', NULL, 'OPERASI', 1, 150.0, '2026-10-08 17:30:00');
     `, [photo1, photo2, photo3, photo4]);
-  } else {
-    try {
-      db2.run("UPDATE hasil_input_aktivitas SET status_unit = 'OPERASI' WHERE status_unit IS NULL OR status_unit = ''");
-      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 185.0 WHERE kode_unit = 'HEH1' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 140.0 WHERE kode_unit = 'DZ-01' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 120.0 WHERE kode_unit = 'DT-102' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 150.0 WHERE kode_unit = 'DT-101' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db2.run("UPDATE hasil_input_aktivitas SET is_isi_solar = 1, jumlah_liter_solar = 110.0 WHERE kode_unit = 'DZ-02' AND (jumlah_liter_solar IS NULL OR jumlah_liter_solar = 0)");
-      db2.run("UPDATE hasil_input_aktivitas SET status_unit = 'STANDBY', is_isi_solar = 0, jumlah_liter_solar = 0.0 WHERE kode_unit = 'GD-01'");
-    } catch (e) {
-      console.warn("Could not backfill solar & status:", e);
-    }
-    const checkPhotos = db2.exec("SELECT COUNT(*) FROM hasil_input_aktivitas WHERE foto_bukti IS NOT NULL");
-    const photoCount = checkPhotos[0]?.values[0]?.[0] || 0;
-    if (photoCount === 0) {
-      const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-      const photo1 = generateSampleFieldPhoto("HEH1", "Loading Overburden (OB)", "Pit Utara Blok C", "Budi Santoso", today);
-      const photo2 = generateSampleFieldPhoto("DZ-01", "Clearing & Grubbing Lahan", "Front Loading 3", "Budi Santoso", today);
-      const photo3 = generateSampleFieldPhoto("DT-102", "Hauling Overburden ke Disposal", "Disposal Barat", "Agus Wijaya", today);
-      const photo4 = generateSampleFieldPhoto("EX-301", "Galian Tanah Lunak", "Pit Selatan ROM 1", "Agus Wijaya", today);
-      try {
-        db2.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'HEH1'", [photo1]);
-        db2.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'DZ-01'", [photo2]);
-        db2.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'DT-102'", [photo3]);
-        db2.run("UPDATE hasil_input_aktivitas SET foto_bukti = ? WHERE kode_unit = 'EX-301'", [photo4]);
-      } catch (e) {
-        console.warn("Could not backfill sample photos:", e);
-      }
-    }
-  }
-  const resLok = db2.exec("SELECT COUNT(*) as cnt FROM lokasi");
-  const lokCount = resLok[0]?.values[0]?.[0] || 0;
-  if (lokCount === 0) {
-    db2.run(`
-      INSERT OR IGNORE INTO lokasi (kode_lokasi, wilayah, luas_bruto, luas_netto, created_at) VALUES
-      ('001A', 'PG1', 12.50, 10.80, '2026-10-01 08:00:00'),
-      ('002B', 'PG1', 15.00, 13.20, '2026-10-01 08:00:00'),
-      ('003A', 'PG2', 8.40, 7.50, '2026-10-01 08:00:00'),
-      ('004C', 'PG2', 22.00, 19.40, '2026-10-01 08:00:00'),
-      ('100A', 'PG3', 30.50, 27.00, '2026-10-01 08:00:00'),
-      ('101B', 'PG3', 18.20, 16.00, '2026-10-01 08:00:00');
-    `);
-    console.log("Seeded master lokasi.");
-  }
-  const resRk = db2.exec("SELECT COUNT(*) as cnt FROM rencana_kerja");
-  const rkCount = resRk[0]?.values[0]?.[0] || 0;
-  if (rkCount === 0) {
-    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     db2.run(`
       INSERT OR IGNORE INTO rencana_kerja (id, nama_pengawas, tanggal, status_unit, kode_unit, operator, kode_lokasi, shift_kerja, nomor_spk, status_spk, keterangan_rencana, created_at) VALUES
       ('RK-2026-001', 'Budi Santoso', '${today}', 'OPERASI', 'HEH1', 'Hendri Kurniawan', '001A', 'SIANG', NULL, 'MENUNGGU_SPK', 'Overburden stripping pit utara blok C', '${today} 06:30:00'),
@@ -887,7 +976,6 @@ function initTablesAndSeed(db2) {
       ('RK-2026-004', 'Agus Wijaya', '${today}', 'STANDBY', 'EX-301', 'Supriyanto', '004C', 'SIANG', NULL, 'MENUNGGU_SPK', 'Standby perapihan bench dan inspeksi', '${today} 07:15:00'),
       ('RK-2026-005', 'Rudi Hermawan', '${today}', 'OPERASI', 'GD-01', 'Ahmad Zaki', '100A', 'SIANG', 'SPK-2026-X103', 'SPK_TERBIT', 'Grading main haul road km 2-6', '${today} 07:30:00');
     `);
-    console.log("Seeded rencana_kerja.");
   }
   const resKendala = db2.exec("SELECT COUNT(*) as cnt FROM master_kendala");
   const kendalaCount = resKendala[0]?.values[0]?.[0] || 0;
@@ -969,16 +1057,280 @@ function execute(sql, params = []) {
   saveDb();
   return { lastInsertRowId, changes };
 }
+async function resetAndSeedDatabase() {
+  const db2 = await getDb();
+  db2.run(`
+    DELETE FROM aktivitas_unit;
+    DELETE FROM rencana_kerja;
+    DELETE FROM operators;
+    DELETE FROM units;
+    DELETE FROM users;
+    DELETE FROM hasil_input_aktivitas;
+  `);
+  db2.run(`
+    INSERT INTO users (nama_lengkap, username, password, hak_akses, role, wilayah, status_aktif) VALUES
+    ('Farid', 'farid', '123', 'Super Admin', 'SUPER_ADMIN', 'Semua Wilayah', 1),
+    ('Deni', 'deni', '123', 'Super Admin', 'SUPER_ADMIN', 'Semua Wilayah', 1),
+    ('Agung', 'agung', '123', 'Kasie', 'SUPERVISOR', 'Geodesi PG1', 1),
+    ('Zainudin', 'zainudin', '123', 'Kasie', 'SUPERVISOR', 'Geodesi PG2', 1),
+    ('Jaidi', 'jaidi', '123', 'Kasie', 'SUPERVISOR', 'Geodesi PG3', 1),
+    ('Hisar', 'hisar', '123', 'Kasie', 'SUPERVISOR', 'RC PG1', 1),
+    ('Yono', 'yono', '123', 'Kasie', 'SUPERVISOR', 'RC PG2', 1),
+    ('Nyoman', 'nyoman', '123', 'Kasie', 'SUPERVISOR', 'RC PG3', 1),
+    ('Saipul', 'saipul', '123', 'Kasie', 'SUPERVISOR', 'LEBUNG PG12', 1),
+    ('Galung', 'galung', '123', 'Kasie', 'SUPERVISOR', 'LEBUNG PG3', 1),
+    ('Lutfi', 'lutfi', '123', 'Manager', 'MANAGER', 'Semua Wilayah', 1),
+    ('Putut', 'putut', '123', 'Manager', 'MANAGER', 'Semua Wilayah', 1);
+  `);
+  const now = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 19);
+  const unitsData = [
+    // 14 Unit Eksplisit
+    { kode: "HEH0013", jenis: "EXCAVATOR", model: "Excavator Long Arm", kasie: "Agung", wilayah: "Geodesi PG1", hm: 1, min: 6, max: 10 },
+    { kode: "HEH0015", jenis: "EXCAVATOR", model: "Excavator Long Arm", kasie: "Agung", wilayah: "Geodesi PG1", hm: 2, min: 6, max: 10.1 },
+    { kode: "HEH0016", jenis: "EXCAVATOR", model: "Excavator Long Arm", kasie: "Zainudin", wilayah: "Geodesi PG2", hm: 3, min: 6, max: 10.2 },
+    { kode: "HEH0017", jenis: "EXCAVATOR", model: "Excavator Long Arm", kasie: "Zainudin", wilayah: "Geodesi PG2", hm: 4, min: 6, max: 10.3 },
+    { kode: "HEH0018", jenis: "EXCAVATOR", model: "Excavator Long Arm", kasie: "Zainudin", wilayah: "Geodesi PG2", hm: 5, min: 6, max: 10.4 },
+    { kode: "HEH0004", jenis: "EXCAVATOR", model: "Excavator Mini", kasie: "Agung", wilayah: "Geodesi PG1", hm: 6, min: 6, max: 10.5 },
+    { kode: "HEH0005", jenis: "EXCAVATOR", model: "Excavator Mini", kasie: "Hisar", wilayah: "RC PG1", hm: 7, min: 6, max: 10.6 },
+    { kode: "HEH0006", jenis: "EXCAVATOR", model: "Excavator Mini", kasie: "Hisar", wilayah: "RC PG1", hm: 8, min: 6, max: 10.7 },
+    { kode: "MGC0001", jenis: "MOTOR GRADER", model: "Motor Grader", kasie: "Jaidi", wilayah: "Geodesi PG3", hm: 9, min: 6, max: 10.8 },
+    { kode: "MGC0003", jenis: "MOTOR GRADER", model: "Motor Grader", kasie: "Jaidi", wilayah: "Geodesi PG3", hm: 10, min: 6, max: 10.9 },
+    { kode: "MGC0004", jenis: "MOTOR GRADER", model: "Motor Grader", kasie: "Jaidi", wilayah: "Geodesi PG3", hm: 11, min: 6, max: 11 },
+    { kode: "MGC0005", jenis: "MOTOR GRADER", model: "Motor Grader", kasie: "Hisar", wilayah: "RC PG1", hm: 12, min: 6, max: 11.1 },
+    { kode: "MGC0006", jenis: "MOTOR GRADER", model: "Motor Grader", kasie: "Hisar", wilayah: "RC PG1", hm: 13, min: 6, max: 11.2 },
+    { kode: "SCC0001", jenis: "COMPACTOR", model: "Compactor", kasie: "Agung", wilayah: "Geodesi PG1", hm: 14, min: 6, max: 11.3 },
+    // Excavator Standar Tambahan (HEH0019 - HEH0040)
+    { kode: "HEH0019", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Yono", wilayah: "RC PG2", hm: 15, min: 6, max: 10 },
+    { kode: "HEH0020", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Yono", wilayah: "RC PG2", hm: 16, min: 6, max: 10 },
+    { kode: "HEH0021", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Yono", wilayah: "RC PG2", hm: 17, min: 6, max: 10 },
+    { kode: "HEH0022", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Nyoman", wilayah: "RC PG3", hm: 18, min: 6, max: 10 },
+    { kode: "HEH0023", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Nyoman", wilayah: "RC PG3", hm: 19, min: 6, max: 10 },
+    { kode: "HEH0024", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Nyoman", wilayah: "RC PG3", hm: 20, min: 6, max: 10 },
+    { kode: "HEH0025", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Saipul", wilayah: "LEBUNG PG12", hm: 21, min: 6, max: 10 },
+    { kode: "HEH0026", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Saipul", wilayah: "LEBUNG PG12", hm: 22, min: 6, max: 10 },
+    { kode: "HEH0027", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Galung", wilayah: "LEBUNG PG3", hm: 23, min: 6, max: 10 },
+    { kode: "HEH0028", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Galung", wilayah: "LEBUNG PG3", hm: 24, min: 6, max: 10 },
+    { kode: "HEH0029", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Agung", wilayah: "Geodesi PG1", hm: 25, min: 6, max: 10 },
+    { kode: "HEH0030", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Agung", wilayah: "Geodesi PG1", hm: 26, min: 6, max: 10 },
+    { kode: "HEH0031", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Zainudin", wilayah: "Geodesi PG2", hm: 27, min: 6, max: 10 },
+    { kode: "HEH0032", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Zainudin", wilayah: "Geodesi PG2", hm: 28, min: 6, max: 10 },
+    { kode: "HEH0033", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Jaidi", wilayah: "Geodesi PG3", hm: 29, min: 6, max: 10 },
+    { kode: "HEH0034", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Jaidi", wilayah: "Geodesi PG3", hm: 30, min: 6, max: 10 },
+    { kode: "HEH0035", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Hisar", wilayah: "RC PG1", hm: 31, min: 6, max: 10 },
+    { kode: "HEH0036", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Hisar", wilayah: "RC PG1", hm: 32, min: 6, max: 10 },
+    { kode: "HEH0037", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Yono", wilayah: "RC PG2", hm: 33, min: 6, max: 10 },
+    { kode: "HEH0038", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Nyoman", wilayah: "RC PG3", hm: 34, min: 6, max: 10 },
+    { kode: "HEH0039", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Saipul", wilayah: "LEBUNG PG12", hm: 35, min: 6, max: 10 },
+    { kode: "HEH0040", jenis: "EXCAVATOR", model: "Excavator Standar", kasie: "Galung", wilayah: "LEBUNG PG3", hm: 36, min: 6, max: 10 },
+    // Compactor (3 Unit Tambahan: SCC0002, SCC0003, SCC0004)
+    { kode: "SCC0002", jenis: "COMPACTOR", model: "Compactor", kasie: "Jaidi", wilayah: "Geodesi PG3", hm: 45, min: 6, max: 10 },
+    { kode: "SCC0003", jenis: "COMPACTOR", model: "Compactor", kasie: "Hisar", wilayah: "RC PG1", hm: 46, min: 6, max: 10 },
+    { kode: "SCC0004", jenis: "COMPACTOR", model: "Compactor", kasie: "Nyoman", wilayah: "RC PG3", hm: 47, min: 6, max: 10 }
+  ];
+  for (const u of unitsData) {
+    db2.run(`
+      INSERT INTO units (
+        kode_unit, jenis_unit, model_unit, nama_pengawas, kasie, wilayah,
+        hm_unit_terakhir_diinputkan, hm_min_standar, hm_max_standar, status_aktif, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `, [u.kode, u.jenis, u.model, u.kasie, u.kasie, u.wilayah, u.hm, u.min, u.max, now]);
+  }
+  const operatorsData = [
+    // Kasie Agung (Geodesi PG1)
+    { nama: "Sudarwin", nik: "123456", kasie: "Agung", wilayah: "Geodesi PG1" },
+    { nama: "Suyadi", nik: "123457", kasie: "Agung", wilayah: "Geodesi PG1" },
+    { nama: "Farid", nik: "123458", kasie: "Agung", wilayah: "Geodesi PG1" },
+    { nama: "Aldo", nik: "123459", kasie: "Agung", wilayah: "Geodesi PG1" },
+    { nama: "Sofyan Bagus", nik: "123460", kasie: "Agung", wilayah: "Geodesi PG1" },
+    // Kasie Zainudin (Geodesi PG2)
+    { nama: "Rendi", nik: "123461", kasie: "Zainudin", wilayah: "Geodesi PG2" },
+    { nama: "Syaifurohman", nik: "123462", kasie: "Zainudin", wilayah: "Geodesi PG2" },
+    { nama: "Tugiman", nik: "123463", kasie: "Zainudin", wilayah: "Geodesi PG2" },
+    { nama: "Ilham Dwi", nik: "123464", kasie: "Zainudin", wilayah: "Geodesi PG2" },
+    { nama: "Rizki", nik: "123465", kasie: "Zainudin", wilayah: "Geodesi PG2" },
+    { nama: "Fernando", nik: "123466", kasie: "Zainudin", wilayah: "Geodesi PG2" },
+    { nama: "S. Bejo", nik: "123467", kasie: "Zainudin", wilayah: "Geodesi PG2" },
+    { nama: "Ronald", nik: "123468", kasie: "Zainudin", wilayah: "Geodesi PG2" },
+    // Kasie Jaidi (Geodesi PG3)
+    { nama: "Somat", nik: "123469", kasie: "Jaidi", wilayah: "Geodesi PG3" },
+    { nama: "Andri l.w", nik: "123470", kasie: "Jaidi", wilayah: "Geodesi PG3" },
+    { nama: "Gunawan", nik: "123471", kasie: "Jaidi", wilayah: "Geodesi PG3" },
+    { nama: "Jepri", nik: "123472", kasie: "Jaidi", wilayah: "Geodesi PG3" },
+    { nama: "A. Taufik", nik: "123473", kasie: "Jaidi", wilayah: "Geodesi PG3" },
+    { nama: "Asraf", nik: "123474", kasie: "Jaidi", wilayah: "Geodesi PG3" },
+    { nama: "Rendi", nik: "123475", kasie: "Jaidi", wilayah: "Geodesi PG3" },
+    // Kasie Hisar (RC PG1)
+    { nama: "Iwan S", nik: "123476", kasie: "Hisar", wilayah: "RC PG1" },
+    { nama: "Habibi", nik: "123477", kasie: "Hisar", wilayah: "RC PG1" },
+    { nama: "Dwi", nik: "123478", kasie: "Hisar", wilayah: "RC PG1" },
+    { nama: "Chandra", nik: "123479", kasie: "Hisar", wilayah: "RC PG1" },
+    { nama: "Agus", nik: "123480", kasie: "Hisar", wilayah: "RC PG1" },
+    { nama: "Bayu", nik: "123481", kasie: "Hisar", wilayah: "RC PG1" },
+    { nama: "Fajar", nik: "123482", kasie: "Hisar", wilayah: "RC PG1" },
+    { nama: "Bayu (2)", nik: "123483", kasie: "Hisar", wilayah: "RC PG1" },
+    // Kasie Yono (RC PG2)
+    { nama: "Aziz I.", nik: "123484", kasie: "Yono", wilayah: "RC PG2" },
+    { nama: "Gus Hamid", nik: "123485", kasie: "Yono", wilayah: "RC PG2" },
+    { nama: "Rio", nik: "123486", kasie: "Yono", wilayah: "RC PG2" },
+    { nama: "Suhardi", nik: "123487", kasie: "Yono", wilayah: "RC PG2" },
+    { nama: "A. Taufiq", nik: "123488", kasie: "Yono", wilayah: "RC PG2" },
+    // Kasie Nyoman (RC PG3)
+    { nama: "Simon", nik: "123489", kasie: "Nyoman", wilayah: "RC PG3" },
+    { nama: "Alex S.", nik: "123490", kasie: "Nyoman", wilayah: "RC PG3" },
+    { nama: "Subandi", nik: "123491", kasie: "Nyoman", wilayah: "RC PG3" },
+    { nama: "Ferdiyanto", nik: "123492", kasie: "Nyoman", wilayah: "RC PG3" },
+    // Kasie Saipul (LEBUNG PG12)
+    { nama: "Tridiyanto", nik: "123493", kasie: "Saipul", wilayah: "LEBUNG PG12" },
+    { nama: "Simon P.", nik: "123494", kasie: "Saipul", wilayah: "LEBUNG PG12" },
+    { nama: "Suranto", nik: "123495", kasie: "Saipul", wilayah: "LEBUNG PG12" },
+    // Kasie Galung (LEBUNG PG3)
+    { nama: "Sahroji", nik: "123496", kasie: "Galung", wilayah: "LEBUNG PG3" },
+    { nama: "Andi S.", nik: "123497", kasie: "Galung", wilayah: "LEBUNG PG3" },
+    { nama: "Sutriyono", nik: "123498", kasie: "Galung", wilayah: "LEBUNG PG3" },
+    { nama: "Sugiyono", nik: "123499", kasie: "Galung", wilayah: "LEBUNG PG3" }
+  ];
+  for (const op of operatorsData) {
+    db2.run(`
+      INSERT INTO operators (
+        nama_operator, nik, nama_pengawas, kasie, wilayah, status_aktif
+      ) VALUES (?, ?, ?, ?, ?, 1)
+    `, [op.nama, op.nik, op.kasie, op.kasie, op.wilayah]);
+  }
+  const aktivitasCount = await seedMasterAktivitas();
+  saveDb();
+  console.log("\u2705 [DB-RESET] Database berhasil di-reset dan data master users (12), units (50), operators (44), serta aktivitas (" + aktivitasCount + ") berhasil di-seed.");
+  const countRes = db2.exec("SELECT COUNT(*) as c FROM users;");
+  const countUnitsRes = db2.exec("SELECT COUNT(*) as c FROM units;");
+  const countOpRes = db2.exec("SELECT COUNT(*) as c FROM operators;");
+  const countActRes = db2.exec("SELECT COUNT(*) as c FROM aktivitas_unit;");
+  const count = countRes[0]?.values[0]?.[0] || 12;
+  const unitCount = countUnitsRes[0]?.values[0]?.[0] || 50;
+  const operatorCount = countOpRes[0]?.values[0]?.[0] || 44;
+  const finalActCount = countActRes[0]?.values[0]?.[0] || aktivitasCount;
+  return {
+    success: true,
+    message: "Data master users (12), master units (50), master operators (44), dan master aktivitas (" + finalActCount + ") berhasil diisi lengkap dengan relasi penanggung jawab Kasie dan status operasional.",
+    userCount: count,
+    unitCount,
+    operatorCount,
+    aktivitasCount: finalActCount
+  };
+}
+async function seedMasterAktivitas() {
+  const db2 = await getDb();
+  db2.run("DELETE FROM aktivitas_unit;");
+  const aktivitasList = [
+    // ====================================================================
+    // 1. Excavator Long Arm (5 Aktivitas Inti + Aktivitas Standby & Breakdown)
+    // ====================================================================
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Perbaikan unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Perataan Tanah Galian Waduk/Lebung", kategori_status: "OPERASI", satuan: "H", kode_sap: "6111171151" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Long Arm Pendalaman Waduk/Lebung", kategori_status: "OPERASI", satuan: "M3", kode_sap: "6111171319" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Excavator Bongkar Bambu", kategori_status: "OPERASI", satuan: "Ha", kode_sap: "6111111115" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Estafet Tanah Galian", kategori_status: "OPERASI", satuan: "M3", kode_sap: "6111211127" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Tunggu Lokasi", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Tunggu Trailer", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Tunggu Cuaca", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Tunggu Solar", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Tunggu Sparepart", kategori_status: "STANDBY", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Tunggu Mekanik", kategori_status: "STANDBY", satuan: "H", kode_sap: "Down" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Off Time", kategori_status: "STANDBY", satuan: "H", kode_sap: "Off" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Perawatan Unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "OP/Divisi" },
+    { jenis_unit: "Excavator Long Arm", nama_aktivitas: "Tunggu Operator", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    // ====================================================================
+    // 2. Excavator Mini (10 Aktivitas Inti + Aktivitas Lapangan)
+    // ====================================================================
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Tunggu Lokasi", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Tunggu Trailer", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Tunggu Cuaca", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Tunggu Solar", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Tunggu Sparepart", kategori_status: "STANDBY", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Perbaikan unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Tunggu Mekanik", kategori_status: "STANDBY", satuan: "H", kode_sap: "Down" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Off Time", kategori_status: "STANDBY", satuan: "H", kode_sap: "Off" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Gali Sal. Sekunder 100 cm, sebar tanah", kategori_status: "OPERASI", satuan: "M", kode_sap: "6111171133" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Perawatan Unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "OP/Divisi" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Tunggu Operator", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Mini", nama_aktivitas: "Cuci Parit / Saluran", kategori_status: "OPERASI", satuan: "M", kode_sap: "6111171132" },
+    // ====================================================================
+    // 3. Motor Grader (15 Aktivitas Lengkap)
+    // ====================================================================
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Off Time", kategori_status: "STANDBY", satuan: "H", kode_sap: "Off" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Tunggu Mekanik", kategori_status: "STANDBY", satuan: "H", kode_sap: "Down" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Perbaikan unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Perawatan Unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "OP/Divisi" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Grader Buat Jalan Baru / Lebar Jalan", kategori_status: "OPERASI", satuan: "M", kode_sap: "6111131114" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Grader Rawat Jalan Tanpa Sirtu", kategori_status: "OPERASI", satuan: "M", kode_sap: "6111131112" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Grader Rawat Jalan Pakai Sirtu", kategori_status: "OPERASI", satuan: "M3", kode_sap: "6111131113" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Grader Kupas Tanah / Stump / Lahan", kategori_status: "OPERASI", satuan: "Ha", kode_sap: "6111111117" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Grader Sebar Timbunan / Sirtu", kategori_status: "OPERASI", satuan: "M3", kode_sap: "6111131116" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Tunggu Lokasi", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Tunggu Trailer", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Tunggu Cuaca", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Tunggu Solar", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Tunggu Sparepart", kategori_status: "STANDBY", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Motor Grader", nama_aktivitas: "Tunggu Operator", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    // ====================================================================
+    // 4. Compactor (Operasi, Standby, Breakdown)
+    // ====================================================================
+    { jenis_unit: "Compactor", nama_aktivitas: "Compactor Padatkan Timbunan / Sirtu", kategori_status: "OPERASI", satuan: "M3", kode_sap: "6111141113" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Compactor Padatkan Subgrade / Badan Jalan", kategori_status: "OPERASI", satuan: "M", kode_sap: "6111141112" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Compactor Kupas Tanah / Lahan", kategori_status: "OPERASI", satuan: "Ha", kode_sap: "6111111117" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Perbaikan unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Compactor", nama_aktivitas: "Perawatan Unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "OP/Divisi" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Tunggu Lokasi", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Tunggu Trailer", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Tunggu Cuaca", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Tunggu Solar", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Tunggu Sparepart", kategori_status: "STANDBY", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Compactor", nama_aktivitas: "Tunggu Mekanik", kategori_status: "STANDBY", satuan: "H", kode_sap: "Down" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Off Time", kategori_status: "STANDBY", satuan: "H", kode_sap: "Off" },
+    { jenis_unit: "Compactor", nama_aktivitas: "Tunggu Operator", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    // ====================================================================
+    // 5. Excavator Standar (Operasi, Standby, Breakdown)
+    // ====================================================================
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Gali Saluran Primer / Sekunder", kategori_status: "OPERASI", satuan: "M", kode_sap: "6111171131" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Cuci Parit / Saluran", kategori_status: "OPERASI", satuan: "M", kode_sap: "6111171132" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Bongkar Lahan / Land Clearing", kategori_status: "OPERASI", satuan: "Ha", kode_sap: "6111111111" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Muat Tanah / Loading Tanah", kategori_status: "OPERASI", satuan: "M3", kode_sap: "6111211121" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Perapihan Tebing / Slope", kategori_status: "OPERASI", satuan: "M", kode_sap: "6111171141" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Galian Tanah Lunak", kategori_status: "OPERASI", satuan: "M3", kode_sap: "6111171101" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Loading Overburden (OB)", kategori_status: "OPERASI", satuan: "BCM", kode_sap: "6111171102" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Tunggu Lokasi", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Tunggu Trailer", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Tunggu Cuaca", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Tunggu Solar", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Tunggu Sparepart", kategori_status: "STANDBY", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Tunggu Mekanik", kategori_status: "STANDBY", satuan: "H", kode_sap: "Down" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Off Time", kategori_status: "STANDBY", satuan: "H", kode_sap: "Off" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Perawatan Unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "OP/Divisi" },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Perbaikan unit", kategori_status: "BREAKDOWN", satuan: "H", kode_sap: "Maint." },
+    { jenis_unit: "Excavator Standar", nama_aktivitas: "Tunggu Operator", kategori_status: "STANDBY", satuan: "H", kode_sap: "Standby" }
+  ];
+  for (const act of aktivitasList) {
+    db2.run(`
+      INSERT INTO master_aktivitas (
+        jenis_unit, nama_aktivitas, satuan, kode_sap, kategori_status, status_unit, status_aktif
+      ) VALUES (?, ?, ?, ?, ?, ?, 1)
+    `, [act.jenis_unit, act.nama_aktivitas, act.satuan, act.kode_sap, act.kategori_status, act.kategori_status]);
+  }
+  saveDb();
+  console.log(`\u2705 [SEED-MASTER-AKTIVITAS] Berhasil menyemai ${aktivitasList.length} aktivitas ke master_aktivitas.`);
+  return aktivitasList.length;
+}
 const db = {
   getDb,
   saveDb,
   queryAll,
   queryOne,
   execute,
+  resetAndSeedDatabase,
+  seedMasterAktivitas,
   generateSampleFieldPhoto
 };
 var db_default = db;
 export {
+  DAFTAR_WILAYAH,
   db,
   db_default as default,
   execute,
@@ -986,5 +1338,7 @@ export {
   getDb,
   queryAll,
   queryOne,
-  saveDb
+  resetAndSeedDatabase,
+  saveDb,
+  seedMasterAktivitas
 };
