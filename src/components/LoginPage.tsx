@@ -63,23 +63,47 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       };
       onLoginSuccess(userPayload);
     } catch (err: unknown) {
-      if (trimmedUser.toLowerCase() === 'manager' && password === 'manager123') {
+      if ((trimmedUser.toLowerCase() === 'farid' || trimmedUser.toLowerCase() === 'deni') && password === '123') {
+        onLoginSuccess({
+          id: trimmedUser.toLowerCase() === 'farid' ? 1 : 2,
+          nama_lengkap: trimmedUser.toLowerCase() === 'farid' ? 'Farid' : 'Deni',
+          username: trimmedUser.toLowerCase(),
+          hak_akses: 'Super Admin',
+          role: 'SUPER_ADMIN',
+          wilayah: 'Semua Wilayah',
+          email: `${trimmedUser.toLowerCase()}@rkce.co.id`,
+          token: `rkce_token_${trimmedUser.toLowerCase()}`
+        });
+      } else if ((trimmedUser.toLowerCase() === 'lutfi' || trimmedUser.toLowerCase() === 'putut') && password === '123') {
+        onLoginSuccess({
+          id: trimmedUser.toLowerCase() === 'lutfi' ? 11 : 12,
+          nama_lengkap: trimmedUser.toLowerCase() === 'lutfi' ? 'Lutfi' : 'Putut',
+          username: trimmedUser.toLowerCase(),
+          hak_akses: 'Manager',
+          role: 'MANAGER',
+          wilayah: 'Semua Wilayah',
+          email: `${trimmedUser.toLowerCase()}@rkce.co.id`,
+          token: `rkce_token_${trimmedUser.toLowerCase()}`
+        });
+      } else if (trimmedUser.toLowerCase() === 'manager' && password === 'manager123') {
         onLoginSuccess({
           id: 2,
-          nama_lengkap: 'Ir. Hendra Kusuma',
+          nama_lengkap: 'Lutfi',
           username: 'manager',
           hak_akses: 'Manager',
           role: 'MANAGER',
+          wilayah: 'Semua Wilayah',
           email: 'manager@rkce.co.id',
           token: 'rkce_token_2_manager'
         });
       } else if (trimmedUser.toLowerCase() === 'admin' && password === 'admin123') {
         onLoginSuccess({
           id: 1,
-          nama_lengkap: 'Farid Hadi',
+          nama_lengkap: 'Farid',
           username: 'admin',
           hak_akses: 'Super Admin',
           role: 'SUPER_ADMIN',
+          wilayah: 'Semua Wilayah',
           email: 'admin@rkce.co.id',
           token: 'rkce_fallback_token'
         });
@@ -222,18 +246,34 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
-              onClick={() => handleUseDemo('admin', 'admin123')}
+              onClick={() => handleUseDemo('farid', '123')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-[11px] font-mono font-medium transition-all cursor-pointer shadow-2xs"
             >
-              <span className="font-bold">admin</span> / <span className="text-emerald-700">admin123</span>
+              <span className="font-bold">farid</span> / <span className="text-emerald-700">123</span>
               <span className="text-[10px] bg-emerald-200 text-emerald-900 font-sans px-1.5 py-0.2 rounded font-bold">Super Admin</span>
             </button>
             <button
               type="button"
-              onClick={() => handleUseDemo('manager', 'manager123')}
+              onClick={() => handleUseDemo('deni', '123')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-[11px] font-mono font-medium transition-all cursor-pointer shadow-2xs"
+            >
+              <span className="font-bold">deni</span> / <span className="text-emerald-700">123</span>
+              <span className="text-[10px] bg-emerald-200 text-emerald-900 font-sans px-1.5 py-0.2 rounded font-bold">Super Admin</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleUseDemo('lutfi', '123')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 text-[11px] font-mono font-medium transition-all cursor-pointer shadow-2xs"
             >
-              <span className="font-bold">manager</span> / <span className="text-blue-700">manager123</span>
+              <span className="font-bold">lutfi</span> / <span className="text-blue-700">123</span>
+              <span className="text-[10px] bg-blue-200 text-blue-900 font-sans px-1.5 py-0.2 rounded font-bold">Manager</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleUseDemo('putut', '123')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 text-[11px] font-mono font-medium transition-all cursor-pointer shadow-2xs"
+            >
+              <span className="font-bold">putut</span> / <span className="text-blue-700">123</span>
               <span className="text-[10px] bg-blue-200 text-blue-900 font-sans px-1.5 py-0.2 rounded font-bold">Manager</span>
             </button>
           </div>

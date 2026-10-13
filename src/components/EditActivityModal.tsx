@@ -243,7 +243,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     return units.find(u => u.kode_unit === kodeUnit);
   }, [units, kodeUnit]);
 
-  // 2. Cascading Filter Aktivitas per Jenis Unit
+  // 2. Cascading Filter Aktivitas per Jenis Unit & Model Unit
   const filteredAktivitas = useMemo(() => {
     if (!selectedUnitObj || !selectedUnitObj.jenis_unit) {
       if (namaAktivitas) {
@@ -252,6 +252,18 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       return [];
     }
     const targetJenis = selectedUnitObj.jenis_unit.trim().toUpperCase();
+    const targetModel = (selectedUnitObj.model_unit || '').trim().toUpperCase();
+
+    // Utamakan filter spesifik berdasarkan model unit
+    if (targetModel) {
+      const modelSpecific = aktivitasList.filter(a => {
+        if (a.nama_aktivitas === namaAktivitas || (kodeSap && a.kode_sap === kodeSap)) return true;
+        const aJenis = (a.jenis_unit || '').trim().toUpperCase();
+        return aJenis === targetModel || targetModel.includes(aJenis) || aJenis.includes(targetModel);
+      });
+      if (modelSpecific.length > 0) return modelSpecific;
+    }
+
     return aktivitasList.filter(a => {
       // Selalu sertakan aktivitas yang saat ini sedang aktif dipilih
       if (a.nama_aktivitas === namaAktivitas || (kodeSap && a.kode_sap === kodeSap)) return true;
@@ -339,7 +351,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     try {
       const targetId = activity.id_aktivitas || activity.id;
       const selectedUser = users?.find(u => u.nama_lengkap === namaPengawas || u.username === namaPengawas);
-      const resolvedWilayah = selectedUser?.wilayah || activity.wilayah || 'PG1';
+      const resolvedWilayah = selectedUser?.wilayah || activity.wilayah || 'Geodesi PG1';
 
       const payload = {
         nama_pengawas: namaPengawas,

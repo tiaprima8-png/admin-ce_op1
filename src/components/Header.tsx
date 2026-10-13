@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
     : (currentUser?.role === 'SUPER_ADMIN' 
         ? 'Super Admin' 
         : (currentUser?.role === 'SUPERVISOR' || currentUser?.hak_akses?.toLowerCase() === 'pengawas' || currentUser?.hak_akses?.toLowerCase() === 'kasie'
-            ? `Kasie (${currentUser?.wilayah || 'PG1'})`
+            ? `Kasie (${currentUser?.wilayah || 'Geodesi PG1'})`
             : (currentUser?.hak_akses || 'Admin')));
   const userInitials = displayName
     .split(' ')

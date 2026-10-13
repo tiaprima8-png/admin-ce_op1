@@ -18,7 +18,7 @@ import {
   Power
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { Lokasi } from '../types';
+import { Lokasi, DAFTAR_WILAYAH, getWilayahBadgeClass } from '../types';
 
 interface MasterLokasiProps {
   lokasiList: Lokasi[];
@@ -105,7 +105,7 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
     } else {
       setEditingKode(null);
       setFormKodeLokasi('');
-      setFormWilayah('PG1');
+      setFormWilayah('Geodesi PG1');
       setFormLuasBruto('10.0');
       setFormLuasNetto('8.5');
     }
@@ -187,25 +187,25 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
     const templateRows = [
       {
         'lokasi': '001A',
-        'wilayah': 'PG1',
+        'wilayah': 'Geodesi PG1',
         'luas bruto': 12.50,
         'luas netto': 10.80
       },
       {
         'lokasi': '002B',
-        'wilayah': 'PG1',
+        'wilayah': 'Geodesi PG2',
         'luas bruto': 15.00,
         'luas netto': 13.20
       },
       {
         'lokasi': '003A',
-        'wilayah': 'PG2',
+        'wilayah': 'RC PG1',
         'luas bruto': 8.40,
         'luas netto': 7.50
       },
       {
-        'lokasi': '100A',
-        'wilayah': 'PG3',
+        'lokasi': '101B',
+        'wilayah': 'LEBUNG PG12',
         'luas bruto': 30.50,
         'luas netto': 27.00
       }
@@ -263,8 +263,8 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
             row['wilayah'] || 
             row['Wilayah'] || 
             row['wilayah_kerja'] || 
-            row['PG'] || 'PG1'
-          ).toString().trim().toUpperCase();
+            row['PG'] || 'Geodesi PG1'
+          ).toString().trim();
 
           // Find luas bruto
           const bruto = parseFloat(
@@ -279,7 +279,7 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
           if (kode) {
             parsedLokasiList.push({
               kode_lokasi: kode,
-              wilayah: wilayah || 'PG1',
+              wilayah: wilayah || 'Geodesi PG1',
               luas_bruto: bruto,
               luas_netto: netto
             });
@@ -552,7 +552,7 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
                       </td>
 
                       <td className="py-3 px-4 font-semibold text-slate-800 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px]">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shadow-2xs ${getWilayahBadgeClass(row.wilayah)}`}>
                           {row.wilayah}
                         </span>
                       </td>
@@ -791,16 +791,18 @@ export const MasterLokasi: React.FC<MasterLokasiProps> = ({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Wilayah Kerja
+                  Wilayah Kerja <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   required
-                  placeholder="Contoh: PG1, PG2, PG3"
                   value={formWilayah}
                   onChange={(e) => setFormWilayah(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs uppercase font-semibold focus:ring-1 focus:ring-emerald-500"
-                />
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-emerald-500 bg-white cursor-pointer"
+                >
+                  {DAFTAR_WILAYAH.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

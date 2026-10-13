@@ -432,12 +432,15 @@ export const MasterAktivitas: React.FC<MasterAktivitasProps> = ({ aktivitasList,
                   className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
                   required
                 >
-                  <option value="EXCAVATOR">EXCAVATOR</option>
-                  <option value="BULLDOZER">BULLDOZER</option>
-                  <option value="DUMP TRUCK">DUMP TRUCK</option>
-                  <option value="MOTOR GRADER">MOTOR GRADER</option>
+                  <option value="Excavator Long Arm">Excavator Long Arm</option>
+                  <option value="Excavator Mini">Excavator Mini</option>
+                  <option value="Excavator Standar">Excavator Standar</option>
+                  <option value="EXCAVATOR">EXCAVATOR (Umum)</option>
+                  <option value="Motor Grader">Motor Grader</option>
+                  <option value="Compactor">Compactor</option>
+                  <option value="Bulldozer">Bulldozer</option>
+                  <option value="Dump Truck">Dump Truck</option>
                   <option value="WATER TRUCK">WATER TRUCK</option>
-                  <option value="COMPACTOR">COMPACTOR</option>
                   <option value="WHEEL LOADER">WHEEL LOADER</option>
                 </select>
               </div>

@@ -17,7 +17,7 @@ import {
   Wrench,
   CheckCircle
 } from 'lucide-react';
-import { Unit, UnitAnalyticsRow, AktivitasAnalyticsRow, AnalyticsSummary, User } from '../types';
+import { Unit, UnitAnalyticsRow, AktivitasAnalyticsRow, AnalyticsSummary, User, DAFTAR_WILAYAH } from '../types';
 import { exportAnalyticsToExcel } from '../utils/export';
 
 interface AnalyticsViewProps {
@@ -261,12 +261,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ units, supervisors
               value={selectedWilayah}
               onChange={(e) => setSelectedWilayah(e.target.value)}
               className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
-              title="Filter Wilayah Operasional (PG1, PG2, PG3)"
+              title="Filter Wilayah Operasional"
             >
               <option value="Semua">Semua Wilayah</option>
-              <option value="PG1">Wilayah PG1</option>
-              <option value="PG2">Wilayah PG2</option>
-              <option value="PG3">Wilayah PG3</option>
+              {DAFTAR_WILAYAH.map((w) => (
+                <option key={w} value={w}>{w}</option>
+              ))}
             </select>
           </div>
 

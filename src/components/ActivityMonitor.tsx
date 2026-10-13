@@ -20,7 +20,7 @@ import {
   Pencil,
   Calendar
 } from 'lucide-react';
-import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, User } from '../types';
+import { HasilInputAktivitas, Unit, AktivitasUnit, Operator, User, DAFTAR_WILAYAH, getWilayahBadgeClass } from '../types';
 import { exportToExcel } from '../utils/export';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { KpiCards } from './KpiCards';
@@ -409,13 +409,21 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   // User & Unit Wilayah lookup
   const userWilayahMap = useMemo(() => {
     const map = new Map<string, string>();
-    map.set('budi santoso', 'PG1');
-    map.set('agus wijaya', 'PG2');
-    map.set('rudi hermawan', 'PG3');
+    map.set('agung', 'GEODESI PG1');
+    map.set('zainudin', 'GEODESI PG2');
+    map.set('jaidi', 'GEODESI PG3');
+    map.set('hisar', 'RC PG1');
+    map.set('yono', 'RC PG2');
+    map.set('nyoman', 'RC PG3');
+    map.set('saipul', 'LEBUNG PG12');
+    map.set('galung', 'LEBUNG PG3');
     if (users) {
       for (const u of users) {
         if (u.nama_lengkap && u.wilayah) {
           map.set(u.nama_lengkap.toLowerCase().trim(), u.wilayah.trim().toUpperCase());
+        }
+        if (u.username && u.wilayah) {
+          map.set(u.username.toLowerCase().trim(), u.wilayah.trim().toUpperCase());
         }
       }
     }
@@ -674,12 +682,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         }
       />
 
-      {/* FILTER & ACTION TOOLBAR (2 BARIS BERSIH & PROFESIONAL) */}
-      <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs space-y-2.5">
+      {/* FILTER & ACTION TOOLBAR (RESPONSIF MOBILE & DESKTOP) */}
+      <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-3.5 shadow-2xs space-y-2.5">
         {/* BARIS 1: PENCARIAN UTAMA, PERIODE CEPAT, & TOMBOL AKSI */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
           {/* Kiri: Universal Search Bar */}
-          <div className="relative flex-1 min-w-[260px]">
+          <div className="relative flex-1 min-w-[240px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -694,9 +702,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           </div>
 
           {/* Kanan: Dropdown Periode Cepat, Export Excel, Tambah Data Manual */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* a. 1 Dropdown Periode ringkas: "Periode: [Pilihan Aktif]" */}
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 shrink-0">
+            {/* a. Dropdown Periode ringkas */}
+            <div className="relative w-full sm:w-auto">
               <select
                 value={activePreset}
                 onChange={(e) => {
@@ -704,7 +712,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     applyPreset(e.target.value as any);
                   }
                 }}
-                className="h-10 pl-3 pr-8 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden shadow-2xs cursor-pointer appearance-none"
+                className="w-full sm:w-auto h-10 pl-3 pr-8 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden shadow-2xs cursor-pointer appearance-none"
               >
                 <option value="hariIni">Periode: Hari Ini</option>
                 <option value="kemarin">Periode: Kemarin</option>
@@ -721,23 +729,23 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               </div>
             </div>
 
-            {/* b. Tombol Export Excel (.xlsx) - style sekunder outline hijau / solid */}
+            {/* b. Tombol Export Excel (.xlsx) */}
             <button
               type="button"
               onClick={handleExportExcel}
               title="Unduh data tabel aktif ke file spreadsheet Excel (.xlsx)"
-              className="h-10 inline-flex items-center gap-1.5 px-3.5 text-sm font-semibold text-emerald-700 bg-white hover:bg-emerald-50 border border-emerald-300 hover:border-emerald-400 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95"
+              className="w-full sm:w-auto h-10 inline-flex items-center justify-center gap-1.5 px-3.5 text-sm font-semibold text-emerald-700 bg-white hover:bg-emerald-50 border border-emerald-300 hover:border-emerald-400 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
               <span>Export Excel (.xlsx)</span>
             </button>
 
-            {/* c. Tombol + Tambah Data Manual - style primer hijau solid (Hanya untuk Admin / Supervisor, disembunyikan untuk Manager) */}
+            {/* c. Tombol + Tambah Data Manual */}
             {!isManager ? (
               <button
                 type="button"
                 onClick={onOpenManualModal}
-                className="h-10 inline-flex items-center gap-1.5 px-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95"
+                className="w-full sm:w-auto h-10 inline-flex items-center justify-center gap-1.5 px-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 <span>+ Tambah Data Manual</span>
@@ -745,7 +753,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             ) : (
               <div 
                 title="Akun Manager memiliki hak akses Monitoring & Executive View (Read-Only)"
-                className="h-10 inline-flex items-center gap-1.5 px-3.5 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg shadow-2xs select-none"
+                className="w-full sm:w-auto h-10 inline-flex items-center justify-center gap-1.5 px-3.5 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg shadow-2xs select-none"
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Executive Monitoring View</span>
@@ -755,39 +763,59 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         </div>
 
         {/* BARIS 2: FILTER PARAMETER OPERASIONAL & KONTROL HALAMAN */}
-        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
-          {/* Kiri (Grup Filter) */}
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            {/* Label/ikon corong: "Filter:" */}
-            <div className="flex items-center gap-1.5 text-slate-600 font-semibold text-sm mr-0.5">
+        <div className="bg-slate-50 p-2.5 sm:p-3 rounded-lg border border-slate-200 space-y-2.5">
+          {/* Header Baris 2: Label Filter dan Kontrol Data per Hal */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-slate-700 font-bold text-xs sm:text-sm">
               <Filter className="w-4 h-4 text-emerald-600" />
-              <span>Filter:</span>
+              <span>Filter Operasional:</span>
             </div>
 
-            {/* Dropdown Wilayah Kerja (default: "Semua Wilayah") */}
+            {/* Kontrol Data per Halaman */}
+            <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+              <span className="hidden sm:inline">Per Hal:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="h-8 px-2 rounded-md border border-slate-300 bg-white text-slate-800 font-semibold text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer shadow-2xs"
+              >
+                <option value={15}>15 Data</option>
+                <option value={25}>25 Data</option>
+                <option value={50}>50 Data</option>
+                <option value={100}>100 Data</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Grid Filter: grid 1 kolom di HP (<640px), 2 kolom di tablet (640-1024px), flex wrap di layar besar */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 text-sm">
+            {/* Dropdown Wilayah Kerja */}
             <select
               value={selectedWilayah}
               onChange={(e) => {
                 setSelectedWilayah(e.target.value);
                 setCurrentPage(1);
               }}
-              title="Filter Wilayah Operasional (PG1, PG2, PG3)"
-              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer font-medium"
+              title="Filter Wilayah Operasional"
+              className="w-full lg:w-auto h-9.5 px-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs sm:text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer font-medium"
             >
               <option value="Semua">Semua Wilayah</option>
-              <option value="PG1">PG1</option>
-              <option value="PG2">PG2</option>
-              <option value="PG3">PG3</option>
+              {DAFTAR_WILAYAH.map((w) => (
+                <option key={w} value={w}>{w}</option>
+              ))}
             </select>
 
-            {/* Dropdown Unit (default: "Semua Unit") */}
+            {/* Dropdown Unit */}
             <select
               value={selectedUnit}
               onChange={(e) => {
                 setSelectedUnit(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+              className="w-full lg:w-auto h-9.5 px-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs sm:text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
             >
               <option value="Semua">Semua Unit</option>
               {units.map((u) => (
@@ -795,28 +823,28 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               ))}
             </select>
 
-            {/* Dropdown Shift (default: "Semua Shift") */}
+            {/* Dropdown Shift */}
             <select
               value={selectedShift}
               onChange={(e) => {
                 setSelectedShift(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+              className="w-full lg:w-auto h-9.5 px-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs sm:text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
             >
               <option value="Semua">Semua Shift</option>
-              <option value="Siang">Shift Siang</option>
-              <option value="Malam">Shift Malam</option>
+              <option value="Siang">Shift: Siang</option>
+              <option value="Malam">Shift: Malam</option>
             </select>
 
-            {/* Dropdown Status (default: "Semua Status") */}
+            {/* Dropdown Status */}
             <select
               value={selectedStatus}
               onChange={(e) => {
                 setSelectedStatus(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-700 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer font-medium"
+              className="w-full lg:w-auto h-9.5 px-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs sm:text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer font-medium"
             >
               <option value="Semua">Semua Status</option>
               <option value="OPERASI">Status: OPERASI</option>
@@ -825,9 +853,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             </select>
 
             {/* Date Picker Rentang Tanggal ringkas (WIB) */}
-            <div className="flex items-center gap-1.5 h-9 bg-white px-2.5 rounded-md border border-slate-300">
-              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span className="text-xs text-slate-500 font-medium">WIB:</span>
+            <div className="col-span-1 sm:col-span-2 lg:col-span-auto flex items-center justify-between gap-1.5 h-9.5 bg-white px-2.5 rounded-lg border border-slate-300 w-full lg:w-auto">
+              <div className="flex items-center gap-1 text-xs text-slate-500 font-medium shrink-0">
+                <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>WIB:</span>
+              </div>
               <input
                 type="date"
                 value={startDate}
@@ -837,9 +867,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   setCurrentPage(1);
                 }}
                 title="Tanggal Awal Operasional (WIB)"
-                className="text-xs font-mono text-slate-800 bg-transparent border-0 p-0 focus:outline-hidden"
+                className="text-xs font-mono text-slate-800 bg-transparent border-0 p-0 focus:outline-hidden flex-1 min-w-0"
               />
-              <span className="text-slate-400 text-xs">s/d</span>
+              <span className="text-slate-400 text-xs px-1">s/d</span>
               <input
                 type="date"
                 value={endDate}
@@ -849,510 +879,805 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   setCurrentPage(1);
                 }}
                 title="Tanggal Akhir Operasional (WIB)"
-                className="text-xs font-mono text-slate-800 bg-transparent border-0 p-0 focus:outline-hidden"
+                className="text-xs font-mono text-slate-800 bg-transparent border-0 p-0 focus:outline-hidden flex-1 min-w-0"
               />
             </div>
 
-            {/* Tombol kecil: "Reset Filter" (hanya muncul/aktif jika filter sedang diterapkan) */}
+            {/* Tombol "Reset Filter" */}
             {isFilterActive && (
               <button
                 type="button"
                 onClick={resetFilters}
                 title="Reset seluruh filter pencarian dan tanggal"
-                className="h-9 inline-flex items-center gap-1.5 px-2.5 rounded-md text-xs font-semibold bg-white text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-colors shadow-2xs cursor-pointer animate-in fade-in"
+                className="col-span-1 sm:col-span-2 lg:col-span-auto w-full lg:w-auto h-9.5 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-xs font-semibold bg-white text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-colors shadow-2xs cursor-pointer animate-in fade-in"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Reset Filter</span>
               </button>
             )}
           </div>
-
-          {/* Kanan: Dropdown kontrol paginasi sejajar rapi di ujung kanan */}
-          <div className="flex items-center gap-2 text-sm text-slate-600 font-medium ml-auto shrink-0">
-            <span>Data per Hal:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="h-9 px-2.5 rounded-md border border-slate-300 bg-white text-slate-800 font-semibold text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-hidden cursor-pointer shadow-2xs"
-            >
-              <option value={15}>15</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
         </div>
       </div>
 
-      {/* OPTIMIZED REKAPITULASI TABLE (FIT TO SCREEN / NO HORIZONTAL SCROLL) */}
+      {/* CONTAINER DATA REKAPITULASI (DESKTOP TABEL + MOBILE CARD VIEW) */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-        <table className="w-full table-fixed text-left border-collapse">
-          
-          {/* Table Header: Exactly 9 Compact Columns with specified widths */}
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
-              {/* Kolom 1 [FOTO & SPK] - ~8% */}
-              <th className="w-[8%] py-2.5 px-2 text-center">
-                Foto & SPK
-              </th>
+        
+        {/* =========================================================================
+            1. TAMPILAN MOBILE CARD (< 768px): Card Vertikal Bersih, Ringkas, Touch-Friendly
+           ========================================================================= */}
+        <div className="block md:hidden p-3 space-y-3 bg-slate-50/60">
+          {paginatedActivities.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 shadow-2xs">
+              <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+              <p className="font-semibold text-slate-700 text-sm">Tidak ada data aktivitas yang sesuai kriteria.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {isManager ? 'Menunggu sinkronisasi data aktivitas dari aplikasi Android armada lapangan.' : 'Gunakan tombol "+ Tambah Data Manual" atau tunggu pengiriman dari aplikasi Android.'}
+              </p>
+            </div>
+          ) : (
+            paginatedActivities.map((row, idx) => {
+              const isGlowing = highlightIds.has(row.id) || 
+                highlightIds.has(Number(row.id)) || 
+                newActivityIds.has(typeof row.id === 'number' ? row.id : parseInt(String(row.id), 10));
+              const kendalaItems = (Array.isArray(row.kendala) && row.kendala.length > 0)
+                ? row.kendala
+                : parseKendalaList(row.kendala || row.kendala_list || row.kendala_data);
+              const isMalam = (row.shift_kerja || '').toUpperCase() === 'MALAM';
+              const kasieWilayah = row.wilayah || userWilayahMap.get((row.nama_pengawas || '').toLowerCase().trim());
+              const st = (row.kategori_status || row.status_unit || 'OPERASI').toUpperCase();
 
-              {/* Kolom 2 [KASIE & TANGGAL] - ~15% */}
-              <th className="w-[15%] py-2.5 px-2.5">
-                Kasie & Shift
-              </th>
+              const sAwal = row.stik_solar_awal !== null && row.stik_solar_awal !== undefined ? row.stik_solar_awal : row.stik_awal;
+              const sAkhir = row.stik_solar_akhir !== null && row.stik_solar_akhir !== undefined ? row.stik_solar_akhir : row.stik_akhir;
+              const hasStik = (sAwal !== null && sAwal !== undefined && Number(sAwal) > 0) || (sAkhir !== null && sAkhir !== undefined && Number(sAkhir) > 0);
+              
+              let est = row.estimasi_konsumsi_solar;
+              if ((!est || Number(est) === 0) && row.jumlah_liter_solar && hasStik && sAwal !== null && sAkhir !== null && (Number(sAkhir) - Number(sAwal)) > 0) {
+                est = Math.round((Number(row.jumlah_liter_solar) / (Number(sAkhir) - Number(sAwal))) * 10) / 10;
+              }
 
-              {/* Kolom 3 [UNIT & STATUS] - ~10% */}
-              <th className="w-[10%] py-2.5 px-2 text-center">
-                Unit & Status
-              </th>
-
-              {/* Kolom 4 [AKTIVITAS & KENDALA] - ~25% */}
-              <th className="w-[25%] py-2.5 px-2.5">
-                Aktivitas & Kendala Lapangan
-              </th>
-
-              {/* Kolom 5 [OPERATOR] - ~11% */}
-              <th className="w-[11%] py-2.5 px-2">
-                Operator
-              </th>
-
-              {/* Kolom 6 [LOKASI] - ~9% */}
-              <th className="w-[9%] py-2.5 px-2">
-                Lokasi
-              </th>
-
-              {/* Kolom 7 [OPERASIONAL HM & SOLAR] - ~13% */}
-              <th className="w-[13%] py-2.5 px-2 text-right">
-                Operasional HM & Solar
-              </th>
-
-              {/* Kolom 8 [HASIL KERJA] - ~5% */}
-              <th className="w-[5%] py-2.5 px-2 text-right">
-                Hasil
-              </th>
-
-              {/* Kolom 9 [AKSI] - ~4% */}
-              <th className="w-[4%] py-2.5 px-1 text-center">
-                {isManager ? 'Audit' : 'Aksi'}
-              </th>
-            </tr>
-          </thead>
-
-          {/* Table Body: 2-3 line cell stacking per column */}
-          <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-            {paginatedActivities.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="text-center py-12 text-slate-400">
-                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                  <p className="font-medium text-slate-600">Tidak ada data aktivitas yang sesuai kriteria.</p>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    {isManager ? 'Menunggu sinkronisasi data aktivitas dari aplikasi Android armada lapangan.' : 'Gunakan tombol "+ Tambah Data Manual" atau tunggu pengiriman dari aplikasi Android.'}
-                  </p>
-                </td>
-              </tr>
-            ) : (
-              paginatedActivities.map((row, idx) => {
-                const isGlowing = highlightIds.has(row.id) || 
-                  highlightIds.has(Number(row.id)) || 
-                  newActivityIds.has(typeof row.id === 'number' ? row.id : parseInt(String(row.id), 10));
-                const kendalaItems = (Array.isArray(row.kendala) && row.kendala.length > 0)
-                  ? row.kendala
-                  : parseKendalaList(row.kendala || row.kendala_list || row.kendala_data);
-                if (!row.kendala || !Array.isArray(row.kendala) || row.kendala.length === 0) {
-                  if (kendalaItems && kendalaItems.length > 0) {
-                    row.kendala = kendalaItems;
-                  }
-                }
-                const isMalam = (row.shift_kerja || '').toUpperCase() === 'MALAM';
-                const kasieWilayah = row.wilayah || userWilayahMap.get((row.nama_pengawas || '').toLowerCase().trim());
-
-                return (
-                  <tr
-                    key={`${row.id || 'act'}-${idx}`}
-                    className={`transition-colors duration-300 hover:bg-slate-50/80 ${
-                      isGlowing ? 'bg-emerald-50 ring-1 ring-emerald-300' : ''
-                    }`}
-                  >
-                    
-                    {/* Kolom 1 [FOTO & SPK]: Thumbnail compact 36x36px + Nomor SPK */}
-                    <td className="py-2.5 px-2 text-center align-top">
-                      <div className="flex flex-col items-center gap-1">
-                        {row.status_realisasi === 'BELUM_INPUT' ? (
-                          <div 
-                            title="Menunggu input laporan realisasi dari Android"
-                            className="h-7 px-2 shrink-0 rounded-md bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 text-[10px] font-semibold gap-1"
-                          >
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            <span>Menunggu</span>
-                          </div>
-                        ) : Boolean(row.has_foto_bukti || row.has_foto || row.foto_bukti) ? (
-                          <button
-                            type="button"
-                            onClick={() => onViewPhoto(row)}
-                            title="Klik untuk membuka & memuat foto bukti lapangan"
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all shadow-2xs hover:shadow-xs cursor-pointer"
-                          >
-                            <Camera className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Lihat Foto</span>
-                          </button>
-                        ) : (
-                          <div 
-                            title="Tidak ada foto bukti"
-                            className="h-7 px-2 shrink-0 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 text-[10px] gap-1"
-                          >
-                            <CameraOff className="w-3 h-3 text-slate-400" />
-                            <span>Tanpa Foto</span>
-                          </div>
-                        )}
-
-                        {row.nomor_spk ? (
-                          <span 
-                            title={`Nomor SPK: ${row.nomor_spk}`}
-                            className="font-mono text-[9px] font-bold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300 max-w-[80px] truncate"
-                          >
-                            {row.nomor_spk}
-                          </span>
-                        ) : (
-                          <span className="text-[9px] text-slate-400 italic">
-                            {row.status_spk || 'Tanpa SPK'}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Kolom 2 [KASIE & TANGGAL & SHIFT]: 
-                        Baris 1: Nama Kasie (teks tebal) + Badge Wilayah
-                        Baris 2: Tanggal laporan + Badge Shift kecil (SIANG amber / MALAM indigo) */}
-                    <td className="py-2.5 px-2.5 align-top">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {isGlowing && (
-                            <span className="flex h-1.5 w-1.5 relative shrink-0">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-600"></span>
-                            </span>
-                          )}
-                          <span className="font-bold text-slate-900 text-xs truncate" title={row.nama_pengawas}>
-                            {row.nama_pengawas}
-                          </span>
-                          {kasieWilayah && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shadow-2xs ${
-                              kasieWilayah.toUpperCase() === 'PG1'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                : kasieWilayah.toUpperCase() === 'PG2'
-                                  ? 'bg-blue-50 text-blue-800 border-blue-300'
-                                  : kasieWilayah.toUpperCase() === 'PG3'
-                                    ? 'bg-purple-50 text-purple-800 border-purple-300'
-                                    : 'bg-slate-100 text-slate-800 border-slate-300'
-                            }`}>
-                              {kasieWilayah}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 font-mono flex-wrap">
-                          <span className="font-semibold text-slate-700">{row.tanggal_kerja || row.tanggal}</span>
-                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">WIB</span>
-                          <span className="text-slate-300">•</span>
-                          {isMalam ? (
-                            <span 
-                              title="Shift Kerja: MALAM"
-                              className="font-bold text-[9px] px-1.5 py-0.2 rounded-sm bg-indigo-50 text-indigo-700 border border-indigo-200 tracking-wider inline-flex items-center gap-0.5"
-                            >
-                              MALAM
-                            </span>
-                          ) : (
-                            <span 
-                              title="Shift Kerja: SIANG"
-                              className="font-bold text-[9px] px-1.5 py-0.2 rounded-sm bg-amber-50 text-amber-800 border border-amber-300 tracking-wider inline-flex items-center gap-0.5"
-                            >
-                              SIANG
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Kolom 3 [UNIT & STATUS]: Baris 1: Kode Unit badge, Baris 2: Pill status */}
-                    <td className="py-2.5 px-2 text-center align-top">
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="font-mono font-bold text-slate-900 text-[11px] px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
-                          {row.kode_unit}
+              return (
+                <div 
+                  key={`card-${row.id || 'act'}-${idx}`}
+                  className={`bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs transition-all ${
+                    isGlowing ? 'bg-emerald-50/80 ring-2 ring-emerald-400' : ''
+                  }`}
+                >
+                  {/* HEADER CARD: Nomor SPK / ID, Badge Status (Hijau/Kuning/Merah), & Shift */}
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2 mb-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {row.nomor_spk ? (
+                        <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-300">
+                          SPK: {row.nomor_spk}
                         </span>
-
-                        {(() => {
-                          const st = (row.kategori_status || row.status_unit || 'OPERASI').toUpperCase();
-                          if (st === 'STANDBY') {
-                            return (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
-                                <span className="w-1 h-1 rounded-full bg-amber-600"></span>
-                                STANDBY
-                              </span>
-                            );
-                          }
-                          if (st === 'BREAKDOWN') {
-                            return (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                <span className="w-1 h-1 rounded-full bg-rose-600"></span>
-                                BREAKDOWN
-                              </span>
-                            );
-                          }
-                          return (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <span className="w-1 h-1 rounded-full bg-emerald-600"></span>
-                              OPERASI
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </td>
-
-                    {/* Kolom 4 [AKTIVITAS & KENDALA & KETERANGAN]: 
-                        Baris 1: Nama Aktivitas + Kode SAP (Satuan)
-                        Baris 2: Stack Badge Peringatan Oranye Kendala: "⚠️ [Nama Kendala] (JJ:MM - JJ:MM | X jam Y menit)"
-                        Baris 3: Catatan Pengawas (italic slate-600, truncate + tooltip) */}
-                    <td className="py-2.5 px-2.5 align-top">
-                      <div className="min-w-0 space-y-1">
-                        {/* Baris 1: Aktivitas & SAP */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <div className="font-medium text-slate-800 text-xs">
-                            {row.aktivitas_aktual || row.nama_aktivitas || row.aktivitas || "Aktivitas Belum Dipilih"}
-                          </div>
-                          {row.kode_sap && (
-                            <span className="badge-sap text-xs bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 mt-0.5 inline-block shrink-0">
-                              {row.kode_sap}
-                            </span>
-                          )}
-                          {row.satuan && (
-                            <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                              ({row.satuan})
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Status Menunggu Realisasi jika belum diinput dari HP Android */}
-                        {row.status_realisasi === 'BELUM_INPUT' && (
-                          <div className="pt-0.5">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                              Menunggu Realisasi Lapangan
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Baris 2: Badge Peringatan Kendala Lapangan (Visual peringatan merah/rose pada baris unit di tabel Beranda) */}
-                        {row.kendala && row.kendala.length > 0 && (
-                          <div className="mt-1.5 flex flex-col gap-1">
-                            {row.kendala.map((k: any, idx: number) => (
-                              <div key={idx} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-rose-50 border border-rose-200 text-rose-700 font-medium">
-                                <span className="text-rose-500 font-bold">⚠️ #{idx + 1} {k.nama_kendala || k.kendala || k.nama} [{k.kode_kendala || k.kode || '-'}]</span>
-                                <span className="text-slate-500 text-[11px]">({k.jam_mulai || k.jam_awal} - {k.jam_selesai || k.jam_akhir} • Hambatan: {k.durasi_jam || k.durasi || k.hambatan} Jam)</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Baris 3: Keterangan / Catatan Lapangan Pengawas */}
-                        {row.keterangan && row.keterangan.trim() !== '' && (
-                          <div 
-                            className="text-[11px] italic text-slate-600 truncate max-w-[340px] pt-0.5 cursor-help"
-                            title={`Catatan Pengawas: "${row.keterangan}"`}
-                          >
-                            "{row.keterangan}"
-                          </div>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Kolom 5 [OPERATOR]: Baris 1: Nama Operator, Baris 2: NIK */}
-                    <td className="py-2.5 px-2 align-top">
-                      <div className="min-w-0">
-                        <div className="font-medium text-slate-900 text-xs truncate" title={row.operator}>
-                          {row.operator}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono truncate mt-0.5" title={row.nik_operator}>
-                          {row.nik_operator}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Kolom 6 [LOKASI]: Baris 1: Kode Lokasi, Baris 2: Detail wilayah/blok */}
-                    <td className="py-2.5 px-2 align-top">
-                      <div className="min-w-0">
-                        <div className="font-bold text-slate-900 text-xs truncate">
-                          {row.kode_lokasi || row.lokasi}
-                        </div>
-                        <div className="text-[10px] text-slate-500 truncate mt-0.5" title={row.lokasi}>
-                          {row.lokasi || row.kode_lokasi}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Kolom 7 [OPERASIONAL HM & SOLAR]: 
-                        Jika status_realisasi === 'BELUM_INPUT', tampilkan tanda strip "-" dan status "Menunggu Realisasi" */}
-                    <td className="py-2.5 px-2 text-right align-top">
-                      {row.status_realisasi === 'BELUM_INPUT' || row.hm_awal === null || row.hm_awal === undefined ? (
-                        <div className="text-right">
-                          <div className="text-xs font-bold text-slate-400 font-mono">
-                            -
-                          </div>
-                          <div className="text-[10px] text-amber-700 font-semibold mt-0.5 inline-flex items-center gap-1 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                            <Clock className="w-2.5 h-2.5 text-amber-600" />
-                            <span>Menunggu Realisasi</span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            HM: - → - | Solar: -
-                          </div>
-                        </div>
                       ) : (
-                        <div className="text-right">
-                          {/* Baris 1: Total HM Berjalan tebal */}
-                          <div className="text-xs">
-                            <span className="font-bold text-emerald-800 font-mono">
+                        <span className="font-mono text-[10px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                          {row.status_spk || 'Tanpa SPK'}
+                        </span>
+                      )}
+                      {isGlowing && (
+                        <span className="flex h-2 w-2 relative shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Shift */}
+                      {isMalam ? (
+                        <span className="font-bold text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 tracking-wider">
+                          MALAM
+                        </span>
+                      ) : (
+                        <span className="font-bold text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 tracking-wider">
+                          SIANG
+                        </span>
+                      )}
+
+                      {/* Badge Status (Operasi / Standby / Breakdown) */}
+                      {st === 'STANDBY' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                          STANDBY
+                        </span>
+                      ) : st === 'BREAKDOWN' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                          BREAKDOWN
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                          OPERASI
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* BARIS 1: Informasi Kasie / Wilayah dan Kode Unit Alat Berat */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-slate-900 text-sm">
+                          {row.nama_pengawas}
+                        </span>
+                        {kasieWilayah && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shadow-2xs ${getWilayahBadgeClass(kasieWilayah)}`}>
+                            {kasieWilayah}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono mt-0.5">
+                        <span className="font-semibold text-slate-700">{row.tanggal_kerja || row.tanggal}</span>
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">WIB</span>
+                        {row.kode_lokasi && (
+                          <>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-600 font-sans text-xs">Lokasi: <strong className="text-slate-800">{row.kode_lokasi}</strong></span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Kode Unit Alat Berat Prominent */}
+                    <div className="text-right shrink-0">
+                      <div className="font-mono font-extrabold text-sm text-slate-900 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg shadow-2xs inline-block">
+                        {row.kode_unit}
+                      </div>
+                      {row.model_unit && (
+                        <div className="text-[10px] text-slate-400 mt-0.5 font-medium truncate max-w-[120px]">
+                          {row.model_unit}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* BARIS 2: Nama Aktivitas Aktual & Kendala Lapangan (jika ada) */}
+                  <div className="bg-slate-50/80 rounded-lg p-2.5 border border-slate-200/80 mb-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="font-semibold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5 flex-wrap">
+                        <span>{row.aktivitas_aktual || row.nama_aktivitas || row.aktivitas || "Aktivitas Belum Dipilih"}</span>
+                        {row.kode_sap && (
+                          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-300">
+                            {row.kode_sap}
+                          </span>
+                        )}
+                      </div>
+                      {row.hasil_kerja !== null && row.hasil_kerja !== undefined && row.status_realisasi !== 'BELUM_INPUT' ? (
+                        <div className="text-right shrink-0">
+                          <span className="font-mono font-bold text-slate-900 text-xs">
+                            {(row.hasil_kerja || 0).toLocaleString('id-ID')}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-medium ml-1">
+                            {row.satuan}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* Menunggu Realisasi Lapangan */}
+                    {row.status_realisasi === 'BELUM_INPUT' && (
+                      <div className="pt-0.5">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                          Menunggu Realisasi Lapangan
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Kendala Lapangan (Stack Badge Peringatan ⚠️) */}
+                    {kendalaItems && kendalaItems.length > 0 && (
+                      <div className="flex flex-col gap-1 pt-1">
+                        {kendalaItems.map((k: any, kIdx: number) => (
+                          <div key={kIdx} className="p-1.5 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium space-y-0.5">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-bold text-rose-800 flex items-center gap-1">
+                                <span>⚠️ #{kIdx + 1}</span>
+                                <span>{k.nama_kendala || k.kendala || k.nama}</span>
+                                {k.kode_kendala && k.kode_kendala !== '-' && (
+                                  <span className="text-[10px] bg-rose-100 px-1 rounded text-rose-900 font-mono">[{k.kode_kendala || k.kode}]</span>
+                                )}
+                              </span>
+                              <span className="text-[10px] font-bold text-rose-800 bg-rose-100 px-1.5 py-0.2 rounded shrink-0">
+                                {k.durasi_jam || k.durasi || k.hambatan || 0} Jam
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-600">
+                              Waktu: {k.jam_mulai || k.jam_awal || '-'} s/d {k.jam_selesai || k.jam_akhir || '-'}
+                              {k.keterangan && ` • ${k.keterangan}`}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Catatan Pengawas */}
+                    {row.keterangan && row.keterangan.trim() !== '' && (
+                      <div className="text-[11px] italic text-slate-600 bg-white p-1.5 rounded border border-slate-200/60">
+                        Catatan: "{row.keterangan}"
+                      </div>
+                    )}
+                  </div>
+
+                  {/* BARIS 3: Detail Operator dan Rincian Operasional */}
+                  <div className="space-y-2 mb-3 text-xs">
+                    {/* Operator */}
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                      <span className="text-slate-500 text-[11px]">Operator:</span>
+                      <div className="text-right">
+                        <span className="font-semibold text-slate-900">{row.operator || 'Operator Default'}</span>
+                        {row.nik_operator && row.nik_operator !== '-' && (
+                          <span className="text-[10px] text-slate-400 font-mono ml-1.5">({row.nik_operator})</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Rincian Operasional: HM Awal ➔ Akhir, Stik Solar, Est. Konsumsi */}
+                    <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200/60">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-semibold">HM & Jam Kerja</span>
+                        {row.status_realisasi === 'BELUM_INPUT' || row.hm_awal === null || row.hm_awal === undefined ? (
+                          <span className="text-slate-400 font-bold">-</span>
+                        ) : (
+                          <div>
+                            <span className="font-extrabold text-emerald-800 font-mono text-sm">
                               {(row.hm_harian_berjalan || 0).toFixed(1)} HM
                             </span>
-                            <span className="text-slate-300 mx-1">|</span>
-                            <span className="text-slate-600 font-medium font-mono">
-                              {row.jam_kerja || 0} Jam
+                            <span className="text-slate-500 font-mono text-xs ml-1 font-medium">
+                              ({row.jam_kerja || 0} Jam)
                             </span>
+                            <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                              <span>{row.hm_awal}</span>
+                              {row.is_hm_awal_corrected === 1 && (
+                                <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1 rounded mx-0.5">Koreksi</span>
+                              )}
+                              <span> → {row.hm_akhir}</span>
+                            </div>
+                            {row.is_hm_awal_corrected === 1 && row.alasan_koreksi_hm && (
+                              <div className="text-[9px] text-amber-800 italic mt-0.5 truncate" title={row.alasan_koreksi_hm}>
+                                Alasan: {row.alasan_koreksi_hm}
+                              </div>
+                            )}
                           </div>
+                        )}
+                      </div>
 
-                          {/* Baris 2: Range HM Awal s/d Akhir */}
-                          <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 font-mono mt-0.5 flex-wrap">
-                            <span className="text-slate-400">HM:</span>
-                            <span className="font-semibold text-slate-700">
-                              {(row.hm_awal || 0).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-semibold">BBM & Stik Solar</span>
+                        {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
+                          <div className="font-bold text-amber-800 font-mono text-xs flex items-center gap-1">
+                            <Fuel className="w-3 h-3 text-amber-600 shrink-0" />
+                            <span>{row.jumlah_liter_solar.toLocaleString('id-ID')} Liter</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs font-mono">-</span>
+                        )}
+                        {hasStik && (
+                          <div className="text-[10px] text-slate-600 font-mono mt-0.5">
+                            <span>Stik: <strong>{sAwal ?? 0} / {sAkhir ?? 0} cm</strong></span>
+                            {est !== null && est !== undefined && Number(est) > 0 && (
+                              <div className="text-[9px] text-amber-800 font-bold bg-amber-50 px-1 rounded border border-amber-200 inline-block mt-0.5">
+                                Est: {est} L/cm
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* FOOTER CARD: Tombol aksi Touch-Friendly (Lihat Foto / Edit / Hapus) */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                    {/* Lihat Foto */}
+                    {Boolean(row.has_foto_bukti || row.has_foto || row.foto_bukti) ? (
+                      <button
+                        type="button"
+                        onClick={() => onViewPhoto(row)}
+                        className="flex-1 min-h-[38px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors cursor-pointer active:scale-98"
+                      >
+                        <Camera className="w-4 h-4 text-emerald-600" />
+                        <span>Lihat Foto</span>
+                      </button>
+                    ) : row.status_realisasi === 'BELUM_INPUT' ? (
+                      <div className="flex-1 min-h-[38px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Menunggu Lapangan</span>
+                      </div>
+                    ) : (
+                      <div className="flex-1 min-h-[38px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 rounded-lg">
+                        <CameraOff className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Tanpa Foto</span>
+                      </div>
+                    )}
+
+                    {/* Edit */}
+                    {!isManager && (
+                      <button
+                        type="button"
+                        onClick={() => onEditActivity(row)}
+                        className="min-h-[38px] px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors cursor-pointer active:scale-98"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Edit</span>
+                      </button>
+                    )}
+
+                    {/* Hapus */}
+                    {!isManager && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(row)}
+                        className="min-h-[38px] px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer active:scale-98"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Hapus</span>
+                      </button>
+                    )}
+
+                    {isManager && (
+                      <span className="px-3 py-1.5 text-xs font-bold text-slate-400 bg-slate-100 rounded-lg">
+                        Mode Audit
+                      </span>
+                    )}
+                  </div>
+
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* =========================================================================
+            2. TAMPILAN DESKTOP TABLE (>= 768px): Tabel 9 Kolom Kompak Presisi
+           ========================================================================= */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full table-fixed text-left border-collapse">
+            
+            {/* Table Header: Exactly 9 Compact Columns with specified widths */}
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                {/* Kolom 1 [FOTO & SPK] - ~8% */}
+                <th className="w-[8%] py-2.5 px-2 text-center">
+                  Foto & SPK
+                </th>
+
+                {/* Kolom 2 [KASIE & TANGGAL] - ~15% */}
+                <th className="w-[15%] py-2.5 px-2.5">
+                  Kasie & Shift
+                </th>
+
+                {/* Kolom 3 [UNIT & STATUS] - ~10% */}
+                <th className="w-[10%] py-2.5 px-2 text-center">
+                  Unit & Status
+                </th>
+
+                {/* Kolom 4 [AKTIVITAS & KENDALA] - ~25% */}
+                <th className="w-[25%] py-2.5 px-2.5">
+                  Aktivitas & Kendala Lapangan
+                </th>
+
+                {/* Kolom 5 [OPERATOR] - ~11% */}
+                <th className="w-[11%] py-2.5 px-2">
+                  Operator
+                </th>
+
+                {/* Kolom 6 [LOKASI] - ~9% */}
+                <th className="w-[9%] py-2.5 px-2">
+                  Lokasi
+                </th>
+
+                {/* Kolom 7 [OPERASIONAL HM & SOLAR] - ~13% */}
+                <th className="w-[13%] py-2.5 px-2 text-right">
+                  Operasional HM & Solar
+                </th>
+
+                {/* Kolom 8 [HASIL KERJA] - ~5% */}
+                <th className="w-[5%] py-2.5 px-2 text-right">
+                  Hasil
+                </th>
+
+                {/* Kolom 9 [AKSI] - ~4% */}
+                <th className="w-[4%] py-2.5 px-1 text-center">
+                  {isManager ? 'Audit' : 'Aksi'}
+                </th>
+              </tr>
+            </thead>
+
+            {/* Table Body: 2-3 line cell stacking per column */}
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+              {paginatedActivities.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-12 text-slate-400">
+                    <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                    <p className="font-medium text-slate-600">Tidak ada data aktivitas yang sesuai kriteria.</p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {isManager ? 'Menunggu sinkronisasi data aktivitas dari aplikasi Android armada lapangan.' : 'Gunakan tombol "+ Tambah Data Manual" atau tunggu pengiriman dari aplikasi Android.'}
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                paginatedActivities.map((row, idx) => {
+                  const isGlowing = highlightIds.has(row.id) || 
+                    highlightIds.has(Number(row.id)) || 
+                    newActivityIds.has(typeof row.id === 'number' ? row.id : parseInt(String(row.id), 10));
+                  const kendalaItems = (Array.isArray(row.kendala) && row.kendala.length > 0)
+                    ? row.kendala
+                    : parseKendalaList(row.kendala || row.kendala_list || row.kendala_data);
+                  if (!row.kendala || !Array.isArray(row.kendala) || row.kendala.length === 0) {
+                    if (kendalaItems && kendalaItems.length > 0) {
+                      row.kendala = kendalaItems;
+                    }
+                  }
+                  const isMalam = (row.shift_kerja || '').toUpperCase() === 'MALAM';
+                  const kasieWilayah = row.wilayah || userWilayahMap.get((row.nama_pengawas || '').toLowerCase().trim());
+
+                  return (
+                    <tr
+                      key={`${row.id || 'act'}-${idx}`}
+                      className={`transition-colors duration-300 hover:bg-slate-50/80 ${
+                        isGlowing ? 'bg-emerald-50 ring-1 ring-emerald-300' : ''
+                      }`}
+                    >
+                      
+                      {/* Kolom 1 [FOTO & SPK]: Thumbnail compact 36x36px + Nomor SPK */}
+                      <td className="py-2.5 px-2 text-center align-top">
+                        <div className="flex flex-col items-center gap-1">
+                          {row.status_realisasi === 'BELUM_INPUT' ? (
+                            <div 
+                              title="Menunggu input laporan realisasi dari Android"
+                              className="h-7 px-2 shrink-0 rounded-md bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 text-[10px] font-semibold gap-1"
+                            >
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              <span>Menunggu</span>
+                            </div>
+                          ) : Boolean(row.has_foto_bukti || row.has_foto || row.foto_bukti) ? (
+                            <button
+                              type="button"
+                              onClick={() => onViewPhoto(row)}
+                              title="Klik untuk membuka & memuat foto bukti lapangan"
+                              className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+                            >
+                              <Camera className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Lihat Foto</span>
+                            </button>
+                          ) : (
+                            <div 
+                              title="Tidak ada foto bukti"
+                              className="h-7 px-2 shrink-0 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 text-[10px] gap-1"
+                            >
+                              <CameraOff className="w-3 h-3 text-slate-400" />
+                              <span>Tanpa Foto</span>
+                            </div>
+                          )}
+
+                          {row.nomor_spk ? (
+                            <span 
+                              title={`Nomor SPK: ${row.nomor_spk}`}
+                              className="font-mono text-[9px] font-bold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300 max-w-[80px] truncate"
+                            >
+                              {row.nomor_spk}
                             </span>
-                            {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
-                              <span 
-                                title={row.alasan_koreksi_hm ? `Alasan Koreksi: ${row.alasan_koreksi_hm}` : 'HM Awal telah dikoreksi oleh pengawas'}
-                                className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold font-sans cursor-help shrink-0 shadow-2xs"
-                              >
-                                <Pencil className="w-2.5 h-2.5 text-amber-700" />
-                                <span>Koreksi</span>
+                          ) : (
+                            <span className="text-[9px] text-slate-400 italic">
+                              {row.status_spk || 'Tanpa SPK'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Kolom 2 [KASIE & TANGGAL & SHIFT] */}
+                      <td className="py-2.5 px-2.5 align-top">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {isGlowing && (
+                              <span className="flex h-1.5 w-1.5 relative shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-600"></span>
                               </span>
                             )}
-                            <span className="text-slate-400">→</span>
-                            <span className="font-semibold text-slate-700">
-                              {(row.hm_akhir || 0).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                            <span className="font-bold text-slate-900 text-xs truncate" title={row.nama_pengawas}>
+                              {row.nama_pengawas}
                             </span>
+                            {kasieWilayah && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shadow-2xs ${getWilayahBadgeClass(kasieWilayah)}`}>
+                                {kasieWilayah}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 font-mono flex-wrap">
+                            <span className="font-semibold text-slate-700">{row.tanggal_kerja || row.tanggal}</span>
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">WIB</span>
+                            <span className="text-slate-300">•</span>
+                            {isMalam ? (
+                              <span 
+                                title="Shift Kerja: MALAM"
+                                className="font-bold text-[9px] px-1.5 py-0.2 rounded-sm bg-indigo-50 text-indigo-700 border border-indigo-200 tracking-wider inline-flex items-center gap-0.5"
+                              >
+                                MALAM
+                              </span>
+                            ) : (
+                              <span 
+                                title="Shift Kerja: SIANG"
+                                className="font-bold text-[9px] px-1.5 py-0.2 rounded-sm bg-amber-50 text-amber-800 border border-amber-300 tracking-wider inline-flex items-center gap-0.5"
+                              >
+                                SIANG
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Kolom 3 [UNIT & STATUS] */}
+                      <td className="py-2.5 px-2 text-center align-top">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="font-mono font-bold text-slate-900 text-[11px] px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                            {row.kode_unit}
+                          </span>
+
+                          {(() => {
+                            const st = (row.kategori_status || row.status_unit || 'OPERASI').toUpperCase();
+                            if (st === 'STANDBY') {
+                              return (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                                  <span className="w-1 h-1 rounded-full bg-amber-600"></span>
+                                  STANDBY
+                                </span>
+                              );
+                            }
+                            if (st === 'BREAKDOWN') {
+                              return (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                  <span className="w-1 h-1 rounded-full bg-rose-600"></span>
+                                  BREAKDOWN
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="w-1 h-1 rounded-full bg-emerald-600"></span>
+                                OPERASI
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </td>
+
+                      {/* Kolom 4 [AKTIVITAS & KENDALA & KETERANGAN] */}
+                      <td className="py-2.5 px-2.5 align-top">
+                        <div className="min-w-0 space-y-1">
+                          {/* Baris 1: Aktivitas & SAP */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="font-medium text-slate-800 text-xs">
+                              {row.aktivitas_aktual || row.nama_aktivitas || row.aktivitas || "Aktivitas Belum Dipilih"}
+                            </div>
+                            {row.kode_sap && (
+                              <span className="badge-sap text-xs bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 mt-0.5 inline-block shrink-0">
+                                {row.kode_sap}
+                              </span>
+                            )}
+                            {row.satuan && (
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                ({row.satuan})
+                              </span>
+                            )}
                           </div>
 
-                          {/* Baris 2B: Alasan Koreksi HM Pengawas (jika is_hm_awal_corrected = 1) */}
-                          {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
-                            <div 
-                              className="text-[9px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5 max-w-[210px] ml-auto truncate cursor-help text-left flex items-center gap-1 font-sans font-medium"
-                              title={`Alasan Koreksi Pengawas: "${row.alasan_koreksi_hm || 'Perbaikan koreksi HM awal lapangan'}"`}
-                            >
-                              <Pencil className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                              <span className="truncate italic">
-                                Koreksi: {row.alasan_koreksi_hm || 'Audit koreksi pengawas'}
+                          {/* Status Menunggu Realisasi jika belum diinput dari HP Android */}
+                          {row.status_realisasi === 'BELUM_INPUT' && (
+                            <div className="pt-0.5">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                                Menunggu Realisasi Lapangan
                               </span>
                             </div>
                           )}
 
-                          {/* Baris 3: Badge Liter Solar & Rincian Stik Solar Lapangan */}
-                          <div className="mt-1 flex flex-col items-end gap-0.5">
-                            {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
-                              <span className="inline-flex items-center gap-1 text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-300 text-[10px] font-mono shadow-2xs">
-                                <Fuel className="w-3 h-3 text-amber-600 shrink-0" />
-                                <span>{row.jumlah_liter_solar.toLocaleString('id-ID')} L</span>
-                              </span>
-                            ) : null}
-
-                            {(() => {
-                              const sAwal = row.stik_solar_awal !== null && row.stik_solar_awal !== undefined ? row.stik_solar_awal : row.stik_awal;
-                              const sAkhir = row.stik_solar_akhir !== null && row.stik_solar_akhir !== undefined ? row.stik_solar_akhir : row.stik_akhir;
-                              const hasStik = (sAwal !== null && sAwal !== undefined && Number(sAwal) > 0) || (sAkhir !== null && sAkhir !== undefined && Number(sAkhir) > 0);
-                              
-                              let est = row.estimasi_konsumsi_solar;
-                              if ((!est || Number(est) === 0) && row.jumlah_liter_solar && hasStik && sAwal !== null && sAkhir !== null && (Number(sAkhir) - Number(sAwal)) > 0) {
-                                est = Math.round((Number(row.jumlah_liter_solar) / (Number(sAkhir) - Number(sAwal))) * 10) / 10;
-                              }
-
-                              if (!hasStik && (!row.jumlah_liter_solar || row.jumlah_liter_solar <= 0)) {
-                                return <span className="text-slate-300 font-medium text-[10px]">-</span>;
-                              }
-
-                              if (!hasStik) return null;
-
-                              return (
-                                <div className="text-[10px] text-slate-600 font-mono flex items-center justify-end gap-1 flex-wrap mt-0.5">
-                                  <span>Stik: <strong className="text-slate-800">{sAwal ?? 0} / {sAkhir ?? 0} cm</strong></span>
-                                  {est !== null && est !== undefined && Number(est) > 0 && (
-                                    <span className="text-amber-800 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
-                                      Est: {est} L/cm
-                                    </span>
-                                  )}
+                          {/* Baris 2: Badge Peringatan Kendala Lapangan */}
+                          {row.kendala && row.kendala.length > 0 && (
+                            <div className="mt-1.5 flex flex-col gap-1">
+                              {row.kendala.map((k: any, idx: number) => (
+                                <div key={idx} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-rose-50 border border-rose-200 text-rose-700 font-medium">
+                                  <span className="text-rose-500 font-bold">⚠️ #{idx + 1} {k.nama_kendala || k.kendala || k.nama} [{k.kode_kendala || k.kode || '-'}]</span>
+                                  <span className="text-slate-500 text-[11px]">({k.jam_mulai || k.jam_awal} - {k.jam_selesai || k.jam_akhir} • Hambatan: {k.durasi_jam || k.durasi || k.hambatan} Jam)</span>
                                 </div>
-                              );
-                            })()}
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Baris 3: Keterangan / Catatan Lapangan Pengawas */}
+                          {row.keterangan && row.keterangan.trim() !== '' && (
+                            <div 
+                              className="text-[11px] italic text-slate-600 truncate max-w-[340px] pt-0.5 cursor-help"
+                              title={`Catatan Pengawas: "${row.keterangan}"`}
+                            >
+                              "{row.keterangan}"
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Kolom 5 [OPERATOR] */}
+                      <td className="py-2.5 px-2 align-top">
+                        <div className="min-w-0">
+                          <div className="font-medium text-slate-900 text-xs truncate" title={row.operator}>
+                            {row.operator}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono truncate mt-0.5" title={row.nik_operator}>
+                            {row.nik_operator}
                           </div>
                         </div>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* Kolom 8 [HASIL KERJA]: Volume hasil kerja tebal + satuan */}
-                    <td className="py-2.5 px-2 text-right align-top">
-                      <div className="text-right">
-                        {row.status_realisasi === 'BELUM_INPUT' || row.hasil_kerja === null || row.hasil_kerja === undefined ? (
-                          <span className="font-bold text-slate-400 font-mono text-xs block">
-                            -
-                          </span>
-                        ) : (
-                          <>
-                            <span className="font-bold text-slate-900 font-mono text-xs block">
-                              {(row.hasil_kerja || 0).toLocaleString('id-ID')}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-medium block">
-                              {row.satuan}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Kolom 9 [AKSI]: Tombol compact Edit & Hapus (Disembunyikan untuk Manager) */}
-                    <td className="py-2.5 px-1 text-center align-top">
-                      {!isManager ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => onEditActivity(row)}
-                            title="Edit laporan"
-                            className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(row)}
-                            title="Hapus laporan"
-                            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                      {/* Kolom 6 [LOKASI] */}
+                      <td className="py-2.5 px-2 align-top">
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 text-xs truncate">
+                            {row.kode_lokasi || row.lokasi}
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate mt-0.5" title={row.lokasi}>
+                            {row.lokasi || row.kode_lokasi}
+                          </div>
                         </div>
-                      ) : (
-                        <span 
-                          className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100" 
-                          title="Mode Audit Eksekutif (Read-Only)"
-                        >
-                          Tinjau
-                        </span>
-                      )}
-                    </td>
+                      </td>
 
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
+                      {/* Kolom 7 [OPERASIONAL HM & SOLAR] */}
+                      <td className="py-2.5 px-2 text-right align-top">
+                        {row.status_realisasi === 'BELUM_INPUT' || row.hm_awal === null || row.hm_awal === undefined ? (
+                          <div className="text-right">
+                            <div className="text-xs font-bold text-slate-400 font-mono">
+                              -
+                            </div>
+                            <div className="text-[10px] text-amber-700 font-semibold mt-0.5 inline-flex items-center gap-1 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                              <Clock className="w-2.5 h-2.5 text-amber-600" />
+                              <span>Menunggu Realisasi</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              HM: - → - | Solar: -
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-right">
+                            <div className="text-xs">
+                              <span className="font-bold text-emerald-800 font-mono">
+                                {(row.hm_harian_berjalan || 0).toFixed(1)} HM
+                              </span>
+                              <span className="text-slate-300 mx-1">|</span>
+                              <span className="text-slate-600 font-medium font-mono">
+                                {row.jam_kerja || 0} Jam
+                              </span>
+                            </div>
 
-        </table>
+                            <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 font-mono mt-0.5 flex-wrap">
+                              <span className="text-slate-400">HM:</span>
+                              <span className="font-semibold text-slate-700">
+                                {(row.hm_awal || 0).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                              </span>
+                              {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
+                                <span 
+                                  title={row.alasan_koreksi_hm ? `Alasan Koreksi: ${row.alasan_koreksi_hm}` : 'HM Awal telah dikoreksi oleh pengawas'}
+                                  className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold font-sans cursor-help shrink-0 shadow-2xs"
+                                >
+                                  <Pencil className="w-2.5 h-2.5 text-amber-700" />
+                                  <span>Koreksi</span>
+                                </span>
+                              )}
+                              <span className="text-slate-400">→</span>
+                              <span className="font-semibold text-slate-700">
+                                {(row.hm_akhir || 0).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                              </span>
+                            </div>
+
+                            {(row.is_hm_awal_corrected === 1 || row.is_hm_awal_corrected === true) && (
+                              <div 
+                                className="text-[9px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5 max-w-[210px] ml-auto truncate cursor-help text-left flex items-center gap-1 font-sans font-medium"
+                                title={`Alasan Koreksi Pengawas: "${row.alasan_koreksi_hm || 'Perbaikan koreksi HM awal lapangan'}"`}
+                              >
+                                <Pencil className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                                <span className="truncate italic">
+                                  Koreksi: {row.alasan_koreksi_hm || 'Audit koreksi pengawas'}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="mt-1 flex flex-col items-end gap-0.5">
+                              {row.jumlah_liter_solar && row.jumlah_liter_solar > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-300 text-[10px] font-mono shadow-2xs">
+                                  <Fuel className="w-3 h-3 text-amber-600 shrink-0" />
+                                  <span>{row.jumlah_liter_solar.toLocaleString('id-ID')} L</span>
+                                </span>
+                              ) : null}
+
+                              {(() => {
+                                const sAwal = row.stik_solar_awal !== null && row.stik_solar_awal !== undefined ? row.stik_solar_awal : row.stik_awal;
+                                const sAkhir = row.stik_solar_akhir !== null && row.stik_solar_akhir !== undefined ? row.stik_solar_akhir : row.stik_akhir;
+                                const hasStik = (sAwal !== null && sAwal !== undefined && Number(sAwal) > 0) || (sAkhir !== null && sAkhir !== undefined && Number(sAkhir) > 0);
+                                
+                                let est = row.estimasi_konsumsi_solar;
+                                if ((!est || Number(est) === 0) && row.jumlah_liter_solar && hasStik && sAwal !== null && sAkhir !== null && (Number(sAkhir) - Number(sAwal)) > 0) {
+                                  est = Math.round((Number(row.jumlah_liter_solar) / (Number(sAkhir) - Number(sAwal))) * 10) / 10;
+                                }
+
+                                if (!hasStik && (!row.jumlah_liter_solar || row.jumlah_liter_solar <= 0)) {
+                                  return <span className="text-slate-300 font-medium text-[10px]">-</span>;
+                                }
+
+                                if (!hasStik) return null;
+
+                                return (
+                                  <div className="text-[10px] text-slate-600 font-mono flex items-center justify-end gap-1 flex-wrap mt-0.5">
+                                    <span>Stik: <strong className="text-slate-800">{sAwal ?? 0} / {sAkhir ?? 0} cm</strong></span>
+                                    {est !== null && est !== undefined && Number(est) > 0 && (
+                                      <span className="text-amber-800 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                                        Est: {est} L/cm
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Kolom 8 [HASIL KERJA] */}
+                      <td className="py-2.5 px-2 text-right align-top">
+                        <div className="text-right">
+                          {row.status_realisasi === 'BELUM_INPUT' || row.hasil_kerja === null || row.hasil_kerja === undefined ? (
+                            <span className="font-bold text-slate-400 font-mono text-xs block">
+                              -
+                            </span>
+                          ) : (
+                            <>
+                              <span className="font-bold text-slate-900 font-mono text-xs block">
+                                {(row.hasil_kerja || 0).toLocaleString('id-ID')}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-medium block">
+                                {row.satuan}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Kolom 9 [AKSI] */}
+                      <td className="py-2.5 px-1 text-center align-top">
+                        {!isManager ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => onEditActivity(row)}
+                              title="Edit laporan"
+                              className="p-1 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(row)}
+                              title="Hapus laporan"
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span 
+                            className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100" 
+                            title="Mode Audit Eksekutif (Read-Only)"
+                          >
+                            Tinjau
+                          </span>
+                        )}
+                      </td>
+
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+
+          </table>
+        </div>
 
         {/* Table Pagination Footer */}
         <div className="px-4 py-3 border-t border-slate-200 bg-slate-50/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">

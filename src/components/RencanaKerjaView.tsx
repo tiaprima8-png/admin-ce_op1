@@ -19,7 +19,7 @@ import {
   Truck,
   UserCheck
 } from 'lucide-react';
-import { RencanaKerja, Unit, Operator, Lokasi, AktivitasUnit, User } from '../types';
+import { RencanaKerja, Unit, Operator, Lokasi, AktivitasUnit, User, DAFTAR_WILAYAH, getWilayahBadgeClass } from '../types';
 
 interface RencanaKerjaViewProps {
   rencanaList: RencanaKerja[];
@@ -64,13 +64,21 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
   // Lookup maps for Wilayah matching
   const userWilayahMap = useMemo(() => {
     const map = new Map<string, string>();
-    map.set('budi santoso', 'PG1');
-    map.set('agus wijaya', 'PG2');
-    map.set('rudi hermawan', 'PG3');
+    map.set('agung', 'GEODESI PG1');
+    map.set('zainudin', 'GEODESI PG2');
+    map.set('jaidi', 'GEODESI PG3');
+    map.set('hisar', 'RC PG1');
+    map.set('yono', 'RC PG2');
+    map.set('nyoman', 'RC PG3');
+    map.set('saipul', 'LEBUNG PG12');
+    map.set('galung', 'LEBUNG PG3');
     if (users) {
       for (const u of users) {
         if (u.nama_lengkap && u.wilayah) {
           map.set(u.nama_lengkap.toLowerCase().trim(), u.wilayah.trim().toUpperCase());
+        }
+        if (u.username && u.wilayah) {
+          map.set(u.username.toLowerCase().trim(), u.wilayah.trim().toUpperCase());
         }
       }
     }
@@ -148,12 +156,23 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
     return units.find(u => u.kode_unit === formKodeUnit);
   }, [units, formKodeUnit]);
 
-  // 2. Cascading Filter Aktivitas per Jenis Unit pada Form Modal Rencana Kerja
+  // 2. Cascading Filter Aktivitas per Jenis Unit & Model Unit pada Form Modal Rencana Kerja
   const filteredFormAktivitas = useMemo(() => {
     if (!selectedFormUnitObj || !selectedFormUnitObj.jenis_unit) {
       return [];
     }
     const targetJenis = selectedFormUnitObj.jenis_unit.trim().toUpperCase();
+    const targetModel = (selectedFormUnitObj.model_unit || '').trim().toUpperCase();
+
+    // Utamakan filter spesifik berdasarkan model unit (misal: Excavator Long Arm vs Excavator Mini)
+    if (targetModel) {
+      const modelSpecific = aktivitasList.filter(a => {
+        const aJenis = (a.jenis_unit || '').trim().toUpperCase();
+        return aJenis === targetModel || targetModel.includes(aJenis) || aJenis.includes(targetModel);
+      });
+      if (modelSpecific.length > 0) return modelSpecific;
+    }
+
     return aktivitasList.filter(a => {
       const aJenis = (a.jenis_unit || '').trim().toUpperCase();
       return aJenis === targetJenis || aJenis.includes(targetJenis) || targetJenis.includes(aJenis);
@@ -491,12 +510,12 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
             value={filterWilayah}
             onChange={(e) => setFilterWilayah(e.target.value)}
             className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium"
-            title="Filter Wilayah Operasional (PG1, PG2, PG3)"
+            title="Filter Wilayah Operasional"
           >
             <option value="Semua">Semua Wilayah</option>
-            <option value="PG1">Wilayah PG1</option>
-            <option value="PG2">Wilayah PG2</option>
-            <option value="PG3">Wilayah PG3</option>
+            {DAFTAR_WILAYAH.map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
           </select>
 
           {/* Filter Shift */}
@@ -623,15 +642,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span>{row.nama_pengawas}</span>
                           {kasieWilayah && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shadow-2xs ${
-                              kasieWilayah.toUpperCase() === 'PG1'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                : kasieWilayah.toUpperCase() === 'PG2'
-                                  ? 'bg-blue-50 text-blue-800 border-blue-300'
-                                  : kasieWilayah.toUpperCase() === 'PG3'
-                                    ? 'bg-purple-50 text-purple-800 border-purple-300'
-                                    : 'bg-slate-100 text-slate-800 border-slate-300'
-                            }`}>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shadow-2xs ${getWilayahBadgeClass(kasieWilayah)}`}>
                               {kasieWilayah}
                             </span>
                           )}
@@ -675,7 +686,7 @@ export const RencanaKerjaView: React.FC<RencanaKerjaViewProps> = ({
                       <td className="py-3 px-3 whitespace-nowrap">
                         <span className="font-semibold text-slate-900">{row.kode_lokasi}</span>
                         {row.wilayah && (
-                          <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className={`ml-1 text-[10px] font-bold px-1.5 py-0.2 rounded border shadow-2xs ${getWilayahBadgeClass(row.wilayah)}`}>
                             {row.wilayah}
                           </span>
                         )}

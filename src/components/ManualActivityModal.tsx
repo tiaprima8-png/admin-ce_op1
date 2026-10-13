@@ -103,12 +103,23 @@ export const ManualActivityModal: React.FC<ManualActivityModalProps> = ({
     return units.find(u => u.kode_unit === kodeUnit);
   }, [units, kodeUnit]);
 
-  // 2. Cascading Filter Aktivitas per Jenis Unit
+  // 2. Cascading Filter Aktivitas per Jenis Unit & Model Unit
   const filteredAktivitas = useMemo(() => {
     if (!selectedUnitObj || !selectedUnitObj.jenis_unit) {
       return [];
     }
     const targetJenis = selectedUnitObj.jenis_unit.trim().toUpperCase();
+    const targetModel = (selectedUnitObj.model_unit || '').trim().toUpperCase();
+
+    // Utamakan filter spesifik berdasarkan model unit (misal: Excavator Long Arm vs Excavator Mini)
+    if (targetModel) {
+      const modelSpecific = aktivitasList.filter(a => {
+        const aJenis = (a.jenis_unit || '').trim().toUpperCase();
+        return aJenis === targetModel || targetModel.includes(aJenis) || aJenis.includes(targetModel);
+      });
+      if (modelSpecific.length > 0) return modelSpecific;
+    }
+
     return aktivitasList.filter(a => {
       const aJenis = (a.jenis_unit || '').trim().toUpperCase();
       return aJenis === targetJenis || aJenis.includes(targetJenis) || targetJenis.includes(aJenis);

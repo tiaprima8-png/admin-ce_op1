@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, X, Search, AlertCircle, Shield, CheckCircle, Power, RotateCcw, Users } from 'lucide-react';
-import { User } from '../types';
+import { User, DAFTAR_WILAYAH, getWilayahBadgeClass } from '../types';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface MasterUsersProps {
@@ -13,6 +13,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
   const isManager = userRole === 'MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'Semua' | '1' | '0'>('Semua');
+  const [selectedWilayahFilter, setSelectedWilayahFilter] = useState<string>('Semua Wilayah');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
@@ -20,7 +21,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
   const [namaLengkap, setNamaLengkap] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [wilayah, setWilayah] = useState('PG1');
+  const [wilayah, setWilayah] = useState('Geodesi PG1');
   const [hakAkses, setHakAkses] = useState<'Admin' | 'Kasie' | 'Manager'>('Kasie');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
     setNamaLengkap('');
     setUsername('');
     setPassword('');
-    setWilayah('PG1');
+    setWilayah('Geodesi PG1');
     setHakAkses('Kasie');
     setErrorMessage(null);
     setIsModalOpen(true);
@@ -46,7 +47,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
     setNamaLengkap(u.nama_lengkap);
     setUsername(u.username);
     setPassword('');
-    setWilayah(u.wilayah || 'PG1');
+    setWilayah(u.wilayah || (u.role === 'SUPER_ADMIN' || u.role === 'MANAGER' ? 'Semua Wilayah' : 'Geodesi PG1'));
     setHakAkses(
       u.role === 'MANAGER' || u.hak_akses?.toLowerCase() === 'manager' 
         ? 'Manager' 
@@ -71,7 +72,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
         username,
         hak_akses: hakAkses,
         role: resolvedRole,
-        wilayah: wilayah || 'PG1'
+        wilayah: wilayah || (resolvedRole === 'SUPER_ADMIN' || resolvedRole === 'MANAGER' ? 'Semua Wilayah' : 'Geodesi PG1')
       };
       if (password) {
         payload.password = password;
@@ -178,6 +179,12 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
       if (isAktif !== selectedStatus) return false;
     }
 
+    if (selectedWilayahFilter !== 'Semua Wilayah') {
+      const uWil = (u.wilayah || '').trim().toUpperCase();
+      const targetWil = selectedWilayahFilter.trim().toUpperCase();
+      if (uWil !== targetWil) return false;
+    }
+
     return true;
   });
 
@@ -249,6 +256,18 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
           </div>
 
           <select
+            value={selectedWilayahFilter}
+            onChange={(e) => setSelectedWilayahFilter(e.target.value)}
+            title="Filter Berdasarkan Wilayah Kerja"
+            className="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-white text-slate-700 font-medium cursor-pointer"
+          >
+            <option value="Semua Wilayah">Semua Wilayah</option>
+            {DAFTAR_WILAYAH.map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+          </select>
+
+          <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value as 'Semua' | '1' | '0')}
             className="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-white text-slate-700 font-medium cursor-pointer"
@@ -258,11 +277,12 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
             <option value="0">Hanya Nonaktif</option>
           </select>
 
-          {(searchTerm || selectedStatus !== 'Semua') && (
+          {(searchTerm || selectedStatus !== 'Semua' || selectedWilayahFilter !== 'Semua Wilayah') && (
             <button
               onClick={() => {
                 setSearchTerm('');
                 setSelectedStatus('Semua');
+                setSelectedWilayahFilter('Semua Wilayah');
               }}
               className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 hover:underline px-2 py-1 rounded cursor-pointer"
             >
@@ -321,16 +341,8 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold text-slate-900">{u.nama_lengkap}</span>
                           <span className="text-slate-400 font-bold">•</span>
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border shadow-2xs ${
-                            (u.wilayah || 'PG1').toUpperCase() === 'PG1'
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                              : (u.wilayah || 'PG1').toUpperCase() === 'PG2'
-                                ? 'bg-blue-50 text-blue-800 border-blue-300'
-                                : (u.wilayah || 'PG1').toUpperCase() === 'PG3'
-                                  ? 'bg-purple-50 text-purple-800 border-purple-300'
-                                  : 'bg-slate-100 text-slate-800 border-slate-300'
-                          }`}>
-                            {u.wilayah || 'PG1'}
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border shadow-2xs ${getWilayahBadgeClass(u.wilayah)}`}>
+                            {u.wilayah || 'Semua Wilayah'}
                           </span>
                         </div>
                       </td>
@@ -358,16 +370,8 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                         )}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border shadow-2xs ${
-                          (u.wilayah || 'PG1').toUpperCase() === 'PG1'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                            : (u.wilayah || 'PG1').toUpperCase() === 'PG2'
-                              ? 'bg-blue-50 text-blue-800 border-blue-300'
-                              : (u.wilayah || 'PG1').toUpperCase() === 'PG3'
-                                ? 'bg-purple-50 text-purple-800 border-purple-300'
-                                : 'bg-slate-100 text-slate-800 border-slate-300'
-                        }`}>
-                          {u.wilayah || 'PG1'}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border shadow-2xs ${getWilayahBadgeClass(u.wilayah)}`}>
+                          {u.wilayah || 'Semua Wilayah'}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -519,13 +523,13 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                 <select
                   value={wilayah}
                   onChange={(e) => setWilayah(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer font-medium"
                   required
                 >
-                  <option value="PG1">PG1</option>
-                  <option value="PG2">PG2</option>
-                  <option value="PG3">PG3</option>
-                  <option value="Semua Wilayah">Semua Wilayah (Lintas Wilayah / Kantor)</option>
+                  <option value="Semua Wilayah">Semua Wilayah (Super Admin / Manager / Lintas Wilayah)</option>
+                  {DAFTAR_WILAYAH.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
                 </select>
               </div>
 

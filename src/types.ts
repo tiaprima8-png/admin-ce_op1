@@ -1,5 +1,32 @@
 export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'MANAGER';
 
+export const DAFTAR_WILAYAH = [
+  'Geodesi PG1',
+  'Geodesi PG2',
+  'Geodesi PG3',
+  'RC PG1',
+  'RC PG2',
+  'RC PG3',
+  'LEBUNG PG12',
+  'LEBUNG PG3'
+] as const;
+
+export type WilayahKerja = typeof DAFTAR_WILAYAH[number];
+
+export function getWilayahBadgeClass(wilayah?: string | null): string {
+  const w = (wilayah || '').trim().toUpperCase();
+  if (w === 'GEODESI PG1') return 'bg-blue-50 text-blue-700 border-blue-200';
+  if (w === 'GEODESI PG2') return 'bg-sky-50 text-sky-700 border-sky-200';
+  if (w === 'GEODESI PG3') return 'bg-cyan-50 text-cyan-700 border-cyan-200';
+  if (w === 'RC PG1') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (w === 'RC PG2') return 'bg-teal-50 text-teal-700 border-teal-200';
+  if (w === 'RC PG3') return 'bg-green-50 text-green-700 border-green-200';
+  if (w === 'LEBUNG PG12') return 'bg-violet-50 text-violet-700 border-violet-200';
+  if (w === 'LEBUNG PG3') return 'bg-purple-50 text-purple-700 border-purple-200';
+  if (w === 'SEMUA WILAYAH' || w === 'SEMUA') return 'bg-slate-100 text-slate-700 border-slate-300';
+  return 'bg-slate-50 text-slate-600 border-slate-200';
+}
+
 export interface User {
   id: number;
   nama_lengkap: string;
