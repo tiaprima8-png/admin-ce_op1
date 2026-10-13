@@ -90,7 +90,15 @@ const getStoredSession = (): AuthUser | null => {
   try {
     const raw = sessionStorage.getItem('rkce_auth');
     if (raw) {
-      return JSON.parse(raw);
+      const u = JSON.parse(raw);
+      const role = String(u.role || (u.hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' : u.username === 'admin' ? 'SUPER_ADMIN' : '')).toUpperCase();
+      const isAllowed = (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'MANAGER') &&
+        u.hak_akses?.toLowerCase() !== 'kasie' &&
+        u.hak_akses?.toLowerCase() !== 'pengawas';
+      if (isAllowed) {
+        return u;
+      }
+      sessionStorage.removeItem('rkce_auth');
     }
   } catch (e) {
     console.warn('Gagal membaca auth session:', e);
@@ -167,6 +175,14 @@ export default function App() {
 
   // --- Auth Handlers ---
   const handleLoginSuccess = (user: AuthUser) => {
+    const role = String(user.role || (user.hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' : user.username === 'admin' ? 'SUPER_ADMIN' : '')).toUpperCase();
+    const isAllowed = (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'MANAGER') &&
+      user.hak_akses?.toLowerCase() !== 'kasie' &&
+      user.hak_akses?.toLowerCase() !== 'pengawas';
+    if (!isAllowed) {
+      alert('Akses ditolak: Hanya Super Admin dan Manager yang berhak login ke website portal ini. Akun Kasie/Pengawas lapangan hanya dapat digunakan pada aplikasi Android HeavyTrack Mobile.');
+      return;
+    }
     sessionStorage.setItem('rkce_auth', JSON.stringify(user));
     setCurrentUser(user);
     setActiveTab('rekapitulasi');

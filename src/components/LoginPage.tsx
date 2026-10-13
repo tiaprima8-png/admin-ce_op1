@@ -47,14 +47,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         throw new Error(data.error || 'Username atau kata sandi tidak valid.');
       }
 
+      const resolvedRole = String(data.role || data.user?.role || (data.user?.username === 'manager' ? 'MANAGER' : 'SUPER_ADMIN')).toUpperCase();
+      const isAllowed = (resolvedRole === 'SUPER_ADMIN' || resolvedRole === 'ADMIN' || resolvedRole === 'MANAGER') &&
+        data.user?.hak_akses?.toLowerCase() !== 'kasie' &&
+        data.user?.hak_akses?.toLowerCase() !== 'pengawas';
+
+      if (!isAllowed) {
+        throw new Error('Akses ditolak: Hanya Super Admin dan Manager yang berhak login ke website portal ini. Akun Kasie/Pengawas lapangan hanya dapat login melalui aplikasi Android HeavyTrack Mobile.');
+      }
+
       const userPayload: AuthUser = {
         ...data.user,
-        role: data.role || data.user?.role || (data.user?.username === 'manager' ? 'MANAGER' : 'ADMIN'),
+        role: (resolvedRole === 'MANAGER' ? 'MANAGER' : 'SUPER_ADMIN') as any,
         token: data.token || `rkce_token_${data.user?.id}_${Date.now()}`
       };
       onLoginSuccess(userPayload);
     } catch (err: unknown) {
-      if (trimmedUser === 'manager' && password === 'manager123') {
+      if (trimmedUser.toLowerCase() === 'manager' && password === 'manager123') {
         onLoginSuccess({
           id: 2,
           nama_lengkap: 'Ir. Hendra Kusuma',
@@ -64,14 +73,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           email: 'manager@rkce.co.id',
           token: 'rkce_token_2_manager'
         });
-      } else if (trimmedUser === 'admin' && password === 'admin123') {
+      } else if (trimmedUser.toLowerCase() === 'admin' && password === 'admin123') {
         onLoginSuccess({
           id: 1,
           nama_lengkap: 'Farid Hadi',
           username: 'admin',
-          hak_akses: 'Admin',
+          hak_akses: 'Super Admin',
           role: 'SUPER_ADMIN',
-          email: 'tiaprima8@gmail.com',
+          email: 'admin@rkce.co.id',
           token: 'rkce_fallback_token'
         });
       } else {
@@ -113,14 +122,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           {/* Green Pill Badge */}
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-bold mb-3">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>RKCE (Rencana Kerja Unit Civil Engineering)</span>
+            <span>Khusus Super Admin & Manager</span>
           </div>
 
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            Portal Masuk Web Admin
+            Portal Masuk Web Portal
           </h1>
           <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
-            Sistem Manajemen Alat Berat & Operasional Lapangan
+            Hanya akun Super Admin dan Manager yang berhak login ke website ini
           </p>
         </div>
 
@@ -207,35 +216,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
         {/* Quick Demo Credential Helper */}
         <div className="mt-8 pt-5 border-t border-slate-100 text-center">
-          <p className="text-[11px] text-slate-400 font-medium mb-2.5">
-            Kredensial Akses Administrator Default:
+          <p className="text-[11px] text-slate-500 font-semibold mb-2.5">
+            Kredensial Akses Web yang Diizinkan:
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
-              onClick={() => handleUseDemo('manager', 'manager123')}
+              onClick={() => handleUseDemo('admin', 'admin123')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-[11px] font-mono font-medium transition-all cursor-pointer shadow-2xs"
             >
-              <span className="font-bold">manager</span> / <span className="text-emerald-700">manager123</span>
-              <span className="text-[10px] bg-emerald-200 text-emerald-900 font-sans px-1.5 py-0.2 rounded font-bold">Manager</span>
+              <span className="font-bold">admin</span> / <span className="text-emerald-700">admin123</span>
+              <span className="text-[10px] bg-emerald-200 text-emerald-900 font-sans px-1.5 py-0.2 rounded font-bold">Super Admin</span>
             </button>
             <button
               type="button"
-              onClick={() => handleUseDemo('admin', 'admin123')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200 text-slate-700 hover:text-emerald-800 text-[11px] font-mono font-medium transition-all cursor-pointer"
+              onClick={() => handleUseDemo('manager', 'manager123')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 text-[11px] font-mono font-medium transition-all cursor-pointer shadow-2xs"
             >
-              <span className="font-bold">admin</span> / <span className="text-slate-500">admin123</span>
-              <span className="text-[10px] bg-slate-200 text-slate-700 font-sans px-1.5 py-0.2 rounded font-bold">Admin</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleUseDemo('budi.santoso', 'budi123')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200 text-slate-700 hover:text-emerald-800 text-[11px] font-mono font-medium transition-all cursor-pointer"
-            >
-              <span className="font-bold">budi.santoso</span> / <span className="text-slate-500">budi123</span>
-              <span className="text-[10px] bg-amber-100 text-amber-800 font-sans px-1.5 py-0.2 rounded font-bold">Kasie (PG1)</span>
+              <span className="font-bold">manager</span> / <span className="text-blue-700">manager123</span>
+              <span className="text-[10px] bg-blue-200 text-blue-900 font-sans px-1.5 py-0.2 rounded font-bold">Manager</span>
             </button>
           </div>
+          <p className="text-[10px] text-slate-400 mt-2.5 max-w-xs mx-auto leading-tight">
+            * Akun Kasie/Pengawas lapangan hanya diizinkan login melalui aplikasi mobile <strong>HeavyTrack Mobile</strong>.
+          </p>
         </div>
 
       </div>

@@ -371,8 +371,16 @@ function initTablesAndSeed(db2) {
       db2.run("UPDATE hasil_input_aktivitas SET ada_kendala = CASE WHEN kendala_list IS NOT NULL AND TRIM(kendala_list) != '' AND TRIM(kendala_list) != '[]' THEN 1 ELSE 0 END;");
       console.log("Added ada_kendala column to hasil_input_aktivitas");
     }
+    if (cols && !cols.includes("wilayah")) {
+      db2.run("ALTER TABLE hasil_input_aktivitas ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log("Added wilayah column to hasil_input_aktivitas");
+    }
     const actInfo = db2.exec("PRAGMA table_info(aktivitas_unit)");
     const actCols = actInfo[0]?.values.map((v) => v[1]);
+    if (actCols && !actCols.includes("wilayah")) {
+      db2.run("ALTER TABLE aktivitas_unit ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log("Added wilayah column to aktivitas_unit");
+    }
     if (actCols && !actCols.includes("is_hm_awal_corrected")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN is_hm_awal_corrected INTEGER DEFAULT 0;");
       console.log("Added is_hm_awal_corrected column to aktivitas_unit");
@@ -396,27 +404,21 @@ function initTablesAndSeed(db2) {
     }
     if (actCols && !actCols.includes("stik_solar_awal")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN stik_solar_awal REAL DEFAULT 0;");
-      console.log("Added stik_solar_awal column to aktivitas_unit");
     }
     if (actCols && !actCols.includes("stik_solar_akhir")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN stik_solar_akhir REAL DEFAULT 0;");
-      console.log("Added stik_solar_akhir column to aktivitas_unit");
     }
     if (actCols && !actCols.includes("estimasi_konsumsi_solar")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN estimasi_konsumsi_solar REAL DEFAULT 0;");
-      console.log("Added estimasi_konsumsi_solar column to aktivitas_unit");
     }
     if (actCols && !actCols.includes("kendala_list")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_list TEXT;");
-      console.log("Added kendala_list column to aktivitas_unit");
     }
     if (actCols && !actCols.includes("kendala_data")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN kendala_data TEXT;");
-      console.log("Added kendala_data column to aktivitas_unit");
     }
     if (actCols && !actCols.includes("ada_kendala")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN ada_kendala INTEGER DEFAULT 0;");
-      console.log("Added ada_kendala column to aktivitas_unit");
     }
     const rkInfo = db2.exec("PRAGMA table_info(rencana_kerja)");
     const rkCols = rkInfo[0]?.values.map((v) => v[1]);
@@ -451,6 +453,10 @@ function initTablesAndSeed(db2) {
     if (rkCols && !rkCols.includes("id_aktivitas")) {
       db2.run("ALTER TABLE rencana_kerja ADD COLUMN id_aktivitas INTEGER DEFAULT NULL;");
       console.log("Added id_aktivitas column to rencana_kerja");
+    }
+    if (rkCols && !rkCols.includes("wilayah")) {
+      db2.run("ALTER TABLE rencana_kerja ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log("Added wilayah column to rencana_kerja");
     }
     try {
       const actInfo2 = db2.exec("PRAGMA table_info(aktivitas_unit)");
@@ -526,6 +532,14 @@ function initTablesAndSeed(db2) {
       db2.run("UPDATE units SET status_aktif = 1 WHERE status_aktif IS NULL;");
       console.log("Added status_aktif column to units");
     }
+    if (unitsCols && !unitsCols.includes("wilayah")) {
+      db2.run("ALTER TABLE units ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log("Added wilayah column to units");
+    }
+    if (unitsCols && !unitsCols.includes("kasie")) {
+      db2.run("ALTER TABLE units ADD COLUMN kasie TEXT DEFAULT NULL;");
+      console.log("Added kasie column to units");
+    }
     if (actCols && !actCols.includes("status_aktif")) {
       db2.run("ALTER TABLE aktivitas_unit ADD COLUMN status_aktif INTEGER DEFAULT 1;");
       db2.run("UPDATE aktivitas_unit SET status_aktif = 1 WHERE status_aktif IS NULL;");
@@ -537,6 +551,14 @@ function initTablesAndSeed(db2) {
       db2.run("ALTER TABLE operators ADD COLUMN status_aktif INTEGER DEFAULT 1;");
       db2.run("UPDATE operators SET status_aktif = 1 WHERE status_aktif IS NULL;");
       console.log("Added status_aktif column to operators");
+    }
+    if (opsCols && !opsCols.includes("wilayah")) {
+      db2.run("ALTER TABLE operators ADD COLUMN wilayah TEXT DEFAULT NULL;");
+      console.log("Added wilayah column to operators");
+    }
+    if (opsCols && !opsCols.includes("kasie")) {
+      db2.run("ALTER TABLE operators ADD COLUMN kasie TEXT DEFAULT NULL;");
+      console.log("Added kasie column to operators");
     }
     const lokInfo = db2.exec("PRAGMA table_info(lokasi)");
     const lokCols = lokInfo[0]?.values.map((v) => v[1]);
@@ -699,6 +721,40 @@ function initTablesAndSeed(db2) {
     db2.run("UPDATE users SET wilayah = 'PG3' WHERE LOWER(username) LIKE '%rudi%' OR LOWER(nama_lengkap) LIKE '%rudi%';");
     db2.run("UPDATE users SET wilayah = 'Semua Wilayah' WHERE (LOWER(username) = 'admin' OR LOWER(username) = 'manager') AND (wilayah IS NULL OR wilayah = '' OR wilayah = 'PG1');");
     db2.run("UPDATE users SET hak_akses = 'Kasie' WHERE hak_akses = 'Pengawas' OR LOWER(hak_akses) = 'pengawas';");
+    db2.run("UPDATE units SET kasie = 'Budi Santoso', wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
+    db2.run("UPDATE units SET kasie = 'Agus Wijaya', wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
+    db2.run("UPDATE units SET kasie = 'Rudi Hermawan', wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
+    db2.run("UPDATE units SET kasie = nama_pengawas WHERE kasie IS NULL OR kasie = '';");
+    db2.run("UPDATE units SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE operators SET kasie = 'Budi Santoso', wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%' OR LOWER(kasie) LIKE '%budi%';");
+    db2.run("UPDATE operators SET kasie = 'Agus Wijaya', wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%' OR LOWER(kasie) LIKE '%agus%';");
+    db2.run("UPDATE operators SET kasie = 'Rudi Hermawan', wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%' OR LOWER(kasie) LIKE '%rudi%';");
+    db2.run("UPDATE operators SET kasie = nama_pengawas WHERE kasie IS NULL OR kasie = '';");
+    db2.run("UPDATE operators SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE rencana_kerja SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%';");
+    db2.run("UPDATE rencana_kerja SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%';");
+    db2.run("UPDATE rencana_kerja SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%';");
+    db2.run("UPDATE rencana_kerja SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = rencana_kerja.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE rencana_kerja SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG1' WHERE LOWER(nama_pengawas) LIKE '%budi%';");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG2' WHERE LOWER(nama_pengawas) LIKE '%agus%';");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG3' WHERE LOWER(nama_pengawas) LIKE '%rudi%';");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = (SELECT wilayah FROM lokasi WHERE kode_lokasi = hasil_input_aktivitas.kode_lokasi) WHERE wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE hasil_input_aktivitas SET wilayah = 'PG1' WHERE wilayah IS NULL OR wilayah = '';");
+    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'EXCAVATOR' WHERE LOWER(nama_aktivitas) LIKE '%galian%' OR LOWER(nama_aktivitas) LIKE '%loading%' OR LOWER(nama_aktivitas) LIKE '%saluran%' OR LOWER(nama_aktivitas) LIKE '%trenching%';");
+    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'BULLDOZER' WHERE LOWER(nama_aktivitas) LIKE '%clearing%' OR LOWER(nama_aktivitas) LIKE '%dozing%' OR LOWER(nama_aktivitas) LIKE '%ripping%' OR LOWER(nama_aktivitas) LIKE '%disposal area%';");
+    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'DUMP TRUCK' WHERE LOWER(nama_aktivitas) LIKE '%hauling%' OR LOWER(nama_aktivitas) LIKE '%breakdown%' OR LOWER(nama_aktivitas) LIKE '%angkut%' OR LOWER(nama_aktivitas) LIKE '%dumping%';");
+    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'MOTOR GRADER' WHERE LOWER(nama_aktivitas) LIKE '%grading%' OR LOWER(nama_aktivitas) LIKE '%perawatan jalan%';");
+    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'WATER TRUCK' WHERE LOWER(nama_aktivitas) LIKE '%penyiraman%' OR LOWER(nama_aktivitas) LIKE '%water%' OR LOWER(nama_aktivitas) LIKE '%siram%';");
+    db2.run("UPDATE aktivitas_unit SET jenis_unit = UPPER(TRIM(jenis_unit)) WHERE jenis_unit IS NOT NULL;");
+    db2.run("UPDATE aktivitas_unit SET jenis_unit = 'EXCAVATOR' WHERE jenis_unit IS NULL OR jenis_unit = '';");
+    try {
+      db2.run("CREATE VIEW IF NOT EXISTS master_user AS SELECT * FROM users;");
+      db2.run("CREATE VIEW IF NOT EXISTS master_unit AS SELECT * FROM units;");
+      db2.run("CREATE VIEW IF NOT EXISTS master_operator AS SELECT * FROM operators;");
+    } catch (vErr) {
+      console.warn("View alias notice:", vErr);
+    }
     const managerCheck = db2.exec("SELECT id FROM users WHERE LOWER(username) = 'manager' LIMIT 1;");
     if (!managerCheck || !managerCheck[0] || managerCheck[0].values.length === 0) {
       db2.run(`

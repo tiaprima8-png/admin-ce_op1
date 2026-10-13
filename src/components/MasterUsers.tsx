@@ -65,7 +65,7 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
       const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
       const method = editingUser ? 'PUT' : 'POST';
 
-      const resolvedRole = hakAkses === 'Manager' ? 'MANAGER' : (hakAkses === 'Admin' ? 'ADMIN' : 'SUPERVISOR');
+      const resolvedRole = hakAkses === 'Manager' ? 'MANAGER' : (hakAkses === 'Admin' ? 'SUPER_ADMIN' : 'SUPERVISOR');
       const payload: Record<string, string> = {
         nama_lengkap: namaLengkap,
         username,
@@ -341,19 +341,19 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                       </td>
                       <td className="py-3 px-4">
                         {u.role === 'MANAGER' || u.hak_akses?.toLowerCase() === 'manager' ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200" title="Akses Web: Monitoring Eksekutif">
                             <Shield className="w-3 h-3 text-blue-600" />
-                            MANAGER EKSEKUTIF
+                            MANAGER (AKSES WEB)
                           </span>
                         ) : u.hak_akses === 'Admin' || u.role === 'SUPER_ADMIN' || u.role === 'ADMIN' ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200" title="Akses Web: Penuh & Master Data">
                             <Shield className="w-3 h-3 text-emerald-600" />
-                            SUPER ADMIN
+                            SUPER ADMIN (AKSES WEB)
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200" title="Akun lapangan untuk aplikasi mobile Android (Tidak bisa login website)">
                             <Shield className="w-3 h-3 text-amber-600" />
-                            KASIE (KEPALA SEKSI)
+                            KASIE (KHUSUS MOBILE)
                           </span>
                         )}
                       </td>
@@ -539,9 +539,9 @@ export const MasterUsers: React.FC<MasterUsersProps> = ({ users, onRefresh, user
                   className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
                   required
                 >
-                  <option value="Kasie">Kasie (Kepala Seksi - Input & Mobile Sync)</option>
-                  <option value="Admin">Admin (Akses Penuh Portal & Master Data)</option>
-                  <option value="Manager">Manager (Monitoring Eksekutif & Analitik)</option>
+                  <option value="Admin">Admin / Super Admin (Akses Penuh Web Portal & Master Data)</option>
+                  <option value="Manager">Manager (Monitoring Eksekutif Web Portal - Read Only)</option>
+                  <option value="Kasie">Kasie (Khusus Aplikasi Android HeavyTrack Mobile - Tidak Bisa Login Web)</option>
                 </select>
               </div>
 

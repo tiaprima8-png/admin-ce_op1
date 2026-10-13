@@ -3898,11 +3898,34 @@ async function startServer() {
 
       const resolvedRole: UserRole = (
         user.role ||
-        (user.username === 'admin' ? 'SUPER_ADMIN' :
+        (user.username.toLowerCase() === 'admin' ? 'SUPER_ADMIN' :
          user.hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' :
+         (user.hak_akses?.toLowerCase() === 'admin' || user.hak_akses?.toLowerCase() === 'super admin') ? 'SUPER_ADMIN' :
          (user.hak_akses?.toLowerCase() === 'pengawas' || user.hak_akses?.toLowerCase() === 'kasie') ? 'SUPERVISOR' :
-         'ADMIN')
+         'SUPERVISOR')
       );
+
+      // KEBIJAKAN KEAMANAN: HANYA SUPER ADMIN DAN MANAGER YANG BISA LOGIN KE WEBSITE PORTAL
+      const isAllowedToLoginWebsite = (
+        resolvedRole === 'SUPER_ADMIN' ||
+        resolvedRole === 'ADMIN' ||
+        resolvedRole === 'MANAGER' ||
+        user.hak_akses?.toLowerCase() === 'manager' ||
+        user.hak_akses?.toLowerCase() === 'admin' ||
+        user.hak_akses?.toLowerCase() === 'super admin' ||
+        user.username.toLowerCase() === 'admin' ||
+        user.username.toLowerCase() === 'manager'
+      ) && (
+        user.hak_akses?.toLowerCase() !== 'kasie' &&
+        user.hak_akses?.toLowerCase() !== 'pengawas' &&
+        resolvedRole !== 'SUPERVISOR'
+      );
+
+      if (!isAllowedToLoginWebsite) {
+        return res.status(403).json({
+          error: 'Akses ditolak: Hanya Super Admin dan Manager yang berhak login ke website portal ini. Akun Kasie/Pengawas lapangan hanya dapat digunakan pada aplikasi Android HeavyTrack Mobile.'
+        });
+      }
 
       res.json({
         status: 'success',
@@ -3913,9 +3936,9 @@ async function startServer() {
           id: user.id,
           nama_lengkap: user.nama_lengkap,
           username: user.username,
-          hak_akses: user.hak_akses === 'Pengawas' ? 'Kasie' : user.hak_akses,
+          hak_akses: resolvedRole === 'MANAGER' ? 'Manager' : (resolvedRole === 'SUPER_ADMIN' || resolvedRole === 'ADMIN' ? 'Super Admin' : user.hak_akses),
           role: resolvedRole,
-          wilayah: user.wilayah || 'PG1',
+          wilayah: user.wilayah || 'Semua Wilayah',
           email: `${user.username}@rkce.co.id`
         }
       });
@@ -3951,7 +3974,7 @@ async function startServer() {
       const resolvedRole = role || (
         hak_akses?.toLowerCase() === 'manager' ? 'MANAGER' :
         (hak_akses?.toLowerCase() === 'pengawas' || hak_akses?.toLowerCase() === 'kasie') ? 'SUPERVISOR' :
-        'ADMIN'
+        'SUPER_ADMIN'
       );
       const userWilayah = (wilayah && String(wilayah).trim()) || 'PG1';
       const userHakAkses = hak_akses || 'Kasie';
@@ -3982,8 +4005,8 @@ async function startServer() {
       const resolvedRole = role || (
         hak_akses ? (
           hak_akses.toLowerCase() === 'manager' ? 'MANAGER' :
-          (hak_akses.toLowerCase() === 'pengawas' || hak_akses.toLowerCase() === 'kasie') ? 'SUPERVISOR' : 'ADMIN'
-        ) : (existing?.role || 'ADMIN')
+          (hak_akses.toLowerCase() === 'pengawas' || hak_akses.toLowerCase() === 'kasie') ? 'SUPERVISOR' : 'SUPER_ADMIN'
+        ) : (existing?.role || 'SUPER_ADMIN')
       );
       const userWilayah = wilayah !== undefined ? (String(wilayah).trim() || 'PG1') : (existing?.wilayah || 'PG1');
       const userHakAkses = hak_akses || existing?.hak_akses || 'Kasie';
